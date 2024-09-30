@@ -4,11 +4,13 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>BTC Map Admin</title>
+    <!-- Link to Bootstrap CDN for default Bootstrap styles -->
     <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
 </head>
 <body>
-    <div class="container">
-        <a href="{{ url_for('select_area') }}">Select Area</a>
+    <div class="container text-center">
+        <h1 class="mt-5">Welcome to BTC Map Admin</h1>
+        <a href="{{ url_for('select_area') }}" class="btn btn-primary btn-lg mt-3">Select Area</a>
     </div>
 </body>
 </html>
