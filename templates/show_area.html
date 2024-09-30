@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Area Data</title>
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+    <style>
+        pre {
+            background-color: #f8f9fa;
+            padding: 10px;
+            border-radius: 5px;
+            overflow-x: auto;
+        }
+        #map {
+            height: 400px; /* Set the height of the map */
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1 class="mt-5">Area Details</h1>
+
+        {% if area_data %}
+            <h2 class="mt-4">Metadata</h2>
+            <ul class="list-group">
+                <li class="list-group-item"><strong>Created At:</strong> {{ area_data.created_at }}</li>
+                <li class="list-group-item"><strong>Updated At:</strong> {{ area_data.updated_at }}</li>
+                <li class="list-group-item"><strong>ID:</strong> {{ area_data.id }}</li>
+                <li class="list-group-item"><strong>Deleted At:</strong> {{ area_data.deleted_at or 'N/A' }}</li>
+            </ul>
+
+            <h2 class="mt-4">Tags</h2>
+            <ul class="list-group">
+                {% for key, value in area_data.tags.items() %}
+                    <li class="list-group-item">
+                        <strong>{{ key }}:</strong> 
+                        {% if value is iterable and not value|string %}
+                            <pre>{{ value | tojson(indent=2) }}</pre>
+                        {% else %}
+                            {{ value }}
+                        {% endif %}
+                    </li>
+                {% endfor %}
+            </ul>
+
+            <h2 class="mt-4">Map View</h2>
+            <div id="map"></div> <!-- Map container -->
+
+        {% else %}
+            <div class="alert alert-warning mt-4">No area data available.</div>
+        {% endif %}
+
+        <a href="{{ url_for('home') }}" class="btn btn-primary mt-4">Go Back</a>
+    </div>
+
+    <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+    <script>
+        // Initialize the map
+        var map = L.map('map').setView([43.3, -2.9], 12); // Set initial view (latitude, longitude, zoom level)
+    
+        // Add OpenStreetMap tile layer
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            maxZoom: 19,
+            attribution: '© OpenStreetMap'
+        }).addTo(map);
+    
+        // GeoJSON data from the server
+        var geojsonData = {{ area_data.tags.geo_json | tojson | safe }}; // Pass GeoJSON data to JavaScript
+    
+        // Create a GeoJSON layer
+        var geojsonLayer = L.geoJSON(geojsonData, {
+            style: function (feature) {
+                return {
+                    color: 'blue',
+                    weight: 2,
+                    fillOpacity: 0.5
+                };
+            }
+        }).addTo(map);
+    
+        // Fit the map to the bounds of the GeoJSON layer
+        map.fitBounds(geojsonLayer.getBounds());
+    </script>
+    
+</body>
+</html>
