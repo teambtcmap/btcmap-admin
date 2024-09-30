@@ -5,8 +5,21 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}{% endblock %}</title>
     <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
     <script src="https://code.jquery.com/jquery-3.5.1.min.js"></script>
     <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.bundle.min.js"></script>
+    <style>
+        pre {
+            background-color: #f8f9fa;
+            padding: 10px;
+            border-radius: 5px;
+            overflow-x: auto;
+        }
+        #map {
+            height: 400px;
+            margin-top: 20px;
+        }
+    </style>
 </head>
 <body>
     <nav class="navbar navbar-expand-lg navbar-light bg-light">
@@ -45,6 +58,11 @@
 
     <script>
         $(document).ready(function() {
+            // Load cached areas from localStorage if available
+            if (localStorage.getItem('areas')) {
+                console.log('Cached areas:', JSON.parse(localStorage.getItem('areas')));
+            }
+
             // Event listener for the "Refresh Areas" button
             $('#refresh-areas-btn').on('click', function(event) {
                 event.preventDefault(); // Prevent default behavior of the button
@@ -54,6 +72,9 @@
                     method: 'POST',
                     success: function(response) {
                         if (response.success) {
+                            // Cache areas in localStorage
+                            localStorage.setItem('areas', JSON.stringify(response.areas));
+
                             // Success message with dismissible alert
                             var successFlash = '<div class="alert alert-success alert-dismissible fade show" role="alert">' +
                                                'Areas refreshed successfully!' +
@@ -74,7 +95,6 @@
                         }
                     },
                     error: function() {
-                        // Error message with dismissible alert
                         var errorFlash = '<div class="alert alert-danger alert-dismissible fade show" role="alert">' +
                                          'Failed to refresh areas.' +
                                          '<button type="button" class="close" data-dismiss="alert" aria-label="Close">' +

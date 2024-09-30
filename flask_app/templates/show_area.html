@@ -1,25 +1,9 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Area Data</title>
-    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
-    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
-    <style>
-        pre {
-            background-color: #f8f9fa;
-            padding: 10px;
-            border-radius: 5px;
-            overflow-x: auto;
-        }
-        #map {
-            height: 400px;
-            margin-top: 20px;
-        }
-    </style>
-</head>
-<body>
+{% extends "base.html" %}
+
+{% block title %}BTC Map Admin - Select Area{% endblock %}
+
+{% block content %}
+
     <div class="container">
         <h1 class="mt-5">Area Details</h1>
 
@@ -37,10 +21,6 @@
                 <li class="list-group-item">
                     <strong>ID:</strong> 
                     <input type="text" class="form-control" name="id" value="{{ area_data.id }}" readonly>
-                </li>
-                <li class="list-group-item">
-                    <strong>Deleted At:</strong> 
-                    <input type="text" class="form-control" name="deleted_at" value="{{ area_data.deleted_at or 'N/A' }}" disabled>
                 </li>
             </ul>
 
@@ -102,5 +82,4 @@
         // Fit the map to the bounds of the GeoJSON layer
         map.fitBounds(geojsonLayer.getBounds());
     </script>
-</body>
-</html>
+{% endblock %}

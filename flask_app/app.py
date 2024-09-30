@@ -38,17 +38,14 @@ def logout():
     flash('Logged out successfully!', 'success')
     return redirect(url_for('home'))
 
-# Fetch Areas
-@app.route('/fetch_areas', methods=['POST'])
-def fetch_areas():
-    filtered_areas = []  # Initialize filtered_areas
-
+#Get Areas Helper Function
+def get_areas_from_api():
     try:
         response = requests.get('https://api.btcmap.org/v2/areas')
         response.raise_for_status()
-        areas = response.json()  # Parse the JSON data
+        areas = response.json()
 
-        # Store only the required metadata in the session
+        # Filter the areas to store only the necessary fields
         filtered_areas = [
             {
                 'id': area['id'],
@@ -61,33 +58,50 @@ def fetch_areas():
                 }
             }
             for area in areas
+            if not area.get('deleted_at')
         ]
-
-        session['areas'] = filtered_areas  # Cache filtered areas list in session
-        flash('Areas list refreshed successfully!', 'success')
+        
+         # Sort areas by name (case insensitive)
+        filtered_areas.sort(key=lambda area: (area['tags']['name'] or '').lower())
+        
+        return filtered_areas
 
     except requests.exceptions.HTTPError as err:
         flash(f'HTTP error occurred: {err}', 'danger')
-
+        return None
     except Exception as err:
         flash(f'Error: {err}', 'danger')
-
-    return redirect(request.referrer or url_for('home'))  # Stay on the same page or go to 'home'
-
+        return None
 
 
-# Select Area
+# Fetch Areas (for AJAX refresh)
+@app.route('/fetch_areas', methods=['POST'])
+def fetch_areas():
+    areas = get_areas_from_api()
+    if areas:
+        session['areas'] = areas  # Cache in session
+        return jsonify({'success': True})
+    else:
+        return jsonify({'success': False, 'error': 'Failed to fetch areas.'})
+
+
+# Select Area (when loading the page)
 @app.route('/select_area', methods=['GET'])
 def select_area():
     # Check if areas are already cached in the session
     areas = session.get('areas')
-    
-    if not areas:
-        flash('Please refresh areas first!', 'danger')
-        return redirect(url_for('home'))
 
-    # Render the select area page with cached areas
+    if not areas:
+        # Fetch the areas if not already cached
+        areas = get_areas_from_api()
+
+        if not areas:
+            flash('Failed to fetch areas. Please try again.', 'danger')
+            return redirect(url_for('home'))
+
+    # Render the select area page with cached or freshly fetched areas
     return render_template('select_area.html', areas=areas)
+
 
 
 # Show Area
