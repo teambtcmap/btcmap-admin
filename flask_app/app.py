@@ -1,9 +1,16 @@
-from flask import Flask, render_template, request, redirect, url_for, flash, session
+from flask import Flask, render_template, request, redirect, url_for, flash, session, jsonify
 import requests
 import json
 
 app = Flask(__name__)
 app.secret_key = 'your_secret_key'  # Set a secret key for session
+
+
+# Protect other routes if API key is not in the session
+@app.before_request
+def require_api_key():
+    if request.endpoint not in ['login', 'home', 'logout'] and 'api_key' not in session:
+        return redirect(url_for('home'))
 
 # Home page
 @app.route('/')
@@ -31,30 +38,57 @@ def logout():
     flash('Logged out successfully!', 'success')
     return redirect(url_for('home'))
 
-# Protect other routes if API key is not in the session
-@app.before_request
-def require_api_key():
-    if request.endpoint not in ['login', 'home', 'logout'] and 'api_key' not in session:
-        return redirect(url_for('home'))
+# Fetch Areas
+@app.route('/fetch_areas', methods=['POST'])
+def fetch_areas():
+    filtered_areas = []  # Initialize filtered_areas
 
-# Get Areas
-@app.route('/select_area', methods=['GET', 'POST'])
-def select_area():
-    # Fetch areas from the API
     try:
         response = requests.get('https://api.btcmap.org/v2/areas')
         response.raise_for_status()
         areas = response.json()  # Parse the JSON data
 
+        # Store only the required metadata in the session
+        filtered_areas = [
+            {
+                'id': area['id'],
+                'created_at': area['created_at'],
+                'updated_at': area['updated_at'],
+                'tags': {
+                    'name': area['tags'].get('name'),
+                    'organization': area['tags'].get('organization'),
+                    'type': area['tags'].get('type'),
+                }
+            }
+            for area in areas
+        ]
+
+        session['areas'] = filtered_areas  # Cache filtered areas list in session
+        flash('Areas list refreshed successfully!', 'success')
+
     except requests.exceptions.HTTPError as err:
         flash(f'HTTP error occurred: {err}', 'danger')
-        areas = []
 
     except Exception as err:
         flash(f'Error: {err}', 'danger')
-        areas = []
 
+    return redirect(request.referrer or url_for('home'))  # Stay on the same page or go to 'home'
+
+
+
+# Select Area
+@app.route('/select_area', methods=['GET'])
+def select_area():
+    # Check if areas are already cached in the session
+    areas = session.get('areas')
+    
+    if not areas:
+        flash('Please refresh areas first!', 'danger')
+        return redirect(url_for('home'))
+
+    # Render the select area page with cached areas
     return render_template('select_area.html', areas=areas)
+
 
 # Show Area
 @app.route('/show_area', methods=['POST'])
