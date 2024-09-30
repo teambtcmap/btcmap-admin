@@ -14,7 +14,7 @@
             overflow-x: auto;
         }
         #map {
-            height: 400px; /* Set the height of the map */
+            height: 400px;
             margin-top: 20px;
         }
     </style>
@@ -26,29 +26,47 @@
         {% if area_data %}
             <h2 class="mt-4">Metadata</h2>
             <ul class="list-group">
-                <li class="list-group-item"><strong>Created At:</strong> {{ area_data.created_at }}</li>
-                <li class="list-group-item"><strong>Updated At:</strong> {{ area_data.updated_at }}</li>
-                <li class="list-group-item"><strong>ID:</strong> {{ area_data.id }}</li>
-                <li class="list-group-item"><strong>Deleted At:</strong> {{ area_data.deleted_at or 'N/A' }}</li>
+                <li class="list-group-item">
+                    <strong>Created At:</strong> 
+                    <input type="text" class="form-control" name="created_at" value="{{ area_data.created_at }}" disabled>
+                </li>
+                <li class="list-group-item">
+                    <strong>Updated At:</strong> 
+                    <input type="text" class="form-control" name="updated_at" value="{{ area_data.updated_at }}" disabled>
+                </li>
+                <li class="list-group-item">
+                    <strong>ID:</strong> 
+                    <input type="text" class="form-control" name="id" value="{{ area_data.id }}" readonly>
+                </li>
+                <li class="list-group-item">
+                    <strong>Deleted At:</strong> 
+                    <input type="text" class="form-control" name="deleted_at" value="{{ area_data.deleted_at or 'N/A' }}" disabled>
+                </li>
             </ul>
 
-            <h2 class="mt-4">Tags</h2>
-            <ul class="list-group">
-                {% for key, value in area_data.tags.items() %}
-                    <li class="list-group-item">
-                        <strong>{{ key }}:</strong> 
-                        {% if value is iterable and not value|string %}
-                            <pre>{{ value | tojson(indent=2) }}</pre>
-                        {% else %}
-                            {{ value }}
-                        {% endif %}
-                    </li>
-                {% endfor %}
-            </ul>
+            <h2 class="mt-4">Edit Tags</h2>
+            <form id="editTagsForm" method="POST" action="{{ url_for('update_area') }}">
+                <input type="hidden" name="api_key" value="{{ session['api_key'] }}">
+                <input type="hidden" name="area_id" value="{{ area_data.id }}">
+
+                <ul class="list-group">
+                    {% for key, value in area_data.tags.items() %}
+                        <li class="list-group-item">
+                            <strong>{{ key }}:</strong> 
+                            {% if value is iterable and not value|string %}
+                                <pre>{{ value | tojson(indent=2) }}</pre>
+                            {% else %}
+                                <input type="text" class="form-control" name="tags[{{ key }}]" value="{{ value }}">
+                            {% endif %}
+                        </li>
+                    {% endfor %}
+                </ul>
+
+                <button type="submit" class="btn btn-success mt-4">Save Changes</button>
+            </form>
 
             <h2 class="mt-4">Map View</h2>
-            <div id="map"></div> <!-- Map container -->
-
+            <div id="map"></div>
         {% else %}
             <div class="alert alert-warning mt-4">No area data available.</div>
         {% endif %}
@@ -59,7 +77,7 @@
     <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
     <script>
         // Initialize the map
-        var map = L.map('map').setView([43.3, -2.9], 12); // Set initial view (latitude, longitude, zoom level)
+        var map = L.map('map').setView([43.3, -2.9], 12);
     
         // Add OpenStreetMap tile layer
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -68,7 +86,7 @@
         }).addTo(map);
     
         // GeoJSON data from the server
-        var geojsonData = {{ area_data.tags.geo_json | tojson | safe }}; // Pass GeoJSON data to JavaScript
+        var geojsonData = {{ area_data.tags.geo_json | tojson | safe }};
     
         // Create a GeoJSON layer
         var geojsonLayer = L.geoJSON(geojsonData, {
@@ -84,6 +102,5 @@
         // Fit the map to the bounds of the GeoJSON layer
         map.fitBounds(geojsonLayer.getBounds());
     </script>
-    
 </body>
 </html>
