@@ -3,33 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Get Area</title>
+    <title>BTC Map Admin</title>
     <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
 </head>
 <body>
     <div class="container">
-        <h1 class="mt-5">Get Area</h1>
-
-        {% with messages = get_flashed_messages(with_categories=true) %}
-            {% if messages %}
-                {% for category, message in messages %}
-                    <div class="alert alert-{{ category }}">{{ message }}</div>
-                {% endfor %}
-            {% endif %}
-        {% endwith %}
-
-        <form method="POST" action="{{ url_for('show_area') }}">
-            <div class="form-group">
-                <label for="api_key_get">API Key</label>
-                <input type="text" class="form-control" id="api_key_get" name="api_key" required>
-            </div>
-            <div class="form-group">
-                <label for="area_id_get">Area ID</label>
-                <input type="text" class="form-control" id="area_id_get" name="area_id" required>
-            </div>
-            <button type="submit" class="btn btn-primary">Get Area</button>
-        </form>
-
+        <a href="{{ url_for('select_area') }}">Select Area</a>
     </div>
 </body>
 </html>
