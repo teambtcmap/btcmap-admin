@@ -27,7 +27,6 @@
         <div class="ml-auto">
             {% if session.get('api_key') %}
                 <a href="{{ url_for('logout') }}" class="btn btn-outline-danger">Logout</a>
-                <button id="refresh-areas-btn" class="btn btn-outline-primary">Refresh Areas</button>
             {% else %}
                 <!-- No button if not logged in -->
             {% endif %}
@@ -62,49 +61,6 @@
             if (localStorage.getItem('areas')) {
                 console.log('Cached areas:', JSON.parse(localStorage.getItem('areas')));
             }
-
-            // Event listener for the "Refresh Areas" button
-            $('#refresh-areas-btn').on('click', function(event) {
-                event.preventDefault(); // Prevent default behavior of the button
-
-                $.ajax({
-                    url: '{{ url_for("fetch_areas") }}',
-                    method: 'POST',
-                    success: function(response) {
-                        if (response.success) {
-                            // Cache areas in localStorage
-                            localStorage.setItem('areas', JSON.stringify(response.areas));
-
-                            // Success message with dismissible alert
-                            var successFlash = '<div class="alert alert-success alert-dismissible fade show" role="alert">' +
-                                               'Areas refreshed successfully!' +
-                                               '<button type="button" class="close" data-dismiss="alert" aria-label="Close">' +
-                                               '<span aria-hidden="true">&times;</span>' +
-                                               '</button>' +
-                                               '</div>';
-                            $('.alert-container').append(successFlash);
-                        } else {
-                            // Error message with dismissible alert
-                            var errorFlash = '<div class="alert alert-danger alert-dismissible fade show" role="alert">' +
-                                             'Error: ' + response.error +
-                                             '<button type="button" class="close" data-dismiss="alert" aria-label="Close">' +
-                                             '<span aria-hidden="true">&times;</span>' +
-                                             '</button>' +
-                                             '</div>';
-                            $('.alert-container').append(errorFlash);
-                        }
-                    },
-                    error: function() {
-                        var errorFlash = '<div class="alert alert-danger alert-dismissible fade show" role="alert">' +
-                                         'Failed to refresh areas.' +
-                                         '<button type="button" class="close" data-dismiss="alert" aria-label="Close">' +
-                                         '<span aria-hidden="true">&times;</span>' +
-                                         '</button>' +
-                                         '</div>';
-                        $('.alert-container').append(errorFlash);
-                    }
-                });
-            });
         });
     </script>
 

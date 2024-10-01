@@ -75,18 +75,7 @@ def get_areas_from_api():
         return None
 
 
-# Fetch Areas (for AJAX refresh)
-@app.route('/fetch_areas', methods=['POST'])
-def fetch_areas():
-    areas = get_areas_from_api()
-    if areas:
-        session['areas'] = areas  # Cache in session
-        return jsonify({'success': True})
-    else:
-        return jsonify({'success': False, 'error': 'Failed to fetch areas.'})
-
-
-# Select Area (when loading the page)
+# Select Area
 @app.route('/select_area', methods=['GET'])
 def select_area():
     # Check if areas are already cached in the session
@@ -155,12 +144,19 @@ def update_tag():
 
     # Server-side validation
     if key in ['area_km2', 'population']:
-        if not str(value).isdigit():
-            return jsonify({'error': 'Value must be an integer.'}), 400
+        try:
+            value = float(value)  # Convert to float for numeric validation
+            if not isinstance(value, (int, float)):
+                flash('Value must be numeric.', 'error')
+                return jsonify({'error': 'Value must be numeric.'}), 400
+        except ValueError:
+            flash('Value must be numeric.', 'error')
+            return jsonify({'error': 'Value must be numeric.'}), 400
     elif key == 'population:date':
         try:
             datetime.strptime(value, '%Y-%m-%d')
         except ValueError:
+            flash('Value must be a valid date in the format YYYY-MM-DD.', 'error')
             return jsonify({'error': 'Value must be a valid date in the format YYYY-MM-DD.'}), 400
 
     # Create the JSON-RPC payload
@@ -171,7 +167,7 @@ def update_tag():
             "token": data['params']['token'],
             "id": data['params']['id'],
             "name": key,
-            "value": value
+            "value": value  # Send the validated value
         },
         "id": 1
     }
@@ -182,7 +178,7 @@ def update_tag():
     response = requests.post(url, headers=headers, data=json.dumps(json_rpc_payload))
 
     # Return the response from the API
-    return response.json()
+    return jsonify(response.json())  # Ensure the response is returned as JSON
 
 
 
