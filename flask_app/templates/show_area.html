@@ -10,16 +10,34 @@
         <h2 class="mt-4">Metadata</h2>
         <ul class="list-group">
             <li class="list-group-item">
-                <strong>Created At:</strong> 
-                <input type="text" class="form-control" name="created_at" value="{{ area_data.created_at }}" disabled>
+                <div class="row align-items-center">
+                    <div class="col-md-2">
+                    <strong>Created At:</strong> 
+                    </div>
+                    <div class="col-md-10">
+                    <input type="text" class="form-control" name="created_at" value="{{ area_data.created_at }}" disabled>
+                    </div>
+                </div>
             </li>
             <li class="list-group-item">
-                <strong>Updated At:</strong> 
-                <input type="text" class="form-control" name="updated_at" value="{{ area_data.updated_at }}" disabled>
+                <div class="row align-items-center">
+                    <div class="col-md-2">
+                    <strong>Updated At:</strong> 
+                    </div>
+                    <div class="col-md-10">
+                    <input type="text" class="form-control" name="updated_at" value="{{ area_data.updated_at }}" disabled>
+                    </div>
+                </div>
             </li>
             <li class="list-group-item">
-                <strong>ID:</strong>
-                <input type="text" class="form-control" name="id" value="{{ area_data.id }}" readonly>
+                <div class="row align-items-center">
+                    <div class="col-md-2">
+                    <strong>ID:</strong>
+                    </div>
+                    <div class="col-md-10">
+                    <input type="text" class="form-control" name="id" value="{{ area_data.id }}" readonly>
+                    </div>
+                </div>
             </li>
         </ul>
 
