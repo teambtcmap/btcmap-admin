@@ -1,85 +1,156 @@
 {% extends "base.html" %}
 
-{% block title %}BTC Map Admin - Select Area{% endblock %}
+{% block title %}BTC Map Admin - Edit Area{% endblock %}
 
 {% block content %}
+<div class="container">
+    <h1 class="mt-5">Area Details</h1>
 
-    <div class="container">
-        <h1 class="mt-5">Area Details</h1>
+    {% if area_data %}
+        <h2 class="mt-4">Metadata</h2>
+        <ul class="list-group">
+            <li class="list-group-item">
+                <strong>Created At:</strong> 
+                <input type="text" class="form-control" name="created_at" value="{{ area_data.created_at }}" disabled>
+            </li>
+            <li class="list-group-item">
+                <strong>Updated At:</strong> 
+                <input type="text" class="form-control" name="updated_at" value="{{ area_data.updated_at }}" disabled>
+            </li>
+            <li class="list-group-item">
+                <strong>ID:</strong>
+                <input type="text" class="form-control" name="id" value="{{ area_data.id }}" readonly>
+            </li>
+        </ul>
 
-        {% if area_data %}
-            <h2 class="mt-4">Metadata</h2>
-            <ul class="list-group">
+        <h2 class="mt-4">Edit Tags</h2>
+        <ul class="list-group">
+            {% for key, value in area_data.tags.items() %}
                 <li class="list-group-item">
-                    <strong>Created At:</strong> 
-                    <input type="text" class="form-control" name="created_at" value="{{ area_data.created_at }}" disabled>
+                    <div class="row align-items-center">
+                        <!-- Tag Name Column -->
+                        <div class="col-md-2">
+                            <strong>{{ key }}:</strong>
+                        </div>
+
+                        <!-- Input Field Column -->
+                        <div class="col-md-9">
+                            <input type="text" class="form-control tag-input" id="tag-{{ key }}" name="tags[{{ key }}]" value="{{ value }}" disabled>
+                        </div>
+
+                        <!-- Buttons Column -->
+                        <div class="col-md-1 text-center">
+                            <button class="btn btn-sm btn-primary edit-btn" data-key="{{ key }}">Edit</button>
+                            <button class="btn btn-sm btn-success save-btn" data-key="{{ key }}" style="display: none;">Save</button>
+                        </div>
+                    </div>
                 </li>
-                <li class="list-group-item">
-                    <strong>Updated At:</strong> 
-                    <input type="text" class="form-control" name="updated_at" value="{{ area_data.updated_at }}" disabled>
-                </li>
-                <li class="list-group-item">
-                    <strong>ID:</strong> 
-                    <input type="text" class="form-control" name="id" value="{{ area_data.id }}" readonly>
-                </li>
-            </ul>
+            {% endfor %}
+        </ul>
 
-            <h2 class="mt-4">Edit Tags</h2>
-            <form id="editTagsForm" method="POST" action="{{ url_for('update_area') }}">
-                <input type="hidden" name="api_key" value="{{ session['api_key'] }}">
-                <input type="hidden" name="area_id" value="{{ area_data.id }}">
+        <h2 class="mt-4">Map View</h2>
+        <div id="map"></div>
+    {% else %}
+        <div class="alert alert-warning mt-4">No area data available.</div>
+    {% endif %}
 
-                <ul class="list-group">
-                    {% for key, value in area_data.tags.items() %}
-                        <li class="list-group-item">
-                            <strong>{{ key }}:</strong> 
-                            {% if value is iterable and not value|string %}
-                                <pre>{{ value | tojson(indent=2) }}</pre>
-                            {% else %}
-                                <input type="text" class="form-control" name="tags[{{ key }}]" value="{{ value }}">
-                            {% endif %}
-                        </li>
-                    {% endfor %}
-                </ul>
+    <a href="{{ url_for('home') }}" class="btn btn-primary mt-4">Go Back</a>
+</div>
 
-                <button type="submit" class="btn btn-success mt-4">Save Changes</button>
-            </form>
+<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+<script>
+    // Initialize the map
+    var map = L.map('map').setView([43.3, -2.9], 12);
 
-            <h2 class="mt-4">Map View</h2>
-            <div id="map"></div>
-        {% else %}
-            <div class="alert alert-warning mt-4">No area data available.</div>
-        {% endif %}
+    // Add OpenStreetMap tile layer
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 19,
+        attribution: '© OpenStreetMap'
+    }).addTo(map);
 
-        <a href="{{ url_for('home') }}" class="btn btn-primary mt-4">Go Back</a>
-    </div>
+    // GeoJSON data from the server
+    var geojsonData = {{ area_data.tags.geo_json | tojson | safe }};
 
-    <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
-    <script>
-        // Initialize the map
-        var map = L.map('map').setView([43.3, -2.9], 12);
-    
-        // Add OpenStreetMap tile layer
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            maxZoom: 19,
-            attribution: '© OpenStreetMap'
-        }).addTo(map);
-    
-        // GeoJSON data from the server
-        var geojsonData = {{ area_data.tags.geo_json | tojson | safe }};
-    
-        // Create a GeoJSON layer
-        var geojsonLayer = L.geoJSON(geojsonData, {
-            style: function (feature) {
-                return {
-                    color: 'blue',
-                    weight: 2,
-                    fillOpacity: 0.5
-                };
+    // Create a GeoJSON layer
+    var geojsonLayer = L.geoJSON(geojsonData, {
+        style: function (feature) {
+            return {
+                color: 'blue',
+                weight: 2,
+                fillOpacity: 0.5
+            };
+        }
+    }).addTo(map);
+
+    // Fit the map to the bounds of the GeoJSON layer
+    map.fitBounds(geojsonLayer.getBounds());
+
+    // Toggle Edit/Save buttons
+    document.querySelectorAll('.edit-btn').forEach(button => {
+        button.addEventListener('click', function() {
+            var key = this.getAttribute('data-key');
+            var input = document.getElementById('tag-' + key);
+            input.disabled = false;  // Enable editing
+            this.style.display = 'none';  // Hide Edit button
+            document.querySelector('.save-btn[data-key="' + key + '"]').style.display = 'inline';  // Show Save button
+        });
+    });
+
+    // Handle Save button click
+    document.querySelectorAll('.save-btn').forEach(button => {
+        button.addEventListener('click', function() {
+            var key = this.getAttribute('data-key');
+            var input = document.getElementById('tag-' + key);
+            var value = input.value;
+            var areaId = '{{ area_data.id }}';  // Get area ID
+
+            // Validation logic
+            if (key === 'area_km2' || key === 'population') {
+                if (!Number.isInteger(Number(value))) {
+                    alert('Value must be an integer.');
+                    return;
+                }
+            } else if (key === 'population:date') {
+                const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+                if (!dateRegex.test(value)) {
+                    alert('Value must be a valid date in the format YYYY-MM-DD.');
+                    return;
+                }
             }
-        }).addTo(map);
-    
-        // Fit the map to the bounds of the GeoJSON layer
-        map.fitBounds(geojsonLayer.getBounds());
-    </script>
+
+            // Make AJAX request to update the tag
+            fetch('{{ url_for("update_tag") }}', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    "jsonrpc": "2.0",
+                    "method": "setareatag",
+                    "params": {
+                        "token": "{{ session['api_key'] }}",  // Use session API key
+                        "id": areaId,
+                        "name": key,
+                        "value": value
+                    },
+                    "id": 1
+                })
+            }).then(response => response.json())
+              .then(data => {
+                  if (data.error) {
+                      alert('Error updating tag: ' + data.error.message);
+                  } else {
+                      alert('Tag updated successfully!');
+                  }
+                  input.disabled = true;  // Disable editing
+                  this.style.display = 'none';  // Hide Save button
+                  document.querySelector('.edit-btn[data-key="' + key + '"]').style.display = 'inline';  // Show Edit button
+              })
+              .catch(error => {
+                  console.error('Error:', error);
+              });
+        });
+    });
+</script>
 {% endblock %}
+

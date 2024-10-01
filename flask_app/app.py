@@ -1,4 +1,5 @@
 from flask import Flask, render_template, request, redirect, url_for, flash, session, jsonify
+from datetime import datetime
 import requests
 import json
 
@@ -41,7 +42,7 @@ def logout():
 #Get Areas Helper Function
 def get_areas_from_api():
     try:
-        response = requests.get('https://api.btcmap.org/v2/areas')
+        response = requests.get('https://api.btcmap.org/areas?2022-10-11T00:00:00.000Z')
         response.raise_for_status()
         areas = response.json()
 
@@ -58,7 +59,7 @@ def get_areas_from_api():
                 }
             }
             for area in areas
-            if not area.get('deleted_at')
+            #if not area.get('deleted_at')
         ]
         
          # Sort areas by name (case insensitive)
@@ -145,40 +146,46 @@ def show_area():
     # Redirect back to the index/home page on failure
     return redirect(url_for('home'))
 
-#Update Area
-@app.route('/update_area', methods=['POST'])
-def update_area():
-    api_key = request.form['api_key']
-    area_id = request.form['area_id']
-    tags = request.form.getlist('tags')
+# Update Area Tag
+@app.route('/update_tag', methods=['POST'])
+def update_tag():
+    data = request.json  # Get the JSON payload
+    key = data['params']['name']
+    value = data['params']['value']
 
-    for key, value in tags.items():
-        # Create the JSON-RPC payload for each tag update
-        json_rpc_payload = {
-            "jsonrpc": "2.0",
-            "method": "setareatag",
-            "params": {
-                "token": api_key,
-                "id": area_id,
-                "name": key,
-                "value": value
-            },
-            "id": 1
-        }
+    # Server-side validation
+    if key in ['area_km2', 'population']:
+        if not str(value).isdigit():
+            return jsonify({'error': 'Value must be an integer.'}), 400
+    elif key == 'population:date':
+        try:
+            datetime.strptime(value, '%Y-%m-%d')
+        except ValueError:
+            return jsonify({'error': 'Value must be a valid date in the format YYYY-MM-DD.'}), 400
 
-        # Send the request to the BTC Map API
-        url = "https://api.btcmap.org/rpc"
-        headers = {'Content-Type': 'application/json'}
-        response = requests.post(url, headers=headers, data=json.dumps(json_rpc_payload))
+    # Create the JSON-RPC payload
+    json_rpc_payload = {
+        "jsonrpc": "2.0",
+        "method": "setareatag",
+        "params": {
+            "token": data['params']['token'],
+            "id": data['params']['id'],
+            "name": key,
+            "value": value
+        },
+        "id": 1
+    }
 
-        # Check for errors
-        if response.status_code != 200 or 'error' in response.json():
-            flash(f"Error updating tag {key}: {response.json().get('error', 'Unknown error')}", "danger")
-            return redirect(url_for('show_area'))
+    # Send the request to the BTC Map API
+    url = "https://api.btcmap.org/rpc"
+    headers = {'Content-Type': 'application/json'}
+    response = requests.post(url, headers=headers, data=json.dumps(json_rpc_payload))
 
-    flash("Area tags updated successfully!", "success")
-    return redirect(url_for('show_area'))
+    # Return the response from the API
+    return response.json()
+
 
 
 if __name__ == '__main__':
     app.run(debug=True)
+
