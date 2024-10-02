@@ -107,7 +107,7 @@ def show_area():
         "jsonrpc": "2.0",
         "method": "getarea",
         "params": {
-            "token": api_key,
+            "password": api_key,
             "id": area_id
         },
         "id": 1
@@ -164,7 +164,7 @@ def update_tag():
         "jsonrpc": "2.0",
         "method": "setareatag",
         "params": {
-            "token": data['params']['token'],
+            "password": data['params']['token'],
             "id": data['params']['id'],
             "name": key,
             "value": value  # Send the validated value
