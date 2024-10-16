@@ -1,0 +1,527 @@
+{% extends "base.html" %}
+
+{% block title %}{{ area.tags.get('name', 'Unknown Area') }}{% endblock %}
+
+{% block content %}
+<div class="starter-template">
+    <h1>Area Details: {{ area.tags.get('name', 'Unknown') }}</h1>
+    <p class="lead">Type: {{ area.tags.get('type', 'Unknown') }}</p>
+
+    <div class="card mb-4">
+        <div class="card-header">
+            <h3 class="mb-0">Metadata</h3>
+        </div>
+        <div class="card-body">
+            <dl class="row">
+                <dt class="col-sm-3">Area ID:</dt>
+                <dd class="col-sm-9">{{ area.id }}</dd>
+
+                <dt class="col-sm-3">Created At:</dt>
+                <dd class="col-sm-9">{{ area.created_at|default('N/A') }}</dd>
+
+                <dt class="col-sm-3">Updated At:</dt>
+                <dd class="col-sm-9">{{ area.updated_at|default('N/A') }}</dd>
+            </dl>
+        </div>
+    </div>
+
+    <div class="map-container position-relative mb-4">
+        <div id="map" style="height: 400px; width: 100%;"></div>
+        <button id="edit-geojson-btn" class="btn btn-primary btn-sm position-absolute" style="top: 10px; right: 10px; z-index: 1000;">Edit GeoJSON</button>
+    </div>
+
+    <div id="geojson-editor" class="mb-4">
+        <textarea id="geojson-input" class="form-control mb-2" rows="10" style="display: none;"></textarea>
+        <button id="show-geojson-btn" class="btn btn-primary mr-2" style="display: none;">Show</button>
+        <button id="update-geojson-btn" class="btn btn-success mr-2" style="display: none;">Update</button>
+        <button id="cancel-geojson-btn" class="btn btn-secondary" style="display: none;">Cancel</button>
+    </div>
+
+    <h3>Tags</h3>
+    <table class="table table-striped" id="tags-table">
+        <thead>
+            <tr>
+                <th style="width: 30%;">Key</th>
+                <th style="width: 40%;">Value</th>
+                <th style="width: 30%;">Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for key, value in area.tags.items() %}
+            {% if key != 'geo_json' %}
+            <tr data-key="{{ key }}">
+                <td>{{ key }}</td>
+                <td class="tag-value-cell">
+                    <div class="tag-value-content">{{ value }}</div>
+                    <textarea class="form-control tag-input" style="display: none;">{{ value }}</textarea>
+                    <select class="form-control tag-select" style="display: none;"></select>
+                </td>
+                <td>
+                    <button class="btn btn-primary btn-sm edit-tag">Edit</button>
+                    <button class="btn btn-success btn-sm update-tag" style="display: none;">Update</button>
+                    <button class="btn btn-danger btn-sm delete-tag" style="display: none;">Delete</button>
+                    <button class="btn btn-secondary btn-sm cancel-edit" style="display: none;">Cancel</button>
+                </td>
+            </tr>
+            {% endif %}
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <div class="mb-3">
+        <button id="add-optional-tag-btn" class="btn btn-primary">Add Optional Tag</button>
+        <button id="add-custom-tag-btn" class="btn btn-secondary">Add Custom Tag</button>
+    </div>
+
+    <div class="mt-5 p-3 bg-danger text-white">
+        <h3>Danger Zone</h3>
+        <p>Be careful! Actions in this section can't be undone.</p>
+        <button id="remove-area-btn" class="btn btn-outline-light">Remove Area</button>
+    </div>
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    var map = L.map('map').setView([0, 0], 2);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+    }).addTo(map);
+
+    var geoJsonData = {{ geo_json | tojson | safe }};
+    var geoJsonLayer;
+    var areaTypeRequirements = {{ area_type_requirements|tojson|safe }};
+    var areaType = "{{ area.tags.get('type', '') }}";
+
+    function updateMap(geoJson) {
+        if (geoJsonLayer) {
+            map.removeLayer(geoJsonLayer);
+        }
+
+        if (!geoJson) {
+            console.log("No valid GeoJSON data available for this area");
+            map.setView([0, 0], 2);
+            return;
+        }
+
+        try {
+            if (typeof geoJson === 'string') {
+                geoJson = JSON.parse(geoJson);
+            }
+
+            geoJsonLayer = L.geoJSON(geoJson).addTo(map);
+            map.fitBounds(geoJsonLayer.getBounds());
+        } catch (error) {
+            console.error("Error adding GeoJSON to map:", error);
+            showToast('Error', `Error displaying the map: ${error.message}. Please check the GeoJSON data.`, 'error');
+        }
+    }
+
+    if (geoJsonData) {
+        updateMap(geoJsonData);
+    } else {
+        console.log("No GeoJSON data available for this area");
+        map.setView([0, 0], 2);
+    }
+
+    document.addEventListener('DOMContentLoaded', function() {
+        const editGeoJsonBtn = document.getElementById('edit-geojson-btn');
+        const geojsonEditor = document.getElementById('geojson-editor');
+        const geojsonInput = document.getElementById('geojson-input');
+        const showGeoJsonBtn = document.getElementById('show-geojson-btn');
+        const updateGeoJsonBtn = document.getElementById('update-geojson-btn');
+        const cancelGeoJsonBtn = document.getElementById('cancel-geojson-btn');
+
+        function showGeoJsonEditor() {
+            geojsonInput.style.display = 'block';
+            showGeoJsonBtn.style.display = 'inline-block';
+            cancelGeoJsonBtn.style.display = 'inline-block';
+            editGeoJsonBtn.style.display = 'none';
+        }
+
+        function hideGeoJsonEditor() {
+            geojsonInput.style.display = 'none';
+            showGeoJsonBtn.style.display = 'none';
+            updateGeoJsonBtn.style.display = 'none';
+            cancelGeoJsonBtn.style.display = 'none';
+            editGeoJsonBtn.style.display = 'inline-block';
+        }
+
+        editGeoJsonBtn.addEventListener('click', function() {
+            geojsonInput.value = geoJsonData ? JSON.stringify(geoJsonData, null, 2) : '';
+            showGeoJsonEditor();
+        });
+
+        showGeoJsonBtn.addEventListener('click', function() {
+            try {
+                const newGeoJson = JSON.parse(geojsonInput.value);
+                updateMap(newGeoJson);
+                updateGeoJsonBtn.style.display = 'inline-block';
+            } catch (error) {
+                showToast('Error', `Invalid GeoJSON: ${error.message}. Please check your input.`, 'error');
+                console.error(error);
+            }
+        });
+
+        updateGeoJsonBtn.addEventListener('click', function() {
+            try {
+                const newGeoJson = JSON.parse(geojsonInput.value);
+                
+                fetch('/api/set_area_tag', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        id: '{{ area.id }}',
+                        name: 'geo_json',
+                        value: newGeoJson
+                    }),
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.error) {
+                        throw new Error(data.error);
+                    } else {
+                        showToast('Success', 'GeoJSON updated successfully', 'success');
+                        geoJsonData = newGeoJson;
+                        updateMap(newGeoJson);
+                        hideGeoJsonEditor();
+                    }
+                })
+                .catch(error => {
+                    showToast('Error', `Error: ${error.message}`, 'error');
+                    console.error(error);
+                });
+            } catch (error) {
+                showToast('Error', `Invalid GeoJSON: ${error.message}. Please check your input.`, 'error');
+                console.error(error);
+            }
+        });
+
+        cancelGeoJsonBtn.addEventListener('click', function() {
+            hideGeoJsonEditor();
+            updateMap(geoJsonData);
+        });
+
+        const tagsTable = document.getElementById('tags-table');
+        const addOptionalTagButton = document.getElementById('add-optional-tag-btn');
+        const addCustomTagButton = document.getElementById('add-custom-tag-btn');
+
+        function startEditing(row) {
+            const key = row.dataset.key;
+            const tagValueContent = row.querySelector('.tag-value-content').textContent;
+            const tagInput = row.querySelector('.tag-input');
+            const tagSelect = row.querySelector('.tag-select');
+
+            if (areaTypeRequirements[key] && areaTypeRequirements[key].allowed_values) {
+                tagSelect.innerHTML = areaTypeRequirements[key].allowed_values.map(value => 
+                    `<option value="${value}" ${value === tagValueContent ? 'selected' : ''}>${value}</option>`
+                ).join('');
+                tagSelect.style.display = 'block';
+                tagInput.style.display = 'none';
+            } else {
+                tagInput.value = tagValueContent;
+                tagInput.style.display = 'block';
+                tagSelect.style.display = 'none';
+            }
+
+            row.querySelector('.tag-value-content').style.display = 'none';
+            row.querySelector('.edit-tag').style.display = 'none';
+            row.querySelector('.update-tag').style.display = 'inline-block';
+            row.querySelector('.delete-tag').style.display = 'inline-block';
+            row.querySelector('.cancel-edit').style.display = 'inline-block';
+            row.classList.add('editing');
+            row.classList.add('unsaved-changes');
+        }
+
+        function cancelEditing(row) {
+            if (row.classList.contains('unsaved-changes')) {
+                showToast('Confirm', 'You have unsaved changes. Are you sure you want to cancel?', 'warning', {
+                    confirmButtonText: 'Yes, cancel',
+                    cancelButtonText: 'No, keep editing',
+                    onConfirm: () => {
+                        resetRow(row);
+                    }
+                });
+            } else {
+                resetRow(row);
+            }
+        }
+
+        function resetRow(row) {
+            row.querySelector('.tag-value-content').style.display = 'block';
+            row.querySelector('.tag-input').style.display = 'none';
+            row.querySelector('.tag-select').style.display = 'none';
+            row.querySelector('.edit-tag').style.display = 'inline-block';
+            row.querySelector('.update-tag').style.display = 'none';
+            row.querySelector('.delete-tag').style.display = 'none';
+            row.querySelector('.cancel-edit').style.display = 'none';
+            row.classList.remove('editing');
+            row.classList.remove('unsaved-changes');
+        }
+
+        function updateTag(row) {
+            const key = row.dataset.key;
+            const tagInput = row.querySelector('.tag-input');
+            const tagSelect = row.querySelector('.tag-select');
+            let newValue = tagSelect.style.display === 'none' ? tagInput.value : tagSelect.value;
+
+            fetch('/api/set_area_tag', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    id: '{{ area.id }}',
+                    name: key,
+                    value: newValue
+                }),
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.error) {
+                    showToast('Error', data.error, 'error');
+                } else {
+                    row.querySelector('.tag-value-content').textContent = newValue;
+                    resetRow(row);
+                    showToast('Success', 'Tag updated successfully', 'success');
+                }
+            })
+            .catch(error => {
+                showToast('Error', 'An unexpected error occurred', 'error');
+                console.error(error);
+            });
+        }
+
+        function deleteTag(row) {
+            const key = row.dataset.key;
+
+            showToast('Confirm', `Are you sure you want to remove the tag "${key}"?`, 'warning', {
+                confirmButtonText: 'Yes, delete it',
+                cancelButtonText: 'Cancel',
+                onConfirm: () => {
+                    fetch('/api/remove_area_tag', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            id: '{{ area.id }}',
+                            tag: key
+                        }),
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.error) {
+                            showToast('Error', data.error, 'error');
+                        } else {
+                            row.remove();
+                            showToast('Success', 'Tag removed successfully', 'success');
+                        }
+                    })
+                    .catch(error => {
+                        showToast('Error', 'An unexpected error occurred', 'error');
+                        console.error(error);
+                    });
+                }
+            });
+        }
+
+        function addNewTag(row) {
+            const newTagKey = row.querySelector('.new-tag-key');
+            const newTagValue = row.querySelector('.new-tag-value');
+            const newTagValueSelect = row.querySelector('.new-tag-value-select');
+            
+            const key = newTagKey.value.trim();
+            let value = newTagValueSelect.style.display === 'none' ? newTagValue.value.trim() : newTagValueSelect.value;
+
+            if (key && value) {
+                fetch('/api/set_area_tag', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        id: '{{ area.id }}',
+                        name: key,
+                        value: value
+                    }),
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.error) {
+                        showToast('Error', data.error, 'error');
+                    } else {
+                        showToast('Success', 'New tag added successfully', 'success');
+                        location.reload();
+                    }
+                })
+                .catch(error => {
+                    showToast('Error', 'An unexpected error occurred', 'error');
+                    console.error(error);
+                });
+            } else {
+                showToast('Error', 'Please enter both key and value for the new tag', 'error');
+            }
+        }
+
+        tagsTable.addEventListener('click', function(e) {
+            const target = e.target;
+            const row = target.closest('tr');
+
+            if (target.classList.contains('edit-tag')) {
+                startEditing(row);
+            } else if (target.classList.contains('update-tag')) {
+                updateTag(row);
+            } else if (target.classList.contains('cancel-edit')) {
+                cancelEditing(row);
+            } else if (target.classList.contains('delete-tag')) {
+                deleteTag(row);
+            }
+        });
+
+        function getExistingTags() {
+            return Array.from(tagsTable.querySelectorAll('tr[data-key]')).map(row => row.dataset.key);
+        }
+
+        addOptionalTagButton.addEventListener('click', function() {
+            const existingTags = getExistingTags();
+            const availableOptionalTags = Object.keys(areaTypeRequirements).filter(key => 
+                !areaTypeRequirements[key].required && !existingTags.includes(key)
+            );
+
+            if (availableOptionalTags.length === 0) {
+                showToast('Info', 'All optional tags have been added.', 'info');
+                return;
+            }
+
+            const newRow = document.createElement('tr');
+            newRow.innerHTML = `
+                <td>
+                    <select class="form-control new-tag-key">
+                        <option value="">Select Optional Tag</option>
+                        ${availableOptionalTags.map(key => `<option value="${key}">${key}</option>`).join('')}
+                    </select>
+                </td>
+                <td>
+                    <input type="text" class="form-control new-tag-value" placeholder="New Tag Value">
+                    <select class="form-control new-tag-value-select" style="display: none;"></select>
+                </td>
+                <td>
+                    <button class="btn btn-success btn-sm add-new-tag">Add</button>
+                    <button class="btn btn-secondary btn-sm cancel-new-tag">Cancel</button>
+                </td>
+            `;
+            tagsTable.querySelector('tbody').appendChild(newRow);
+
+            const newTagKey = newRow.querySelector('.new-tag-key');
+            const newTagValue = newRow.querySelector('.new-tag-value');
+            const newTagValueSelect = newRow.querySelector('.new-tag-value-select');
+
+            newTagKey.addEventListener('change', function() {
+                const selectedKey = this.value;
+                if (areaTypeRequirements[selectedKey] && areaTypeRequirements[selectedKey].allowed_values) {
+                    newTagValue.style.display = 'none';
+                    newTagValueSelect.style.display = 'block';
+                    newTagValueSelect.innerHTML = areaTypeRequirements[selectedKey].allowed_values.map(value => 
+                        `<option value="${value}">${value}</option>`
+                    ).join('');
+                } else {
+                    newTagValue.style.display = 'block';
+                    newTagValueSelect.style.display = 'none';
+                }
+            });
+
+            newRow.querySelector('.add-new-tag').addEventListener('click', function() {
+                addNewTag(newRow);
+            });
+
+            newRow.querySelector('.cancel-new-tag').addEventListener('click', function() {
+                newRow.remove();
+            });
+        });
+
+        addCustomTagButton.addEventListener('click', function() {
+            const newRow = document.createElement('tr');
+            newRow.innerHTML = `
+                <td><input type="text" class="form-control new-tag-key" placeholder="Custom Tag Key"></td>
+                <td><input type="text" class="form-control new-tag-value" placeholder="New Tag Value"></td>
+                <td>
+                    <button class="btn btn-success btn-sm add-new-tag">Add</button>
+                    <button class="btn btn-secondary btn-sm cancel-new-tag">Cancel</button>
+                </td>
+            `;
+            tagsTable.querySelector('tbody').appendChild(newRow);
+
+            newRow.querySelector('.add-new-tag').addEventListener('click', function() {
+                addNewTag(newRow);
+            });
+
+            newRow.querySelector('.cancel-new-tag').addEventListener('click', function() {
+                newRow.remove();
+            });
+        });
+
+        const removeAreaBtn = document.getElementById('remove-area-btn');
+        removeAreaBtn.addEventListener('click', function() {
+            showToast('Confirm', 'Are you sure you want to remove this area?', 'warning', {
+                confirmButtonText: 'Yes, remove it',
+                cancelButtonText: 'Cancel',
+                onConfirm: () => {
+                    fetch('/api/remove_area', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({ id: '{{ area.id }}' }),
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.error) {
+                            showToast('Error', data.error, 'error');
+                        } else {
+                            showToast('Success', 'Area removed successfully', 'success');
+                            setTimeout(() => {
+                                window.location.href = '/select_area';
+                            }, 2000);
+                        }
+                    })
+                    .catch(error => {
+                        showToast('Error', 'An unexpected error occurred', 'error');
+                        console.error(error);
+                    });
+                }
+            });
+        });
+    });
+</script>
+
+<style>
+    .tag-value-cell {
+        max-width: 300px;
+        word-wrap: break-word;
+    }
+    
+    .tag-value-content,
+    .tag-input,
+    .tag-select {
+        width: 100%;
+        min-height: 38px;
+    }
+    
+    .tag-value-content {
+        padding: 6px 12px;
+        border: 1px solid transparent;
+    }
+    
+    .tag-input {
+        resize: vertical;
+    }
+    
+    .unsaved-changes {
+        background-color: #fff3cd;
+    }
+</style>
+{% endblock %}

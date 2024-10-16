@@ -1,0 +1,95 @@
+{% extends "base.html" %}
+
+{% block title %}Select Area{% endblock %}
+
+{% block content %}
+<div class="starter-template">
+    <h1>Select an Area</h1>
+    <div class="row justify-content-center">
+        <div class="col-md-4">
+            <form id="search-form" class="form-inline mb-3">
+                <input type="text" id="search-input" name="search" class="form-control mb-2 mr-sm-2" placeholder="Search by name ...">
+            </form>
+            <div id="search-results"></div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const searchForm = document.getElementById('search-form');
+    const searchInput = document.getElementById('search-input');
+    const searchResults = document.getElementById('search-results');
+
+    async function performSearch() {
+        const searchQuery = searchInput.value.trim().toLowerCase();
+
+        try {
+            const response = await fetch('/api/search_areas', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ query: searchQuery })
+            });
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            const data = await response.json();
+            if (data.error) {
+                throw new Error(data.error);
+            }
+            const areas = data;
+
+            if (areas.length === 0) {
+                searchResults.innerHTML = '<p>No results found.</p>';
+            } else {
+                searchResults.innerHTML = areas.map(area => `
+                    <div class="card mb-2">
+                        <div class="card-body">
+                            <h5 class="card-title">${area.name}</h5>
+                            <h6 class="card-subtitle mb-2 text-muted">${area.type}</h6>
+                            <p class="card-text">ID: ${area.id}</p>
+                            <a href="/show_area/${area.id}" class="btn btn-primary btn-sm">View</a>
+                        </div>
+                    </div>
+                `).join('');
+            }
+        } catch (error) {
+            console.error('Error performing search:', error);
+            let errorMessage = 'An unexpected error occurred. Please try again later.';
+            if (error.name === 'TypeError' && error.message === 'Failed to fetch') {
+                errorMessage = 'Network error. Please check your internet connection and try again.';
+            } else if (error.message.startsWith('HTTP error!')) {
+                errorMessage = `Server error: ${error.message}. Please try again later.`;
+            } else if (error.message.includes('timeout') || error.message.includes('Timeout')) {
+                errorMessage = 'The request timed out. Please try again later.';
+            }
+            showToast('Error', errorMessage, 'error');
+            searchResults.innerHTML = `<p class="text-danger">${errorMessage}</p>`;
+        }
+    }
+
+   searchForm.addEventListener('submit', function(e) {
+        e.preventDefault();
+        performSearch();
+    });
+
+    searchInput.addEventListener('input', function() {
+        if (this.value.trim() === '') {
+            searchResults.innerHTML = '<p>Enter a search query to see results.</p>';
+        } else {
+            performSearch();
+        }
+    });
+
+    // Handle unhandled rejections
+    window.addEventListener('unhandledrejection', function(event) {
+        console.error('Unhandled rejection:', event.reason);
+        showToast('Error', 'An unexpected error occurred. Please try again later.', 'error');
+    });
+});
+</script>
+{% endblock %}

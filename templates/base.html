@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Area Admin Interface{% endblock %}</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" />
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/map.css') }}">
+</head>
+<body>
+    <nav class="navbar navbar-expand-md navbar-dark bg-dark fixed-top">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="{{ url_for('home') }}">Area Admin</a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav me-auto">
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('select_area') }}">Select Area</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('add_area') }}">Add Area</a>
+                    </li>
+                </ul>
+                <ul class="navbar-nav">
+                    {% if session.get('password') %}
+                        <li class="nav-item">
+                            <a class="nav-link" href="{{ url_for('logout') }}">Logout</a>
+                        </li>
+                    {% else %}
+                        <li class="nav-item">
+                            <a class="nav-link" href="{{ url_for('login') }}">Login</a>
+                        </li>
+                    {% endif %}
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <main role="main" class="container mt-5 pt-3">
+        {% block content %}{% endblock %}
+    </main>
+
+    <div class="toast-container position-fixed top-0 start-50 translate-middle-x p-3">
+        <div id="liveToast" class="toast" role="alert" aria-live="assertive" aria-atomic="true">
+            <div class="toast-header">
+                <strong class="me-auto" id="toastTitle">Notification</strong>
+                <button type="button" class="btn-close" data-bs-dismiss="toast" aria-label="Close"></button>
+            </div>
+            <div class="toast-body" id="toastMessage"></div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
+    <script src="{{ url_for('static', filename='js/script.js') }}"></script>
+    <script>
+    function showToast(title, message, type = 'success', options = {}) {
+        const toastElement = document.getElementById('liveToast');
+        const toastTitle = document.getElementById('toastTitle');
+        const toastMessage = document.getElementById('toastMessage');
+        const toast = new bootstrap.Toast(toastElement, {
+            position: 'top-center',
+            autohide: true,
+            delay: 5000
+        });
+
+        toastTitle.textContent = title;
+        toastMessage.innerHTML = message;
+        
+        toastElement.classList.remove('bg-success', 'bg-danger', 'bg-warning', 'text-dark', 'text-white');
+        
+        switch (type) {
+            case 'error':
+                toastElement.classList.add('bg-danger', 'text-white');
+                break;
+            case 'warning':
+                toastElement.classList.add('bg-warning', 'text-dark');
+                break;
+            default:
+                toastElement.classList.add('bg-success', 'text-white');
+        }
+
+        if (options.confirmButtonText && options.cancelButtonText) {
+            const confirmBtn = document.createElement('button');
+            confirmBtn.className = 'btn btn-sm btn-light me-2';
+            confirmBtn.textContent = options.confirmButtonText;
+            confirmBtn.onclick = () => {
+                options.onConfirm();
+                toast.hide();
+            };
+
+            const cancelBtn = document.createElement('button');
+            cancelBtn.className = 'btn btn-sm btn-secondary';
+            cancelBtn.textContent = options.cancelButtonText;
+            cancelBtn.onclick = () => {
+                toast.hide();
+            };
+
+            toastMessage.appendChild(document.createElement('br'));
+            toastMessage.appendChild(confirmBtn);
+            toastMessage.appendChild(cancelBtn);
+        }
+
+        toast.show();
+    }
+    </script>
+    {% block scripts %}{% endblock %}
+</body>
+</html>
