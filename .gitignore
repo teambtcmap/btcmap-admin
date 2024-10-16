@@ -1,0 +1,35 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Flask
+instance/
+.webassets-cache
+
+# Virtual environment
+venv/
+env/
+
+# IDEs and editors
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# Flask session files
+flask_session/
+
+# Replit specific
+.replit
+.breakpoints
+replit.nix
+.upm/
+
+# Others
+*.log
+*.sqlite
