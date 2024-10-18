@@ -89,7 +89,7 @@
         attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
     }).addTo(map);
 
-    var geoJsonData = {{ geo_json | tojson | safe }};
+    var geoJsonData = {{ area.tags.get('geo_json', 'null') | tojson | safe }};
     var geoJsonLayer;
     var areaTypeRequirements = {{ area_type_requirements|tojson|safe }};
     var areaType = "{{ area.tags.get('type', '') }}";
