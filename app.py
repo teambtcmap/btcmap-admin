@@ -180,8 +180,6 @@ def select_area():
 def show_area(area_id):
     area = get_area(area_id)
     if area:
-        app.logger.info(f"GeoJSON data for area {area_id}: {area['tags'].get('geo_json')}")
-
         area['created_at'] = format_date(area.get('created_at'))
         area['updated_at'] = format_date(area.get('updated_at'))
         area['last_sync'] = format_date(area.get('last_sync'))
@@ -197,8 +195,6 @@ def show_area(area_id):
             else:
                 app.logger.error(f"Invalid GeoJSON for area {area_id}: {result}")
                 geo_json = None
-        else:
-            geo_json = None
 
         return render_template('show_area.html',
                                area=area,
