@@ -216,11 +216,7 @@
             const newTagValueSelect = row.querySelector('.new-tag-value-select');
             
             const key = newTagKey.value.trim();
-            let value = '';
-            
-            if (newTagValue) {
-                value = newTagValue.value.trim();
-            }
+            let value = newTagValue ? newTagValue.value.trim() : '';
             
             if (newTagValueSelect && newTagValueSelect.style.display !== 'none') {
                 value = newTagValueSelect.value;
