@@ -12,7 +12,8 @@ Session(app)
 
 from utils import (
     get_area, rpc_call, validate_geo_json, validate_general,
-    AREA_TYPES, AREA_TYPE_REQUIREMENTS, validation_functions
+    AREA_TYPES, AREA_TYPE_REQUIREMENTS, validation_functions,
+    search_areas
 )
 
 @app.route('/')
@@ -176,6 +177,18 @@ def add_area():
 @app.route('/select_area')
 def select_area():
     return render_template('select_area.html')
+
+@app.route('/api/search_areas', methods=['POST'])
+def search_areas_api():
+    data = request.json
+    if not data or 'query' not in data:
+        return jsonify({'error': 'Invalid request data'}), 400
+
+    query = data['query']
+    app.logger.info(f"Searching for areas with query: {query}")
+
+    results = search_areas(query)
+    return jsonify(results)
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)

@@ -1,4 +1,3 @@
-
 import json
 from shapely.geometry import shape
 import geojson_rewind
@@ -31,6 +30,18 @@ def validate_general(value, allowed_values=None):
     if allowed_values and value not in allowed_values:
         return False, f'Value must be one of: {", ".join(allowed_values)}'
     return True, None
+
+def search_areas(query):
+    # Placeholder function, replace with actual implementation
+    # This should query the database or API for areas matching the search query
+    dummy_results = [
+        {'id': '1', 'name': 'New York', 'type': 'city'},
+        {'id': '2', 'name': 'Los Angeles', 'type': 'city'},
+        {'id': '3', 'name': 'Chicago', 'type': 'city'},
+        {'id': '4', 'name': 'Houston', 'type': 'city'},
+        {'id': '5', 'name': 'Phoenix', 'type': 'city'}
+    ]
+    return [area for area in dummy_results if query.lower() in area['name'].lower()]
 
 AREA_TYPES = ['country', 'state', 'city', 'neighborhood']
 
