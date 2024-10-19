@@ -140,6 +140,10 @@ AREA_TYPE_REQUIREMENTS = {
         'tips_url': {
             'required': False,
             'type': 'url'
+        },
+        'description': {
+            'required': False,
+            'type': 'text'
         }
     }
 }
