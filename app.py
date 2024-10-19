@@ -187,8 +187,12 @@ def search_areas_api():
     query = data['query']
     app.logger.info(f"Searching for areas with query: {query}")
 
-    results = search_areas(query)
-    return jsonify(results)
+    try:
+        results = search_areas(query)
+        return jsonify(results)
+    except Exception as e:
+        app.logger.error(f"Error performing search: {str(e)}")
+        return jsonify({'error': 'An error occurred while searching areas'}), 500
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)

@@ -32,16 +32,11 @@ def validate_general(value, allowed_values=None):
     return True, None
 
 def search_areas(query):
-    # Placeholder function, replace with actual implementation
-    # This should query the database or API for areas matching the search query
-    dummy_results = [
-        {'id': '1', 'name': 'New York', 'type': 'city'},
-        {'id': '2', 'name': 'Los Angeles', 'type': 'city'},
-        {'id': '3', 'name': 'Chicago', 'type': 'city'},
-        {'id': '4', 'name': 'Houston', 'type': 'city'},
-        {'id': '5', 'name': 'Phoenix', 'type': 'city'}
-    ]
-    return [area for area in dummy_results if query.lower() in area['name'].lower()]
+    # Use RPC call to search for areas
+    result = rpc_call('search_areas', {'query': query})
+    if 'error' in result:
+        raise Exception(f"Error searching areas: {result['error']}")
+    return result.get('areas', [])
 
 AREA_TYPES = ['country', 'state', 'city', 'neighborhood']
 
