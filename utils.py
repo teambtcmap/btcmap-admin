@@ -1,6 +1,7 @@
 import json
 from shapely.geometry import shape
 import geojson_rewind
+import logging
 
 def get_area(area_id):
     # Placeholder function, replace with actual implementation
@@ -32,11 +33,18 @@ def validate_general(value, allowed_values=None):
     return True, None
 
 def search_areas(query):
-    # Use RPC call to search for areas
-    result = rpc_call('search_areas', {'query': query})
-    if 'error' in result:
-        raise Exception(f"Error searching areas: {result['error']}")
-    return result.get('areas', [])
+    logging.info(f"Searching for areas with query: {query}")
+    try:
+        result = rpc_call('search_areas', {'query': query})
+        if 'error' in result:
+            logging.error(f"Error in RPC call: {result['error']}")
+            raise Exception(f"Error searching areas: {result['error']}")
+        areas = result.get('areas', [])
+        logging.info(f"Found {len(areas)} areas")
+        return areas
+    except Exception as e:
+        logging.exception(f"Unexpected error in search_areas: {str(e)}")
+        raise
 
 AREA_TYPES = ['country', 'state', 'city', 'neighborhood']
 

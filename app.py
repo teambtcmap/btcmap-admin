@@ -4,17 +4,16 @@ import os
 import json
 from datetime import datetime
 from urllib.parse import urlparse
-
-app = Flask(__name__)
-app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'your-secret-key')
-app.config['SESSION_TYPE'] = 'filesystem'
-Session(app)
-
 from utils import (
     get_area, rpc_call, validate_geo_json, validate_general,
     AREA_TYPES, AREA_TYPE_REQUIREMENTS, validation_functions,
     search_areas
 )
+
+app = Flask(__name__)
+app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'your-secret-key')
+app.config['SESSION_TYPE'] = 'filesystem'
+Session(app)
 
 @app.route('/')
 def home():
@@ -182,17 +181,19 @@ def select_area():
 def search_areas_api():
     data = request.json
     if not data or 'query' not in data:
-        return jsonify({'error': 'Invalid request data'}), 400
+        app.logger.error("Invalid request data: missing query")
+        return jsonify({'error': 'Invalid request data: missing query'}), 400
 
     query = data['query']
     app.logger.info(f"Searching for areas with query: {query}")
 
     try:
         results = search_areas(query)
+        app.logger.info(f"Search completed. Found {len(results)} results.")
         return jsonify(results)
     except Exception as e:
-        app.logger.error(f"Error performing search: {str(e)}")
-        return jsonify({'error': 'An error occurred while searching areas'}), 500
+        app.logger.exception(f"Error performing search: {str(e)}")
+        return jsonify({'error': f'An error occurred while searching areas: {str(e)}'}), 500
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)
