@@ -51,6 +51,18 @@ def set_area_tag():
 
     requirements = AREA_TYPE_REQUIREMENTS.get(area_type, {}).get(key, {})
 
+    # Handle numeric values
+    if key == 'area_km2':
+        try:
+            value = float(value)
+        except ValueError:
+            return jsonify({'error': f'{key}: Invalid numeric value'}), 400
+    elif key == 'population':
+        try:
+            value = int(value)
+        except ValueError:
+            return jsonify({'error': f'{key}: Invalid integer value'}), 400
+
     validation_funcs = validation_functions.get(requirements.get('type', 'text'), [validate_general])
     for validation_func in validation_funcs:
         is_valid, error_message = validation_func(value, requirements.get('allowed_values'))
@@ -85,17 +97,6 @@ def set_area_tag():
 
         return jsonify({'success': True, 'message': 'GeoJSON and area updated successfully'})
     else:
-        if key == 'area_km2':
-            try:
-                value = float(value)
-            except ValueError:
-                return jsonify({'error': f'{key}: Invalid numeric value'}), 400
-        elif key == 'population':
-            try:
-                value = int(value)
-            except ValueError:
-                return jsonify({'error': f'{key}: Invalid integer value'}), 400
-
         result = rpc_call('set_area_tag', {
             'id': area_id,
             'name': key,
@@ -136,6 +137,22 @@ def add_area():
                 validation_errors.append(f'Missing required field: {key}')
             elif key in tags:
                 value = tags[key]
+                # Handle numeric values
+                if key == 'area_km2':
+                    try:
+                        value = float(value)
+                        tags[key] = value
+                    except ValueError:
+                        validation_errors.append(f'{key}: Invalid numeric value')
+                        continue
+                elif key == 'population':
+                    try:
+                        value = int(value)
+                        tags[key] = value
+                    except ValueError:
+                        validation_errors.append(f'{key}: Invalid integer value')
+                        continue
+
                 validation_funcs = validation_functions.get(requirements['type'], [validate_general])
                 for validation_func in validation_funcs:
                     is_valid, error_message = validation_func(value, requirements.get('allowed_values'))
@@ -152,17 +169,6 @@ def add_area():
                 return jsonify({'error': {'message': result}}), 400
             tags['geo_json'] = result['geo_json']
             tags['area_km2'] = result['area_km2']
-
-        if 'area_km2' in tags:
-            try:
-                tags['area_km2'] = float(tags['area_km2'])
-            except ValueError:
-                return jsonify({'error': {'message': 'Invalid area_km2 value'}}), 400
-        if 'population' in tags:
-            try:
-                tags['population'] = int(tags['population'])
-            except ValueError:
-                return jsonify({'error': {'message': 'Invalid population value'}}), 400
 
         result = rpc_call('add_area', {'tags': tags})
 
