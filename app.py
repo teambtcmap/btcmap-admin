@@ -41,7 +41,7 @@ AREA_TYPE_REQUIREMENTS = {
             'type': 'select',
             'allowed_values': CONTINENTS
         },
-        'icon_square': {
+        'icon:square': {
             'required': True,
             'type': 'text'
         },
@@ -91,7 +91,7 @@ AREA_TYPE_REQUIREMENTS = {
         },
         'contact:nostr': {
             'required': False,
-            'type': 'url'
+            'type': 'text'
         },
         'contact:meetup': {
             'required': False,
