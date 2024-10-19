@@ -1,25 +1,49 @@
 {% extends "base.html" %}
 
-{% block title %}Area Details{% endblock %}
+{% block title %}{{ area.tags.get('name', 'Unknown Area') }}{% endblock %}
 
 {% block content %}
-<div class="container">
-    <h1 class="mt-5">Area Details</h1>
-    <h2>{{ area.tags.name }} ({{ area.tags.type }})</h2>
-    
-    <div id="map" style="height: 400px; width: 100%;"></div>
-    
-    <h3 class="mt-4">Tags</h3>
-    <table id="tags-table" class="table table-striped">
+<div class="starter-template">
+    <h1>Area Details: {{ area.tags.get('name', 'Unknown') }}</h1>
+    <p class="lead">Type: {{ area.tags.get('type', 'Unknown') }}</p>
+
+    <div class="card mb-4">
+        <div class="card-header">
+            <h3 class="mb-0">Metadata</h3>
+        </div>
+        <div class="card-body">
+            <dl class="row">
+                <dt class="col-sm-3">Area ID:</dt>
+                <dd class="col-sm-9">{{ area.id }}</dd>
+
+                <dt class="col-sm-3">Created At:</dt>
+                <dd class="col-sm-9">{{ area.created_at|default('N/A') }}</dd>
+
+                <dt class="col-sm-3">Updated At:</dt>
+                <dd class="col-sm-9">{{ area.updated_at|default('N/A') }}</dd>
+
+                <dt class="col-sm-3">Last Sync:</dt>
+                <dd class="col-sm-9">{{ area.last_sync|default('N/A') }}</dd>
+            </dl>
+        </div>
+    </div>
+
+    <div class="map-container position-relative mb-4">
+        <div id="map" style="height: 400px; width: 100%;"></div>
+    </div>
+
+    <h3>Tags</h3>
+    <table class="table table-striped" id="tags-table">
         <thead>
             <tr>
-                <th>Key</th>
-                <th>Value</th>
-                <th>Actions</th>
+                <th style="width: 30%;">Key</th>
+                <th style="width: 40%;">Value</th>
+                <th style="width: 30%;">Actions</th>
             </tr>
         </thead>
         <tbody>
             {% for key, value in area.tags.items() %}
+            {% if key != 'geo_json' %}
             <tr data-key="{{ key }}">
                 <td>{{ key }}</td>
                 <td class="tag-value-cell">
@@ -36,27 +60,22 @@
                     {% endif %}
                 </td>
             </tr>
+            {% endif %}
             {% endfor %}
         </tbody>
     </table>
-    
-    <div class="mt-3">
-        <button id="add-optional-tag" class="btn btn-secondary">Add Optional Tag</button>
-        <button id="add-custom-tag" class="btn btn-secondary">Add Custom Tag</button>
+
+    <div class="mb-3">
+        <button id="add-optional-tag-btn" class="btn btn-primary">Add Optional Tag</button>
+        <button id="add-custom-tag-btn" class="btn btn-secondary">Add Custom Tag</button>
     </div>
 
-    <div class="mt-5">
-        <h3>Area Information</h3>
-        <p><strong>ID:</strong> {{ area.id }}</p>
-        <p><strong>Created At:</strong> {{ area.created_at }}</p>
-        <p><strong>Updated At:</strong> {{ area.updated_at }}</p>
-        <p><strong>Last Sync:</strong> {{ area.last_sync }}</p>
+    <div class="mt-5 p-3 bg-danger text-white">
+        <h3>Danger Zone</h3>
+        <p>Be careful! Actions in this section can't be undone.</p>
+        <button id="remove-area-btn" class="btn btn-outline-light">Remove Area</button>
     </div>
 
-    <div class="mt-5 mb-5">
-        <h3 class="text-danger">Danger Zone</h3>
-        <button id="remove-area-btn" class="btn btn-danger">Remove Area</button>
-    </div>
 </div>
 {% endblock %}
 
@@ -65,8 +84,8 @@
 <script>
     document.addEventListener('DOMContentLoaded', function() {
         const tagsTable = document.getElementById('tags-table');
-        const addOptionalTagButton = document.getElementById('add-optional-tag');
-        const addCustomTagButton = document.getElementById('add-custom-tag');
+        const addOptionalTagButton = document.getElementById('add-optional-tag-btn');
+        const addCustomTagButton = document.getElementById('add-custom-tag-btn');
         const areaTypeRequirements = {{ area_type_requirements | tojson | safe }};
 
         var map = L.map('map').setView([0, 0], 2);
@@ -99,8 +118,10 @@
                     `<option value="${value}" ${content.textContent.trim() === value ? 'selected' : ''}>${value}</option>`
                 ).join('');
                 select.style.display = 'block';
+                input.style.display = 'none';
             } else {
                 input.style.display = 'block';
+                select.style.display = 'none';
             }
         }
 
@@ -382,10 +403,6 @@
     
     .tag-input {
         resize: vertical;
-    }
-    
-    .unsaved-changes {
-        background-color: #fff3cd;
     }
 </style>
 {% endblock %}
