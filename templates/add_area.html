@@ -80,6 +80,50 @@ document.addEventListener('DOMContentLoaded', function() {
     var currentGeoJson;
     var previouslySavedGeoJson;
 
+    function validateKey(key) {
+        if (!key || typeof key !== 'string') {
+            return { isValid: false, error: "Key must be a non-empty string" };
+        }
+        
+        key = key.trim();
+        if (!key) {
+            return { isValid: false, error: "Key cannot be empty or contain only whitespace" };
+        }
+        
+        if (!/^[a-zA-Z][a-zA-Z0-9_:]*$/.test(key)) {
+            return { isValid: false, error: "Key must start with a letter and contain only letters, numbers, underscores, and colons" };
+        }
+        
+        return { isValid: true };
+    }
+
+    function validateValue(value, type = 'text', allowedValues = null) {
+        if (!value || typeof value !== 'string') {
+            return { isValid: false, error: "Value must be a non-empty string" };
+        }
+
+        value = value.trim();
+        if (!value) {
+            return { isValid: false, error: "Value cannot be empty or contain only whitespace" };
+        }
+
+        if (type === 'number') {
+            if (!/^\d*\.?\d+$/.test(value)) {
+                return { isValid: false, error: "Value must be a valid number" };
+            }
+        } else if (type === 'date') {
+            if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+                return { isValid: false, error: "Value must be in YYYY-MM-DD format" };
+            }
+        } else if (allowedValues) {
+            if (!allowedValues.includes(value)) {
+                return { isValid: false, error: `Value must be one of: ${allowedValues.join(', ')}` };
+            }
+        }
+
+        return { isValid: true };
+    }
+
     function updateMap(geoJson) {
         if (geoJsonLayer) {
             map.removeLayer(geoJsonLayer);
@@ -106,7 +150,11 @@ document.addEventListener('DOMContentLoaded', function() {
                         ${allowedValues.map(val => `<option value="${val}">${val}</option>`).join('')}
                     </select>
                 ` : `
-                    <input type="${key === 'population' || key === 'area_km2' ? 'number' : 'text'}" class="form-control" name="${key}" value="${value}" ${isRequired ? 'required' : ''}>
+                    <input type="${key === 'population' || key === 'area_km2' ? 'number' : 'text'}" 
+                           class="form-control" 
+                           name="${key}" 
+                           value="${value}" 
+                           ${isRequired ? 'required' : ''}>
                 `}
             </td>
             <td>
@@ -125,15 +173,15 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     function getExistingKeys() {
-        const keys = [];
+        const keys = new Set();
         tagsTable.querySelectorAll('tr').forEach(row => {
             const keyElement = row.querySelector('td:first-child');
-            const key = keyElement.textContent.trim() || keyElement.querySelector('input')?.value.trim();
+            const key = keyElement.textContent.trim() || keyElement.querySelector('input')?.value?.trim();
             if (key) {
-                keys.push(key);
+                keys.add(key);
             }
         });
-        return keys;
+        return Array.from(keys);
     }
 
     function updateFields() {
@@ -219,6 +267,79 @@ document.addEventListener('DOMContentLoaded', function() {
         tagsTable.appendChild(newRow);
     }
 
+    function validateAndGetTags() {
+        const tags = {};
+        const errors = [];
+        const existingKeys = new Set();
+
+        // Add type
+        const selectedType = typeSelect.value;
+        if (!selectedType) {
+            errors.push("Please select an area type");
+            return { isValid: false, errors };
+        }
+        tags.type = selectedType;
+
+        // Validate required fields
+        if (areaTypeRequirements[selectedType]) {
+            for (const [key, requirements] of Object.entries(areaTypeRequirements[selectedType])) {
+                if (requirements.required) {
+                    const input = tagsTable.querySelector(`[name="${key}"]`);
+                    if (!input || !input.value.trim()) {
+                        errors.push(`Required field "${key}" is missing or empty`);
+                    }
+                }
+            }
+        }
+
+        // Validate all fields
+        tagsTable.querySelectorAll('tr').forEach(row => {
+            const keyElement = row.querySelector('td:first-child');
+            let key = keyElement.textContent.trim() || keyElement.querySelector('input')?.value?.trim();
+            const valueInput = row.querySelector('td:nth-child(2) input, td:nth-child(2) select');
+            
+            if (!key && !valueInput?.value.trim()) {
+                return; // Skip completely empty rows
+            }
+
+            // Validate key
+            const keyValidation = validateKey(key);
+            if (!keyValidation.isValid) {
+                errors.push(keyValidation.error);
+                return;
+            }
+
+            // Check for duplicate keys
+            if (existingKeys.has(key)) {
+                errors.push(`Duplicate key: ${key}`);
+                return;
+            }
+            existingKeys.add(key);
+
+            // Validate value
+            const value = valueInput?.value.trim();
+            const requirements = areaTypeRequirements[selectedType]?.[key];
+            const valueValidation = validateValue(value, requirements?.type, requirements?.allowed_values);
+            if (!valueValidation.isValid) {
+                errors.push(`${key}: ${valueValidation.error}`);
+                return;
+            }
+
+            tags[key] = value;
+        });
+
+        // Add GeoJSON if present
+        if (currentGeoJson) {
+            tags.geo_json = JSON.stringify(currentGeoJson);
+        }
+
+        return {
+            isValid: errors.length === 0,
+            errors,
+            tags
+        };
+    }
+
     // GeoJSON editing functionality
     const editGeoJsonBtn = document.getElementById('edit-geojson-btn');
     const geojsonInput = document.getElementById('geojson-input');
@@ -275,22 +396,10 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 
     function submitForm() {
-        const tags = {};
-        tags['type'] = typeSelect.value;
-
-        const rows = tagsTable.querySelectorAll('tr');
-        rows.forEach(row => {
-            const keyElement = row.querySelector('td:first-child');
-            const key = keyElement.textContent.trim() || keyElement.querySelector('select, input')?.value?.trim();
-            const valueInput = row.querySelector('td:nth-child(2) input, td:nth-child(2) select');
-            
-            if (key && valueInput && valueInput.value.trim()) {
-                tags[key] = valueInput.value.trim();
-            }
-        });
-
-        if (currentGeoJson) {
-            tags['geo_json'] = JSON.stringify(currentGeoJson);
+        const validation = validateAndGetTags();
+        if (!validation.isValid) {
+            showToast('Error', validation.errors.join('\n'), 'error');
+            return;
         }
 
         fetch('/add_area', {
@@ -298,7 +407,7 @@ document.addEventListener('DOMContentLoaded', function() {
             headers: {
                 'Content-Type': 'application/json',
             },
-            body: JSON.stringify(tags)
+            body: JSON.stringify(validation.tags)
         }).then(response => response.json())
         .then(data => {
             if (data.error) {
@@ -335,4 +444,27 @@ document.addEventListener('DOMContentLoaded', function() {
     updateFields();
 });
 </script>
+
+<style>
+    .tag-value-cell {
+        max-width: 300px;
+        word-wrap: break-word;
+    }
+    
+    .tag-value-content,
+    .tag-input,
+    .tag-select {
+        width: 100%;
+        min-height: 38px;
+    }
+    
+    .tag-value-content {
+        padding: 6px 12px;
+        border: 1px solid transparent;
+    }
+    
+    .tag-input {
+        resize: vertical;
+    }
+</style>
 {% endblock %}
