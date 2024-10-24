@@ -133,11 +133,11 @@ AREA_TYPE_REQUIREMENTS = {
             'required': False,
             'type': 'url'
         },
-        'ln_address': {
+        'tips:lightning_address': {
             'required': False,
             'type': 'text'
         },
-        'tips_url': {
+        'tips:url': {
             'required': False,
             'type': 'url'
         },
