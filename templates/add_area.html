@@ -95,6 +95,20 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
+    function validateKey(key, existingKeys) {
+        key = key.trim();
+        if (key === '') {
+            return { isValid: false, message: 'Key cannot be empty' };
+        }
+        if (existingKeys.includes(key)) {
+            return { isValid: false, message: 'Key already exists' };
+        }
+        if (!/^[a-zA-Z][a-zA-Z0-9_:]*$/.test(key)) {
+            return { isValid: false, message: 'Key must start with a letter and contain only letters, numbers, underscores, and colons' };
+        }
+        return { isValid: true };
+    }
+
     function createTagRow(key, value = '', isRequired = false, isCustom = false, allowedValues = null) {
         const row = document.createElement('tr');
         row.innerHTML = `
@@ -121,7 +135,43 @@ document.addEventListener('DOMContentLoaded', function() {
             });
         }
 
+        if (isCustom) {
+            const keyInput = row.querySelector('.custom-key');
+            keyInput.addEventListener('blur', function() {
+                const validation = validateKey(this.value, getExistingKeys());
+                if (!validation.isValid) {
+                    showToast('Error', validation.message, 'error');
+                    this.classList.add('is-invalid');
+                    if (!this.nextElementSibling || !this.nextElementSibling.classList.contains('invalid-feedback')) {
+                        const feedback = document.createElement('div');
+                        feedback.className = 'invalid-feedback';
+                        feedback.textContent = validation.message;
+                        this.parentNode.appendChild(feedback);
+                    }
+                    this.value = '';
+                } else {
+                    this.classList.remove('is-invalid');
+                    const feedback = this.nextElementSibling;
+                    if (feedback && feedback.classList.contains('invalid-feedback')) {
+                        feedback.remove();
+                    }
+                }
+            });
+        }
+
         return row;
+    }
+
+    function getExistingKeys() {
+        const keys = [];
+        tagsTable.querySelectorAll('tr').forEach(row => {
+            const keyElement = row.querySelector('td:first-child');
+            const key = keyElement.textContent.trim() || keyElement.querySelector('input')?.value.trim();
+            if (key) {
+                keys.push(key);
+            }
+        });
+        return keys;
     }
 
     function updateFields() {
@@ -139,11 +189,22 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     function addOptionalField() {
+        const existingKeys = getExistingKeys();
+        const optionalFields = Object.entries(areaTypeRequirements[typeSelect.value] || {})
+            .filter(([key, req]) => !req.required && !existingKeys.includes(key))
+            .map(([key]) => key);
+
+        if (optionalFields.length === 0) {
+            showToast('Info', 'All optional fields have been added', 'info');
+            return;
+        }
+
         const newRow = document.createElement('tr');
         newRow.innerHTML = `
             <td>
                 <select class="form-control optional-field-select">
                     <option value="">Select Optional Field</option>
+                    ${optionalFields.map(field => `<option value="${field}">${field}</option>`).join('')}
                 </select>
             </td>
             <td>
@@ -156,15 +217,12 @@ document.addEventListener('DOMContentLoaded', function() {
         tagsTable.appendChild(newRow);
 
         const optionalFieldSelect = newRow.querySelector('.optional-field-select');
-        updateOptionalFieldSelect(optionalFieldSelect);
-
         optionalFieldSelect.addEventListener('change', function() {
             const selectedField = this.value;
-            const selectedType = typeSelect.value;
-            const requirements = areaTypeRequirements[selectedType] && areaTypeRequirements[selectedType][selectedField];
+            const requirements = areaTypeRequirements[typeSelect.value]?.[selectedField];
             const valueCell = this.closest('tr').querySelector('td:nth-child(2)');
 
-            if (requirements && requirements.allowed_values) {
+            if (requirements?.allowed_values) {
                 valueCell.innerHTML = `
                     <select class="form-control" name="${selectedField}">
                         <option value="">Select ${selectedField}</option>
@@ -173,7 +231,9 @@ document.addEventListener('DOMContentLoaded', function() {
                 `;
             } else {
                 valueCell.innerHTML = `
-                    <input type="${selectedField === 'population' || selectedField === 'area_km2' ? 'number' : 'text'}" class="form-control" name="${selectedField}">
+                    <input type="${selectedField === 'population' || selectedField === 'area_km2' ? 'number' : 'text'}" 
+                           class="form-control" 
+                           name="${selectedField}">
                 `;
             }
         });
@@ -184,36 +244,23 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    function updateOptionalFieldSelect(selectElement = null) {
-        const selectedType = typeSelect.value;
-        const addedFields = Array.from(tagsTable.querySelectorAll('tr')).map(row => {
-            const firstCell = row.querySelector('td:first-child');
-            return firstCell.textContent.trim() || firstCell.querySelector('select, input')?.value;
-        }).filter(Boolean);
+    function updateOptionalFieldSelect() {
+        const existingKeys = getExistingKeys();
+        const selects = tagsTable.querySelectorAll('.optional-field-select');
+        
+        selects.forEach(select => {
+            const currentValue = select.value;
+            const optionalFields = Object.entries(areaTypeRequirements[typeSelect.value] || {})
+                .filter(([key, req]) => !req.required && !existingKeys.includes(key))
+                .map(([key]) => key);
 
-        const optionalFields = [];
-        if (areaTypeRequirements && selectedType in areaTypeRequirements) {
-            for (const [key, requirements] of Object.entries(areaTypeRequirements[selectedType])) {
-                if (!requirements.required && !addedFields.includes(key)) {
-                    optionalFields.push(key);
-                }
-            }
-        }
-
-        const updateSelect = (select) => {
-            if (select) {
-                select.innerHTML = `
-                    <option value="">Select Optional Field</option>
-                    ${optionalFields.map(field => `<option value="${field}">${field}</option>`).join('')}
-                `;
-            }
-        };
-
-        if (selectElement) {
-            updateSelect(selectElement);
-        } else {
-            tagsTable.querySelectorAll('.optional-field-select').forEach(updateSelect);
-        }
+            select.innerHTML = `
+                <option value="">Select Optional Field</option>
+                ${optionalFields.map(field => `
+                    <option value="${field}" ${currentValue === field ? 'selected' : ''}>${field}</option>
+                `).join('')}
+            `;
+        });
     }
 
     function addCustomField() {
@@ -280,93 +327,61 @@ document.addEventListener('DOMContentLoaded', function() {
     addOptionalFieldBtn.addEventListener('click', addOptionalField);
     addCustomFieldBtn.addEventListener('click', addCustomField);
 
-    function validateTag(key, value, requirements) {
-        if (requirements.required && !value.trim()) {
-            return `${key} is required`;
-        }
-
-        if (requirements.type === 'number' || requirements.type === 'integer') {
-            const num = parseFloat(value);
-            if (isNaN(num) || num < 0) {
-                return `${key} must be a non-negative ${requirements.type}`;
-            }
-            if (requirements.type === 'integer' && !Number.isInteger(num)) {
-                return `${key} must be an integer`;
-            }
-        }
-
-        if (requirements.type === 'date') {
-            const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
-            if (!dateRegex.test(value)) {
-                return `${key} must be in YYYY-MM-DD format`;
-            }
-            const date = new Date(value);
-            if (isNaN(date.getTime())) {
-                return `${key} is not a valid date`;
-            }
-        }
-
-        if (requirements.type === 'url') {
-            try {
-                new URL(value);
-            } catch (_) {
-                return `${key} must be a valid URL`;
-            }
-        }
-
-        if (requirements.type === 'email') {
-            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-            if (!emailRegex.test(value)) {
-                return `${key} must be a valid email address`;
-            }
-        }
-
-        if (requirements.type === 'tel') {
-            const phoneRegex = /^\+?[1-9]\d{1,14}$/;
-            if (!phoneRegex.test(value)) {
-                return `${key} must be a valid phone number`;
-            }
-        }
-
-        if (requirements.allowed_values && !requirements.allowed_values.includes(value)) {
-            return `${key} must be one of: ${requirements.allowed_values.join(', ')}`;
-        }
-
-        return null;
-    }
-
     function validateForm() {
         const selectedType = typeSelect.value;
+        if (!selectedType) {
+            showToast('Error', 'Please select an area type', 'error');
+            return false;
+        }
+
         const rows = tagsTable.querySelectorAll('tr');
         let isValid = true;
         let errors = [];
 
+        const existingKeys = new Set();
+
         rows.forEach(row => {
             const keyElement = row.querySelector('td:first-child');
-            const key = keyElement.textContent.trim() || keyElement.querySelector('select, input')?.value;
+            let key = keyElement.textContent.trim() || keyElement.querySelector('select, input')?.value?.trim();
             const valueInput = row.querySelector('td:nth-child(2) input, td:nth-child(2) select');
             
             if (key && valueInput) {
+                // Validate key
+                const keyValidation = validateKey(key, Array.from(existingKeys));
+                if (!keyValidation.isValid) {
+                    isValid = false;
+                    errors.push(keyValidation.message);
+                    if (keyElement.querySelector('input')) {
+                        keyElement.querySelector('input').classList.add('is-invalid');
+                    }
+                    return;
+                }
+
+                existingKeys.add(key);
+
+                // Validate value
                 const value = valueInput.value.trim();
                 const requirements = areaTypeRequirements[selectedType][key] || {type: 'text', required: false};
-                const error = validateTag(key, value, requirements);
                 
-                if (error) {
+                if (requirements.required && !value) {
                     isValid = false;
-                    errors.push(error);
+                    errors.push(`${key} is required`);
                     valueInput.classList.add('is-invalid');
-                    let errorFeedback = row.querySelector('.invalid-feedback');
-                    if (!errorFeedback) {
-                        errorFeedback = document.createElement('div');
-                        errorFeedback.className = 'invalid-feedback';
-                        valueInput.parentNode.appendChild(errorFeedback);
-                    }
-                    errorFeedback.textContent = error;
-                } else {
-                    valueInput.classList.remove('is-invalid');
-                    const errorFeedback = row.querySelector('.invalid-feedback');
-                    if (errorFeedback) {
-                        errorFeedback.remove();
+                }
+
+                if (value) {
+                    if (requirements.type === 'number' || requirements.type === 'integer') {
+                        const num = parseFloat(value);
+                        if (isNaN(num) || num < 0) {
+                            isValid = false;
+                            errors.push(`${key} must be a non-negative ${requirements.type}`);
+                            valueInput.classList.add('is-invalid');
+                        }
+                        if (requirements.type === 'integer' && !Number.isInteger(num)) {
+                            isValid = false;
+                            errors.push(`${key} must be an integer`);
+                            valueInput.classList.add('is-invalid');
+                        }
                     }
                 }
             }
@@ -387,7 +402,7 @@ document.addEventListener('DOMContentLoaded', function() {
             const rows = tagsTable.querySelectorAll('tr');
             rows.forEach(row => {
                 const keyElement = row.querySelector('td:first-child');
-                const key = keyElement.textContent.trim() || keyElement.querySelector('select, input')?.value;
+                const key = keyElement.textContent.trim() || keyElement.querySelector('select, input')?.value?.trim();
                 const valueInput = row.querySelector('td:nth-child(2) input, td:nth-child(2) select');
                 
                 if (key && valueInput && valueInput.value.trim()) {
@@ -398,8 +413,6 @@ document.addEventListener('DOMContentLoaded', function() {
             if (currentGeoJson) {
                 tags['geo_json'] = JSON.stringify(currentGeoJson);
             }
-
-            console.log('Submitting form with tags:', tags);
 
             fetch('/add_area', {
                 method: 'POST',
