@@ -62,26 +62,14 @@
         const toastElement = document.getElementById('liveToast');
         const toastTitle = document.getElementById('toastTitle');
         const toastMessage = document.getElementById('toastMessage');
-        
-        // Determine if message contains multiple lines
-        const hasMultipleLines = message.includes('\n') || message.includes('<br>');
-        
-        // Set delay based on type and content
-        let delay = 3000; // Default for success
-        if (type === 'error') {
-            delay = hasMultipleLines ? 0 : 10000; // No auto-hide for multi-line errors, 10s for single line
-        } else if (type === 'warning') {
-            delay = 5000;
-        }
-
         const toast = new bootstrap.Toast(toastElement, {
             position: 'top-center',
-            autohide: delay > 0,
-            delay: delay
+            autohide: true,
+            delay: 5000
         });
 
         toastTitle.textContent = title;
-        toastMessage.innerHTML = message.replace(/\n/g, '<br>');
+        toastMessage.innerHTML = message;
         
         toastElement.classList.remove('bg-success', 'bg-danger', 'bg-warning', 'text-dark', 'text-white');
         

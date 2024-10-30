@@ -59,6 +59,7 @@
 {% endblock %}
 
 {% block scripts %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Turf.js/6.5.0/turf.min.js"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     const areaTypeRequirements = {{ area_type_requirements | tojson | safe }};
@@ -79,355 +80,379 @@ document.addEventListener('DOMContentLoaded', function() {
     var currentGeoJson;
     var previouslySavedGeoJson;
 
-    function validateKey(key) {
-        if (!key || typeof key !== 'string') {
-            return { isValid: false, error: "Key must be a non-empty string" };
+    function updateMap(geoJson) {
+        if (geoJsonLayer) {
+            map.removeLayer(geoJsonLayer);
         }
-        
-        key = key.trim();
-        if (!key) {
-            return { isValid: false, error: "Key cannot be empty or contain only whitespace" };
+
+        try {
+            geoJsonLayer = L.geoJSON(geoJson).addTo(map);
+            map.fitBounds(geoJsonLayer.getBounds());
+            currentGeoJson = geoJson;
+        } catch (error) {
+            console.error("Error adding GeoJSON to map:", error);
+            showToast('Error', `Invalid GeoJSON: ${error.message}`, 'error');
         }
-        
-        if (!/^[a-zA-Z][a-zA-Z0-9_:]*$/.test(key)) {
-            return { isValid: false, error: "Key must start with a letter and contain only letters, numbers, underscores, and colons" };
-        }
-        
-        return { isValid: true, key: key };
     }
 
-    function validateValue(value, type = 'text', allowedValues = null) {
-        if (!value || typeof value !== 'string') {
-            return { isValid: false, error: "Value must be a non-empty string" };
+    function validateKey(key, existingKeys) {
+        key = key.trim();
+        if (key === '') {
+            return { isValid: false, message: 'Key cannot be empty' };
         }
-
-        value = value.trim();
-        if (!value) {
-            return { isValid: false, error: "Value cannot be empty or contain only whitespace" };
+        if (existingKeys.includes(key)) {
+            return { isValid: false, message: 'Key already exists' };
         }
-
-        if (type === 'number') {
-            if (!/^\d*\.?\d+$/.test(value)) {
-                return { isValid: false, error: "Value must be a valid number" };
-            }
-        } else if (type === 'date') {
-            if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) {
-                return { isValid: false, error: "Value must be in YYYY-MM-DD format" };
-            }
-        } else if (allowedValues) {
-            if (!allowedValues.includes(value)) {
-                return { isValid: false, error: `Value must be one of: ${allowedValues.join(', ')}` };
-            }
+        if (!/^[a-zA-Z][a-zA-Z0-9_:]*$/.test(key)) {
+            return { isValid: false, message: 'Key must start with a letter and contain only letters, numbers, underscores, and colons' };
         }
-
-        return { isValid: true, value: value };
+        return { isValid: true };
     }
 
     function createTagRow(key, value = '', isRequired = false, isCustom = false, allowedValues = null) {
         const row = document.createElement('tr');
-        const keyCell = document.createElement('td');
-        const valueCell = document.createElement('td');
-        const actionCell = document.createElement('td');
-
-        if (isCustom) {
-            const keyInput = document.createElement('input');
-            keyInput.type = 'text';
-            keyInput.className = 'form-control';
-            keyInput.placeholder = 'Custom Key';
-            keyInput.addEventListener('input', function() {
-                // Validate key on input
-                const validation = validateKey(this.value);
-                if (!validation.isValid) {
-                    this.classList.add('is-invalid');
-                    if (!this.nextElementSibling) {
-                        const feedback = document.createElement('div');
-                        feedback.className = 'invalid-feedback';
-                        keyCell.appendChild(feedback);
-                    }
-                    this.nextElementSibling.textContent = validation.error;
-                } else {
-                    this.classList.remove('is-invalid');
-                    if (this.nextElementSibling) {
-                        this.nextElementSibling.textContent = '';
-                    }
-                }
-            });
-            keyCell.appendChild(keyInput);
-        } else {
-            keyCell.textContent = key;
-        }
-
-        if (allowedValues) {
-            const select = document.createElement('select');
-            select.className = 'form-control';
-            select.name = key;
-            if (isRequired) select.required = true;
-
-            const defaultOption = document.createElement('option');
-            defaultOption.value = '';
-            defaultOption.textContent = `Select ${key}`;
-            select.appendChild(defaultOption);
-
-            allowedValues.forEach(val => {
-                const option = document.createElement('option');
-                option.value = val;
-                option.textContent = val;
-                if (val === value) option.selected = true;
-                select.appendChild(option);
-            });
-            valueCell.appendChild(select);
-        } else {
-            const input = document.createElement('input');
-            input.type = key === 'population' || key === 'area_km2' ? 'number' : 'text';
-            input.className = 'form-control';
-            input.name = key;
-            input.value = value;
-            if (isRequired) input.required = true;
-            input.addEventListener('input', function() {
-                // Validate value on input
-                const validation = validateValue(this.value, key === 'population' || key === 'area_km2' ? 'number' : 'text');
-                if (!validation.isValid) {
-                    this.classList.add('is-invalid');
-                    if (!this.nextElementSibling) {
-                        const feedback = document.createElement('div');
-                        feedback.className = 'invalid-feedback';
-                        valueCell.appendChild(feedback);
-                    }
-                    this.nextElementSibling.textContent = validation.error;
-                } else {
-                    this.classList.remove('is-invalid');
-                    if (this.nextElementSibling) {
-                        this.nextElementSibling.textContent = '';
-                    }
-                }
-            });
-            valueCell.appendChild(input);
-        }
+        row.innerHTML = `
+            <td>${isCustom ? '<input type="text" class="form-control custom-key" placeholder="Custom Key">' : key}</td>
+            <td>
+                ${allowedValues ? `
+                    <select class="form-control" name="${key}" ${isRequired ? 'required' : ''}>
+                        <option value="">Select ${key}</option>
+                        ${allowedValues.map(val => `<option value="${val}">${val}</option>`).join('')}
+                    </select>
+                ` : `
+                    <input type="${key === 'population' || key === 'area_km2' ? 'number' : 'text'}" class="form-control" name="${key}" value="${value}" ${isRequired ? 'required' : ''}>
+                `}
+            </td>
+            <td>
+                ${!isRequired ? '<button type="button" class="btn btn-danger btn-sm remove-field">Remove</button>' : ''}
+            </td>
+        `;
 
         if (!isRequired) {
-            const removeBtn = document.createElement('button');
-            removeBtn.type = 'button';
-            removeBtn.className = 'btn btn-danger btn-sm';
-            removeBtn.textContent = 'Remove';
-            removeBtn.onclick = () => {
+            row.querySelector('.remove-field').addEventListener('click', function() {
                 row.remove();
                 updateOptionalFieldSelect();
-            };
-            actionCell.appendChild(removeBtn);
+            });
         }
 
-        row.appendChild(keyCell);
-        row.appendChild(valueCell);
-        row.appendChild(actionCell);
+        if (isCustom) {
+            const keyInput = row.querySelector('.custom-key');
+            keyInput.addEventListener('blur', function() {
+                const validation = validateKey(this.value, getExistingKeys());
+                if (!validation.isValid) {
+                    showToast('Error', validation.message, 'error');
+                    this.classList.add('is-invalid');
+                    if (!this.nextElementSibling || !this.nextElementSibling.classList.contains('invalid-feedback')) {
+                        const feedback = document.createElement('div');
+                        feedback.className = 'invalid-feedback';
+                        feedback.textContent = validation.message;
+                        this.parentNode.appendChild(feedback);
+                    }
+                    this.value = '';
+                } else {
+                    this.classList.remove('is-invalid');
+                    const feedback = this.nextElementSibling;
+                    if (feedback && feedback.classList.contains('invalid-feedback')) {
+                        feedback.remove();
+                    }
+                }
+            });
+        }
+
         return row;
     }
 
     function getExistingKeys() {
-        const keys = new Set();
+        const keys = [];
         tagsTable.querySelectorAll('tr').forEach(row => {
             const keyElement = row.querySelector('td:first-child');
-            const key = keyElement.textContent.trim() || keyElement.querySelector('input')?.value?.trim();
+            const key = keyElement.textContent.trim() || keyElement.querySelector('input')?.value.trim();
             if (key) {
-                keys.add(key);
+                keys.push(key);
             }
         });
-        return Array.from(keys);
+        return keys;
     }
 
-    function validateAndGetTags() {
-        const tags = {};
-        const errors = [];
-        const existingKeys = new Set();
+    function updateFields() {
+        const selectedType = typeSelect.value;
+        tagsTable.innerHTML = '';
 
-        // Add type
-        const selectedType = typeSelect.value?.trim();
-        if (!selectedType) {
-            errors.push("Please select an area type");
-            return { isValid: false, errors };
-        }
-        tags.type = selectedType;
-
-        // Validate required fields first
-        if (areaTypeRequirements[selectedType]) {
+        if (areaTypeRequirements && selectedType in areaTypeRequirements) {
             for (const [key, requirements] of Object.entries(areaTypeRequirements[selectedType])) {
                 if (requirements.required) {
-                    const input = tagsTable.querySelector(`[name="${key}"]`);
-                    const value = input?.value?.trim();
-                    if (!value) {
-                        errors.push(`Required field "${key}" is missing or empty`);
-                    }
+                    tagsTable.appendChild(createTagRow(key, '', true, false, requirements.allowed_values));
                 }
             }
         }
-
-        // Validate all fields
-        tagsTable.querySelectorAll('tr').forEach(row => {
-            const keyElement = row.querySelector('td:first-child');
-            let keyInput = keyElement.querySelector('input');
-            let key = keyElement.textContent.trim();
-            
-            // Handle custom key input
-            if (keyInput) {
-                key = keyInput.value?.trim() || '';
-            }
-
-            const valueElement = row.querySelector('td:nth-child(2)');
-            const valueInput = valueElement.querySelector('input, select');
-            let value = valueInput?.value?.trim() || '';
-
-            // Skip if both key and value are empty
-            if (!key && !value) {
-                return;
-            }
-
-            // Validate key
-            const keyValidation = validateKey(key);
-            if (!keyValidation.isValid) {
-                errors.push(`Invalid key "${key}": ${keyValidation.error}`);
-                return;
-            }
-
-            key = keyValidation.key; // Use the validated and trimmed key
-
-            // Check for duplicate keys
-            if (existingKeys.has(key)) {
-                errors.push(`Duplicate key: ${key}`);
-                return;
-            }
-
-            existingKeys.add(key);
-
-            // Validate value
-            const requirements = areaTypeRequirements[selectedType]?.[key] || { type: 'text' };
-            const valueValidation = validateValue(value, requirements.type, requirements.allowed_values);
-
-            if (!valueValidation.isValid) {
-                errors.push(`${key}: ${valueValidation.error}`);
-                return;
-            }
-
-            value = valueValidation.value; // Use the validated and trimmed value
-
-            // Only add valid key-value pairs
-            tags[key] = value;
-        });
-
-        // Add GeoJSON if present
-        if (currentGeoJson) {
-            tags.geo_json = currentGeoJson;
-        }
-
-        return {
-            isValid: errors.length === 0,
-            errors,
-            tags
-        };
+        updateOptionalFieldSelect();
     }
 
-    // Rest of the code remains the same...
-    [Previous implementation of updateFields, addOptionalField, updateOptionalFieldSelect, addCustomField functions]
+    function addOptionalField() {
+        const existingKeys = getExistingKeys();
+        const optionalFields = Object.entries(areaTypeRequirements[typeSelect.value] || {})
+            .filter(([key, req]) => !req.required && !existingKeys.includes(key))
+            .map(([key]) => key);
 
-    function submitForm() {
-        const validation = validateAndGetTags();
-        if (!validation.isValid) {
-            showToast('Error', validation.errors.join('\n'), 'error');
+        if (optionalFields.length === 0) {
+            showToast('Info', 'All optional fields have been added', 'info');
             return;
         }
 
-        // Remove any empty or whitespace-only keys before submission
-        const cleanedTags = {};
-        for (const [key, value] of Object.entries(validation.tags)) {
-            const trimmedKey = key.trim();
-            const trimmedValue = String(value).trim();
-            if (trimmedKey && trimmedValue) {
-                cleanedTags[trimmedKey] = trimmedValue;
-            }
-        }
+        const newRow = document.createElement('tr');
+        newRow.innerHTML = `
+            <td>
+                <select class="form-control optional-field-select">
+                    <option value="">Select Optional Field</option>
+                    ${optionalFields.map(field => `<option value="${field}">${field}</option>`).join('')}
+                </select>
+            </td>
+            <td>
+                <input type="text" class="form-control" disabled>
+            </td>
+            <td>
+                <button type="button" class="btn btn-danger btn-sm remove-field">Remove</button>
+            </td>
+        `;
+        tagsTable.appendChild(newRow);
 
-        fetch('/add_area', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(cleanedTags)
-        }).then(response => response.json())
-        .then(data => {
-            if (data.error) {
-                showToast('Error', data.error.message, 'error');
-                console.error('Server error:', data.error);
+        const optionalFieldSelect = newRow.querySelector('.optional-field-select');
+        optionalFieldSelect.addEventListener('change', function() {
+            const selectedField = this.value;
+            const requirements = areaTypeRequirements[typeSelect.value]?.[selectedField];
+            const valueCell = this.closest('tr').querySelector('td:nth-child(2)');
+
+            if (requirements?.allowed_values) {
+                valueCell.innerHTML = `
+                    <select class="form-control" name="${selectedField}">
+                        <option value="">Select ${selectedField}</option>
+                        ${requirements.allowed_values.map(val => `<option value="${val}">${val}</option>`).join('')}
+                    </select>
+                `;
             } else {
-                showToast('Success', 'Area added successfully', 'success');
-                setTimeout(() => {
-                    window.location.href = '/select_area';
-                }, 2000);
+                valueCell.innerHTML = `
+                    <input type="${selectedField === 'population' || selectedField === 'area_km2' ? 'number' : 'text'}" 
+                           class="form-control" 
+                           name="${selectedField}">
+                `;
             }
-        }).catch(error => {
-            showToast('Error', 'An unexpected error occurred', 'error');
-            console.error('Fetch error:', error);
+        });
+
+        newRow.querySelector('.remove-field').addEventListener('click', function() {
+            newRow.remove();
+            updateOptionalFieldSelect();
         });
     }
 
-    // Event Listeners
+    function updateOptionalFieldSelect() {
+        const existingKeys = getExistingKeys();
+        const selects = tagsTable.querySelectorAll('.optional-field-select');
+        
+        selects.forEach(select => {
+            const currentValue = select.value;
+            const optionalFields = Object.entries(areaTypeRequirements[typeSelect.value] || {})
+                .filter(([key, req]) => !req.required && !existingKeys.includes(key))
+                .map(([key]) => key);
+
+            select.innerHTML = `
+                <option value="">Select Optional Field</option>
+                ${optionalFields.map(field => `
+                    <option value="${field}" ${currentValue === field ? 'selected' : ''}>${field}</option>
+                `).join('')}
+            `;
+        });
+    }
+
+    function addCustomField() {
+        const newRow = createTagRow('custom', '', false, true);
+        tagsTable.appendChild(newRow);
+    }
+
+    // GeoJSON editing functionality
+    const editGeoJsonBtn = document.getElementById('edit-geojson-btn');
+    const geojsonInput = document.getElementById('geojson-input');
+    const showBtn = document.getElementById('show-btn');
+    const saveLocallyBtn = document.getElementById('save-locally-btn');
+    const cancelGeoJsonBtn = document.getElementById('cancel-geojson-btn');
+
+    editGeoJsonBtn.addEventListener('click', function() {
+        geojsonInput.style.display = 'block';
+        showBtn.style.display = 'inline-block';
+        cancelGeoJsonBtn.style.display = 'inline-block';
+        
+        if (currentGeoJson) {
+            geojsonInput.value = JSON.stringify(currentGeoJson, null, 2);
+            previouslySavedGeoJson = JSON.parse(JSON.stringify(currentGeoJson));
+        }
+    });
+
+    showBtn.addEventListener('click', function() {
+        try {
+            const geoJson = JSON.parse(geojsonInput.value);
+            updateMap(geoJson);
+            showToast('Success', 'GeoJSON has been shown on the map', 'success');
+            saveLocallyBtn.style.display = 'inline-block';
+        } catch (error) {
+            showToast('Error', 'Invalid GeoJSON. Please check your input.', 'error');
+        }
+    });
+
+    saveLocallyBtn.addEventListener('click', function() {
+        try {
+            currentGeoJson = JSON.parse(geojsonInput.value);
+            previouslySavedGeoJson = JSON.parse(JSON.stringify(currentGeoJson));
+            geojsonInput.style.display = 'none';
+            showBtn.style.display = 'none';
+            saveLocallyBtn.style.display = 'none';
+            cancelGeoJsonBtn.style.display = 'none';
+            showToast('Success', 'GeoJSON saved locally', 'success');
+        } catch (error) {
+            showToast('Error', 'Invalid GeoJSON. Unable to save.', 'error');
+        }
+    });
+
+    cancelGeoJsonBtn.addEventListener('click', function() {
+        geojsonInput.style.display = 'none';
+        showBtn.style.display = 'none';
+        saveLocallyBtn.style.display = 'none';
+        cancelGeoJsonBtn.style.display = 'none';
+        if (previouslySavedGeoJson) {
+            updateMap(previouslySavedGeoJson);
+            currentGeoJson = previouslySavedGeoJson;
+            geojsonInput.value = JSON.stringify(previouslySavedGeoJson, null, 2);
+        }
+    });
+
     typeSelect.addEventListener('change', updateFields);
     addOptionalFieldBtn.addEventListener('click', addOptionalField);
     addCustomFieldBtn.addEventListener('click', addCustomField);
 
-    submitAreaBtn.addEventListener('click', function(e) {
-        e.preventDefault();
-        showToast('Confirm', 'Are you sure you want to add this area?', 'warning', {
-            confirmButtonText: 'Yes, add it',
-            cancelButtonText: 'Cancel',
-            onConfirm: () => {
-                submitForm();
+    function validateForm() {
+        const selectedType = typeSelect.value;
+        if (!selectedType) {
+            showToast('Error', 'Please select an area type', 'error');
+            return false;
+        }
+
+        const rows = tagsTable.querySelectorAll('tr');
+        let isValid = true;
+        let errors = [];
+
+        const existingKeys = new Set();
+
+        rows.forEach(row => {
+            const keyElement = row.querySelector('td:first-child');
+            let key = keyElement.textContent.trim() || keyElement.querySelector('select, input')?.value?.trim();
+            const valueInput = row.querySelector('td:nth-child(2) input, td:nth-child(2) select');
+            
+            if (key && valueInput) {
+                // Validate key
+                const keyValidation = validateKey(key, Array.from(existingKeys));
+                if (!keyValidation.isValid) {
+                    isValid = false;
+                    errors.push(keyValidation.message);
+                    if (keyElement.querySelector('input')) {
+                        keyElement.querySelector('input').classList.add('is-invalid');
+                    }
+                    return;
+                }
+
+                existingKeys.add(key);
+
+                // Validate value
+                const value = valueInput.value.trim();
+                const requirements = areaTypeRequirements[selectedType][key] || {type: 'text', required: false};
+                
+                if (requirements.required && !value) {
+                    isValid = false;
+                    errors.push(`${key} is required`);
+                    valueInput.classList.add('is-invalid');
+                }
+
+                if (value) {
+                    if (requirements.type === 'number' || requirements.type === 'integer') {
+                        const num = parseFloat(value);
+                        if (isNaN(num) || num < 0) {
+                            isValid = false;
+                            errors.push(`${key} must be a non-negative ${requirements.type}`);
+                            valueInput.classList.add('is-invalid');
+                        }
+                        if (requirements.type === 'integer' && !Number.isInteger(num)) {
+                            isValid = false;
+                            errors.push(`${key} must be an integer`);
+                            valueInput.classList.add('is-invalid');
+                        }
+                    }
+                }
             }
         });
+
+        if (!isValid) {
+            showToast('Error', 'Please correct the following errors:\n' + errors.join('\n'), 'error');
+        }
+
+        return isValid;
+    }
+
+    function submitForm() {
+        if (validateForm()) {
+            const tags = {};
+            tags['type'] = typeSelect.value;
+
+            const rows = tagsTable.querySelectorAll('tr');
+            rows.forEach(row => {
+                const keyElement = row.querySelector('td:first-child');
+                const key = keyElement.textContent.trim() || keyElement.querySelector('select, input')?.value?.trim();
+                const valueInput = row.querySelector('td:nth-child(2) input, td:nth-child(2) select');
+                
+                if (key && valueInput && valueInput.value.trim()) {
+                    tags[key] = valueInput.value.trim();
+                }
+            });
+
+            if (currentGeoJson) {
+                tags['geo_json'] = JSON.stringify(currentGeoJson);
+            }
+
+            fetch('/add_area', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(tags)
+            }).then(response => response.json())
+            .then(data => {
+                if (data.error) {
+                    showToast('Error', data.error.message, 'error');
+                    console.error('Server error:', data.error);
+                } else {
+                    showToast('Success', 'Area added successfully', 'success');
+                    setTimeout(() => {
+                        window.location.href = '/select_area';
+                    }, 2000);
+                }
+            }).catch(error => {
+                showToast('Error', 'An unexpected error occurred', 'error');
+                console.error('Fetch error:', error);
+            });
+        }
+    }
+
+    submitAreaBtn.addEventListener('click', function(e) {
+        e.preventDefault();
+        if (validateForm()) {
+            showToast('Confirm', 'Are you sure you want to add this area?', 'warning', {
+                confirmButtonText: 'Yes, add it',
+                cancelButtonText: 'Cancel',
+                onConfirm: () => {
+                    submitForm();
+                }
+            });
+        }
     });
 
     // Initial field update
     updateFields();
 });
 </script>
-
-<style>
-    #map {
-        height: 400px;
-        width: 100%;
-        margin-bottom: 20px;
-        border: 1px solid #ccc;
-        border-radius: 4px;
-    }
-
-    .tag-value-cell {
-        max-width: 300px;
-        word-wrap: break-word;
-    }
-    
-    .tag-value-content,
-    .tag-input,
-    .tag-select {
-        width: 100%;
-        min-height: 38px;
-    }
-    
-    .tag-value-content {
-        padding: 6px 12px;
-        border: 1px solid transparent;
-    }
-    
-    .tag-input {
-        resize: vertical;
-    }
-
-    #geojson-input {
-        font-family: monospace;
-    }
-
-    .invalid-feedback {
-        display: block;
-        width: 100%;
-        margin-top: .25rem;
-        font-size: 80%;
-        color: #dc3545;
-    }
-</style>
 {% endblock %}
