@@ -76,12 +76,18 @@
 {% endblock %}
 
 {% block scripts %}
+<script src="{{ url_for('static', filename='js/validation.js') }}"></script>
 <script>
     document.addEventListener('DOMContentLoaded', function() {
         const tagsTable = document.getElementById('tags-table');
         const addOptionalTagButton = document.getElementById('add-optional-tag-btn');
         const addCustomTagButton = document.getElementById('add-custom-tag-btn');
         const areaTypeRequirements = {{ area_type_requirements | tojson | safe }};
+        
+        function updateOptionalFieldSelect() {
+            // This function will be called when needed to update optional field selections
+            // Currently not needed in show_area.html but added to prevent console errors
+        }
 
         var map = L.map('map').setView([0, 0], 2);
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -92,32 +98,6 @@
         var geoJsonLayer = L.geoJSON({{ geo_json | tojson | safe }}).addTo(map);
         map.fitBounds(geoJsonLayer.getBounds());
         {% endif %}
-
-        function validateNumericValue(value, type) {
-            if (!value || value.trim() === '') {
-                return { isValid: false, message: 'Value cannot be empty' };
-            }
-
-            if (type === 'integer') {
-                const num = parseInt(value);
-                if (isNaN(num) || !Number.isInteger(parseFloat(value))) {
-                    return { isValid: false, message: 'Value must be a valid integer' };
-                }
-                if (num < 0) {
-                    return { isValid: false, message: 'Value must be non-negative' };
-                }
-                return { isValid: true, value: num };
-            } else {
-                const num = parseFloat(value);
-                if (isNaN(num)) {
-                    return { isValid: false, message: 'Value must be a valid number' };
-                }
-                if (num < 0) {
-                    return { isValid: false, message: 'Value must be non-negative' };
-                }
-                return { isValid: true, value: num };
-            }
-        }
 
         function startEditing(row) {
             const valueCell = row.querySelector('.tag-value-cell');
@@ -141,6 +121,15 @@
                 select.style.display = 'block';
                 input.style.display = 'none';
             } else {
+                if (key === 'population') {
+                    input.type = 'number';
+                    input.min = '0';
+                    input.step = '1';
+                } else if (key === 'area_km2') {
+                    input.type = 'number';
+                    input.min = '0';
+                    input.step = '0.01';
+                }
                 input.style.display = 'block';
                 select.style.display = 'none';
             }
@@ -155,20 +144,24 @@
             const newValue = select.style.display === 'block' ? select.value : input.value;
 
             let processedValue = newValue;
+            let isValid = true;
+            let errorMessage = '';
+
             if (key === 'population') {
                 const validation = validateNumericValue(newValue, 'integer');
-                if (!validation.isValid) {
-                    showToast('Error', validation.message, 'error');
-                    return;
-                }
-                processedValue = validation.value;
+                isValid = validation.isValid;
+                errorMessage = validation.message;
+                if (isValid) processedValue = validation.value;
             } else if (key === 'area_km2') {
                 const validation = validateNumericValue(newValue, 'number');
-                if (!validation.isValid) {
-                    showToast('Error', validation.message, 'error');
-                    return;
-                }
-                processedValue = validation.value;
+                isValid = validation.isValid;
+                errorMessage = validation.message;
+                if (isValid) processedValue = validation.value;
+            }
+
+            if (!isValid) {
+                showToast('Error', errorMessage, 'error');
+                return;
             }
 
             fetch('/api/set_area_tag', {
@@ -193,7 +186,7 @@
                     throw new Error(data.error);
                 }
                 showToast('Success', 'Tag updated successfully', 'success');
-                content.textContent = newValue;
+                content.textContent = processedValue;
                 cancelEditing(row);
             })
             .catch(error => {
@@ -270,6 +263,37 @@
                 cancelEditing(row);
             } else if (target.classList.contains('delete-tag')) {
                 deleteTag(row);
+            }
+        });
+
+        // Handle numeric input validation
+        tagsTable.addEventListener('input', function(e) {
+            const target = e.target;
+            if (target.classList.contains('tag-input')) {
+                const row = target.closest('tr');
+                const key = row.dataset.key;
+                
+                if (key === 'population' || key === 'area_km2') {
+                    const validation = validateNumericValue(
+                        target.value,
+                        key === 'population' ? 'integer' : 'number'
+                    );
+                    
+                    if (!validation.isValid) {
+                        target.classList.add('is-invalid');
+                        if (!target.nextElementSibling || !target.nextElementSibling.classList.contains('invalid-feedback')) {
+                            const feedback = document.createElement('div');
+                            feedback.className = 'invalid-feedback';
+                            target.parentNode.insertBefore(feedback, target.nextSibling);
+                        }
+                        target.nextElementSibling.textContent = validation.message;
+                    } else {
+                        target.classList.remove('is-invalid');
+                        if (target.nextElementSibling && target.nextElementSibling.classList.contains('invalid-feedback')) {
+                            target.nextElementSibling.textContent = '';
+                        }
+                    }
+                }
             }
         });
 
