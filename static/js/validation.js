@@ -27,7 +27,7 @@ function validateNumericValue(value, type) {
             return { isValid: false, message: 'Value must be non-negative' };
         }
         return { isValid: true, value: num };
-    } else {
+    } else if (type === 'number') {
         const num = parseFloat(value);
         if (isNaN(num)) {
             return { isValid: false, message: 'Value must be a valid number' };
@@ -37,6 +37,8 @@ function validateNumericValue(value, type) {
         }
         return { isValid: true, value: num };
     }
+
+    return { isValid: true, value: value.trim() };
 }
 
 function validateValue(value, requirements) {
@@ -44,11 +46,9 @@ function validateValue(value, requirements) {
         return { isValid: false, message: 'Value cannot be empty' };
     }
 
-    if (requirements) {
-        if (requirements.type === 'integer' || requirements.key === 'population') {
-            return validateNumericValue(value, 'integer');
-        } else if (requirements.type === 'number' || requirements.key === 'area_km2') {
-            return validateNumericValue(value, 'number');
+    if (requirements && requirements.type) {
+        if (requirements.type === 'integer' || requirements.type === 'number') {
+            return validateNumericValue(value, requirements.type);
         } else if (requirements.allowed_values) {
             if (!requirements.allowed_values.includes(value)) {
                 return { isValid: false, message: `Value must be one of: ${requirements.allowed_values.join(', ')}` };

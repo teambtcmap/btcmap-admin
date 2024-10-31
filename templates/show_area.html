@@ -45,8 +45,9 @@
                 <td>{{ key }}</td>
                 <td class="tag-value-cell">
                     <div class="tag-value-content">{{ value }}</div>
-                    <textarea class="form-control tag-input" style="display: none;">{{ value }}</textarea>
+                    <input type="text" class="form-control tag-input" style="display: none;" value="{{ value }}">
                     <select class="form-control tag-select" style="display: none;"></select>
+                    <div class="invalid-feedback"></div>
                 </td>
                 <td>
                     <button class="btn btn-primary btn-sm edit-tag">Edit</button>
@@ -83,10 +84,26 @@
         const addOptionalTagButton = document.getElementById('add-optional-tag-btn');
         const addCustomTagButton = document.getElementById('add-custom-tag-btn');
         const areaTypeRequirements = {{ area_type_requirements | tojson | safe }};
+        const areaType = "{{ area.tags.get('type', '') }}";
         
         function updateOptionalFieldSelect() {
-            // This function will be called when needed to update optional field selections
-            // Currently not needed in show_area.html but added to prevent console errors
+            // Get all existing keys
+            const existingKeys = Array.from(tagsTable.querySelectorAll('tr'))
+                .map(row => row.dataset.key)
+                .filter(key => key);
+
+            // Get all available optional fields
+            const optionalFields = Object.entries(areaTypeRequirements[areaType] || {})
+                .filter(([key, req]) => !req.required && !existingKeys.includes(key))
+                .map(([key]) => key);
+
+            // Update the UI or button state based on available optional fields
+            addOptionalTagButton.disabled = optionalFields.length === 0;
+            if (optionalFields.length === 0) {
+                addOptionalTagButton.title = "All optional fields have been added";
+            } else {
+                addOptionalTagButton.title = "Add an optional field";
+            }
         }
 
         var map = L.map('map').setView([0, 0], 2);
@@ -109,26 +126,24 @@
             const cancelBtn = row.querySelector('.cancel-edit');
             const key = row.dataset.key;
 
+            const fieldRequirements = areaTypeRequirements[areaType]?.[key] || { type: 'text' };
+
             content.style.display = 'none';
             editBtn.style.display = 'none';
             updateBtn.style.display = 'inline-block';
             cancelBtn.style.display = 'inline-block';
 
-            if (areaTypeRequirements[key] && areaTypeRequirements[key].allowed_values) {
-                select.innerHTML = areaTypeRequirements[key].allowed_values.map(value => 
+            if (fieldRequirements.allowed_values) {
+                select.innerHTML = fieldRequirements.allowed_values.map(value => 
                     `<option value="${value}" ${content.textContent.trim() === value ? 'selected' : ''}>${value}</option>`
                 ).join('');
                 select.style.display = 'block';
                 input.style.display = 'none';
             } else {
-                if (key === 'population') {
-                    input.type = 'number';
+                input.type = fieldRequirements.type === 'number' || fieldRequirements.type === 'integer' ? 'number' : 'text';
+                if (input.type === 'number') {
                     input.min = '0';
-                    input.step = '1';
-                } else if (key === 'area_km2') {
-                    input.type = 'number';
-                    input.min = '0';
-                    input.step = '0.01';
+                    input.step = fieldRequirements.type === 'integer' ? '1' : '0.01';
                 }
                 input.style.display = 'block';
                 select.style.display = 'none';
@@ -143,24 +158,11 @@
             const select = valueCell.querySelector('.tag-select');
             const newValue = select.style.display === 'block' ? select.value : input.value;
 
-            let processedValue = newValue;
-            let isValid = true;
-            let errorMessage = '';
+            const fieldRequirements = areaTypeRequirements[areaType]?.[key] || { type: 'text' };
+            const validation = validateValue(newValue, fieldRequirements);
 
-            if (key === 'population') {
-                const validation = validateNumericValue(newValue, 'integer');
-                isValid = validation.isValid;
-                errorMessage = validation.message;
-                if (isValid) processedValue = validation.value;
-            } else if (key === 'area_km2') {
-                const validation = validateNumericValue(newValue, 'number');
-                isValid = validation.isValid;
-                errorMessage = validation.message;
-                if (isValid) processedValue = validation.value;
-            }
-
-            if (!isValid) {
-                showToast('Error', errorMessage, 'error');
+            if (!validation.isValid) {
+                showToast('Error', validation.message, 'error');
                 return;
             }
 
@@ -172,7 +174,7 @@
                 body: JSON.stringify({
                     id: '{{ area.id }}',
                     name: key,
-                    value: processedValue
+                    value: validation.value
                 }),
             })
             .then(response => {
@@ -186,7 +188,7 @@
                     throw new Error(data.error);
                 }
                 showToast('Success', 'Tag updated successfully', 'success');
-                content.textContent = processedValue;
+                content.textContent = validation.value;
                 cancelEditing(row);
             })
             .catch(error => {
@@ -213,44 +215,6 @@
             cancelBtn.style.display = 'none';
         }
 
-        function deleteTag(row) {
-            const key = row.dataset.key;
-            showToast('Confirm', `Are you sure you want to delete the tag "${key}"?`, 'warning', {
-                confirmButtonText: 'Yes, delete it',
-                cancelButtonText: 'Cancel',
-                onConfirm: () => {
-                    fetch('/api/remove_area_tag', {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                        },
-                        body: JSON.stringify({
-                            id: '{{ area.id }}',
-                            tag: key
-                        }),
-                    })
-                    .then(response => {
-                        if (!response.ok) {
-                            throw new Error(`HTTP error! status: ${response.status}`);
-                        }
-                        return response.json();
-                    })
-                    .then(data => {
-                        if (data.error) {
-                            throw new Error(data.error);
-                        }
-                        showToast('Success', 'Tag removed successfully', 'success');
-                        row.remove();
-                    })
-                    .catch(error => {
-                        console.error('Error removing tag:', error);
-                        let errorMessage = error.message || 'An unexpected error occurred';
-                        showToast('Error', errorMessage, 'error');
-                    });
-                }
-            });
-        }
-
         tagsTable.addEventListener('click', function(e) {
             const target = e.target;
             const row = target.closest('tr');
@@ -272,26 +236,19 @@
             if (target.classList.contains('tag-input')) {
                 const row = target.closest('tr');
                 const key = row.dataset.key;
-                
-                if (key === 'population' || key === 'area_km2') {
-                    const validation = validateNumericValue(
-                        target.value,
-                        key === 'population' ? 'integer' : 'number'
-                    );
+                const fieldRequirements = areaTypeRequirements[areaType]?.[key] || { type: 'text' };
+
+                if (fieldRequirements.type === 'number' || fieldRequirements.type === 'integer') {
+                    const validation = validateValue(target.value, fieldRequirements);
+                    const feedback = target.nextElementSibling;
                     
                     if (!validation.isValid) {
                         target.classList.add('is-invalid');
-                        if (!target.nextElementSibling || !target.nextElementSibling.classList.contains('invalid-feedback')) {
-                            const feedback = document.createElement('div');
-                            feedback.className = 'invalid-feedback';
-                            target.parentNode.insertBefore(feedback, target.nextSibling);
-                        }
-                        target.nextElementSibling.textContent = validation.message;
+                        feedback.textContent = validation.message;
+                        feedback.style.display = 'block';
                     } else {
                         target.classList.remove('is-invalid');
-                        if (target.nextElementSibling && target.nextElementSibling.classList.contains('invalid-feedback')) {
-                            target.nextElementSibling.textContent = '';
-                        }
+                        feedback.style.display = 'none';
                     }
                 }
             }
@@ -333,6 +290,9 @@
                 }
             });
         });
+
+        // Initialize the optional fields button state
+        updateOptionalFieldSelect();
 
         // Handle unhandled rejections
         window.addEventListener('unhandledrejection', function(event) {
