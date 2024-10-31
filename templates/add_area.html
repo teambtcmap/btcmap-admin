@@ -97,7 +97,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     function validateKey(key, existingKeys) {
         key = key.trim();
-        if (key === '') {
+        if (!key || key === '') {
             return { isValid: false, message: 'Key cannot be empty' };
         }
         if (existingKeys.includes(key)) {
@@ -109,8 +109,31 @@ document.addEventListener('DOMContentLoaded', function() {
         return { isValid: true };
     }
 
+    function validateNumericValue(value, type) {
+        if (!value || value.trim() === '') {
+            return { isValid: false, message: 'Value cannot be empty' };
+        }
+
+        const num = Number(value);
+        if (isNaN(num)) {
+            return { isValid: false, message: 'Value must be a valid number' };
+        }
+
+        if (num < 0) {
+            return { isValid: false, message: 'Value must be non-negative' };
+        }
+
+        if (type === 'integer' && !Number.isInteger(num)) {
+            return { isValid: false, message: 'Value must be an integer' };
+        }
+
+        return { isValid: true, value: num };
+    }
+
     function createTagRow(key, value = '', isRequired = false, isCustom = false, allowedValues = null) {
         const row = document.createElement('tr');
+        const isNumericField = key === 'population' || key === 'area_km2';
+        
         row.innerHTML = `
             <td>${isCustom ? '<input type="text" class="form-control custom-key" placeholder="Custom Key">' : key}</td>
             <td>
@@ -120,7 +143,12 @@ document.addEventListener('DOMContentLoaded', function() {
                         ${allowedValues.map(val => `<option value="${val}">${val}</option>`).join('')}
                     </select>
                 ` : `
-                    <input type="${key === 'population' || key === 'area_km2' ? 'number' : 'text'}" class="form-control" name="${key}" value="${value}" ${isRequired ? 'required' : ''}>
+                    <input type="${isNumericField ? 'number' : 'text'}" 
+                           class="form-control" 
+                           name="${key}" 
+                           value="${value}" 
+                           ${isRequired ? 'required' : ''} 
+                           ${isNumericField ? 'min="0" step="' + (key === 'population' ? '1' : '0.01') + '"' : ''}>
                 `}
             </td>
             <td>
@@ -137,6 +165,14 @@ document.addEventListener('DOMContentLoaded', function() {
 
         if (isCustom) {
             const keyInput = row.querySelector('.custom-key');
+            keyInput.addEventListener('input', function() {
+                this.classList.remove('is-invalid');
+                const feedback = this.nextElementSibling;
+                if (feedback && feedback.classList.contains('invalid-feedback')) {
+                    feedback.remove();
+                }
+            });
+
             keyInput.addEventListener('blur', function() {
                 const validation = validateKey(this.value, getExistingKeys());
                 if (!validation.isValid) {
@@ -149,12 +185,21 @@ document.addEventListener('DOMContentLoaded', function() {
                         this.parentNode.appendChild(feedback);
                     }
                     this.value = '';
+                }
+            });
+        }
+
+        // Add validation for numeric fields
+        if (isNumericField) {
+            const input = row.querySelector('input[type="number"]');
+            input.addEventListener('input', function() {
+                const validation = validateNumericValue(this.value, key === 'population' ? 'integer' : 'number');
+                if (!validation.isValid) {
+                    this.setCustomValidity(validation.message);
+                    this.classList.add('is-invalid');
                 } else {
+                    this.setCustomValidity('');
                     this.classList.remove('is-invalid');
-                    const feedback = this.nextElementSibling;
-                    if (feedback && feedback.classList.contains('invalid-feedback')) {
-                        feedback.remove();
-                    }
                 }
             });
         }
@@ -221,6 +266,7 @@ document.addEventListener('DOMContentLoaded', function() {
             const selectedField = this.value;
             const requirements = areaTypeRequirements[typeSelect.value]?.[selectedField];
             const valueCell = this.closest('tr').querySelector('td:nth-child(2)');
+            const isNumericField = selectedField === 'population' || selectedField === 'area_km2';
 
             if (requirements?.allowed_values) {
                 valueCell.innerHTML = `
@@ -231,10 +277,25 @@ document.addEventListener('DOMContentLoaded', function() {
                 `;
             } else {
                 valueCell.innerHTML = `
-                    <input type="${selectedField === 'population' || selectedField === 'area_km2' ? 'number' : 'text'}" 
+                    <input type="${isNumericField ? 'number' : 'text'}" 
                            class="form-control" 
-                           name="${selectedField}">
+                           name="${selectedField}"
+                           ${isNumericField ? `min="0" step="${selectedField === 'population' ? '1' : '0.01'}"` : ''}>
                 `;
+
+                if (isNumericField) {
+                    const input = valueCell.querySelector('input');
+                    input.addEventListener('input', function() {
+                        const validation = validateNumericValue(this.value, selectedField === 'population' ? 'integer' : 'number');
+                        if (!validation.isValid) {
+                            this.setCustomValidity(validation.message);
+                            this.classList.add('is-invalid');
+                        } else {
+                            this.setCustomValidity('');
+                            this.classList.remove('is-invalid');
+                        }
+                    });
+                }
             }
         });
 
@@ -327,131 +388,92 @@ document.addEventListener('DOMContentLoaded', function() {
     addOptionalFieldBtn.addEventListener('click', addOptionalField);
     addCustomFieldBtn.addEventListener('click', addCustomField);
 
-    function validateForm() {
+    submitAreaBtn.addEventListener('click', function(e) {
+        e.preventDefault();
         const selectedType = typeSelect.value;
         if (!selectedType) {
             showToast('Error', 'Please select an area type', 'error');
-            return false;
+            return;
         }
 
-        const rows = tagsTable.querySelectorAll('tr');
+        const tags = {};
         let isValid = true;
-        let errors = [];
+        let errorMessages = [];
 
-        const existingKeys = new Set();
-
-        rows.forEach(row => {
+        // Validate all fields
+        tagsTable.querySelectorAll('tr').forEach(row => {
             const keyElement = row.querySelector('td:first-child');
-            let key = keyElement.textContent.trim() || keyElement.querySelector('select, input')?.value?.trim();
+            const key = keyElement.textContent.trim() || keyElement.querySelector('select, input')?.value?.trim();
             const valueInput = row.querySelector('td:nth-child(2) input, td:nth-child(2) select');
             
-            if (key && valueInput) {
-                // Validate key
-                const keyValidation = validateKey(key, Array.from(existingKeys));
-                if (!keyValidation.isValid) {
-                    isValid = false;
-                    errors.push(keyValidation.message);
-                    if (keyElement.querySelector('input')) {
-                        keyElement.querySelector('input').classList.add('is-invalid');
-                    }
-                    return;
-                }
+            if (!key || key === '') {
+                isValid = false;
+                errorMessages.push('Key cannot be empty');
+                return;
+            }
 
-                existingKeys.add(key);
-
-                // Validate value
+            if (valueInput) {
                 const value = valueInput.value.trim();
-                const requirements = areaTypeRequirements[selectedType][key] || {type: 'text', required: false};
-                
-                if (requirements.required && !value) {
-                    isValid = false;
-                    errors.push(`${key} is required`);
-                    valueInput.classList.add('is-invalid');
-                }
+                const isNumericField = key === 'population' || key === 'area_km2';
 
-                if (value) {
-                    if (requirements.type === 'number' || requirements.type === 'integer') {
-                        const num = parseFloat(value);
-                        if (isNaN(num) || num < 0) {
-                            isValid = false;
-                            errors.push(`${key} must be a non-negative ${requirements.type}`);
-                            valueInput.classList.add('is-invalid');
-                        }
-                        if (requirements.type === 'integer' && !Number.isInteger(num)) {
-                            isValid = false;
-                            errors.push(`${key} must be an integer`);
-                            valueInput.classList.add('is-invalid');
-                        }
+                if (isNumericField) {
+                    const validation = validateNumericValue(value, key === 'population' ? 'integer' : 'number');
+                    if (!validation.isValid) {
+                        isValid = false;
+                        errorMessages.push(`${key}: ${validation.message}`);
+                        valueInput.classList.add('is-invalid');
+                    } else {
+                        tags[key] = validation.value; // Store as number
+                    }
+                } else {
+                    if (value === '' && areaTypeRequirements[selectedType]?.[key]?.required) {
+                        isValid = false;
+                        errorMessages.push(`${key} is required`);
+                        valueInput.classList.add('is-invalid');
+                    } else if (value !== '') {
+                        tags[key] = value;
                     }
                 }
             }
         });
 
         if (!isValid) {
-            showToast('Error', 'Please correct the following errors:\n' + errors.join('\n'), 'error');
+            showToast('Error', errorMessages.join('\n'), 'error');
+            return;
         }
 
-        return isValid;
-    }
+        // Add type tag
+        tags['type'] = selectedType;
 
-    function submitForm() {
-        if (validateForm()) {
-            const tags = {};
-            tags['type'] = typeSelect.value;
+        // Add GeoJSON if present
+        if (currentGeoJson) {
+            tags['geo_json'] = JSON.stringify(currentGeoJson);
+        }
 
-            const rows = tagsTable.querySelectorAll('tr');
-            rows.forEach(row => {
-                const keyElement = row.querySelector('td:first-child');
-                const key = keyElement.textContent.trim() || keyElement.querySelector('select, input')?.value?.trim();
-                const valueInput = row.querySelector('td:nth-child(2) input, td:nth-child(2) select');
-                
-                if (key && valueInput && valueInput.value.trim()) {
-                    tags[key] = valueInput.value.trim();
-                }
-            });
-
-            if (currentGeoJson) {
-                tags['geo_json'] = JSON.stringify(currentGeoJson);
+        fetch('/add_area', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(tags)
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.error) {
+                showToast('Error', data.error.message, 'error');
+            } else {
+                showToast('Success', 'Area added successfully', 'success');
+                setTimeout(() => {
+                    window.location.href = '/select_area';
+                }, 2000);
             }
-
-            fetch('/add_area', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify(tags)
-            }).then(response => response.json())
-            .then(data => {
-                if (data.error) {
-                    showToast('Error', data.error.message, 'error');
-                    console.error('Server error:', data.error);
-                } else {
-                    showToast('Success', 'Area added successfully', 'success');
-                    setTimeout(() => {
-                        window.location.href = '/select_area';
-                    }, 2000);
-                }
-            }).catch(error => {
-                showToast('Error', 'An unexpected error occurred', 'error');
-                console.error('Fetch error:', error);
-            });
-        }
-    }
-
-    submitAreaBtn.addEventListener('click', function(e) {
-        e.preventDefault();
-        if (validateForm()) {
-            showToast('Confirm', 'Are you sure you want to add this area?', 'warning', {
-                confirmButtonText: 'Yes, add it',
-                cancelButtonText: 'Cancel',
-                onConfirm: () => {
-                    submitForm();
-                }
-            });
-        }
+        })
+        .catch(error => {
+            showToast('Error', 'An unexpected error occurred while adding the area', 'error');
+            console.error('Error:', error);
+        });
     });
 
-    // Initial field update
     updateFields();
 });
 </script>
