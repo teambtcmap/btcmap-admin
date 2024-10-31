@@ -10,21 +10,29 @@
             <form id="search-form" class="form-inline mb-3">
                 <input type="text" id="search-input" name="search" class="form-control mb-2 mr-sm-2" placeholder="Search by name ...">
             </form>
-            <div id="search-results"></div>
+            <div id="search-results">
+                <p>Enter a search query to see results.</p>
+            </div>
         </div>
     </div>
 </div>
 {% endblock %}
 
 {% block scripts %}
+<script src="{{ url_for('static', filename='js/validation.js') }}"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     const searchForm = document.getElementById('search-form');
     const searchInput = document.getElementById('search-input');
     const searchResults = document.getElementById('search-results');
+    let searchTimeout;
 
     async function performSearch() {
         const searchQuery = searchInput.value.trim().toLowerCase();
+        if (!searchQuery) {
+            searchResults.innerHTML = '<p>Enter a search query to see results.</p>';
+            return;
+        }
 
         try {
             const response = await fetch('/api/search_areas', {
@@ -34,61 +42,86 @@ document.addEventListener('DOMContentLoaded', function() {
                 },
                 body: JSON.stringify({ query: searchQuery })
             });
+
             if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
+                const errorText = await response.text();
+                throw new Error(`Server error: ${response.status} - ${errorText}`);
             }
+
             const data = await response.json();
             if (data.error) {
                 throw new Error(data.error);
             }
-            const areas = data;
 
-            if (areas.length === 0) {
-                searchResults.innerHTML = '<p>No results found.</p>';
-            } else {
-                searchResults.innerHTML = areas.map(area => `
-                    <div class="card mb-2">
-                        <div class="card-body">
-                            <h5 class="card-title">${area.name}</h5>
-                            <h6 class="card-subtitle mb-2 text-muted">${area.type}</h6>
-                            <p class="card-text">ID: ${area.id}</p>
-                            <a href="/show_area/${area.id}" class="btn btn-primary btn-sm">View</a>
-                        </div>
-                    </div>
-                `).join('');
+            if (!Array.isArray(data)) {
+                throw new Error('Invalid response format from server');
             }
+
+            if (data.length === 0) {
+                searchResults.innerHTML = '<p class="text-muted">No results found.</p>';
+                return;
+            }
+
+            searchResults.innerHTML = data.map(area => `
+                <div class="card mb-2">
+                    <div class="card-body">
+                        <h5 class="card-title">${escapeHtml(area.name || 'Unnamed Area')}</h5>
+                        <h6 class="card-subtitle mb-2 text-muted">${escapeHtml(area.type || 'Unknown Type')}</h6>
+                        <p class="card-text">ID: ${escapeHtml(area.id)}</p>
+                        <a href="/show_area/${encodeURIComponent(area.id)}" class="btn btn-primary btn-sm">View</a>
+                    </div>
+                </div>
+            `).join('');
         } catch (error) {
             console.error('Error performing search:', error);
-            let errorMessage = 'An unexpected error occurred. Please try again later.';
-            if (error.name === 'TypeError' && error.message === 'Failed to fetch') {
-                errorMessage = 'Network error. Please check your internet connection and try again.';
-            } else if (error.message.startsWith('HTTP error!')) {
-                errorMessage = `Server error: ${error.message}. Please try again later.`;
-            } else if (error.message.includes('timeout') || error.message.includes('Timeout')) {
-                errorMessage = 'The request timed out. Please try again later.';
+            let errorMessage = 'An unexpected error occurred';
+
+            if (error instanceof TypeError && error.message === 'Failed to fetch') {
+                errorMessage = 'Network error. Please check your connection and try again.';
+            } else if (error.name === 'SyntaxError') {
+                errorMessage = 'Invalid response from server. Please try again later.';
+            } else if (error.message.includes('Server error')) {
+                errorMessage = error.message;
+            } else {
+                errorMessage = error.message || 'An unexpected error occurred. Please try again.';
             }
+
             showToast('Error', errorMessage, 'error');
-            searchResults.innerHTML = `<p class="text-danger">${errorMessage}</p>`;
+            searchResults.innerHTML = `<p class="text-danger">${escapeHtml(errorMessage)}</p>`;
         }
     }
 
-   searchForm.addEventListener('submit', function(e) {
+    function escapeHtml(unsafe) {
+        if (unsafe == null) return '';
+        return unsafe
+            .toString()
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;")
+            .replace(/'/g, "&#039;");
+    }
+
+    searchForm.addEventListener('submit', function(e) {
         e.preventDefault();
+        clearTimeout(searchTimeout);
         performSearch();
     });
 
     searchInput.addEventListener('input', function() {
+        clearTimeout(searchTimeout);
         if (this.value.trim() === '') {
             searchResults.innerHTML = '<p>Enter a search query to see results.</p>';
         } else {
-            performSearch();
+            searchTimeout = setTimeout(performSearch, 300);
         }
     });
 
     // Handle unhandled rejections
     window.addEventListener('unhandledrejection', function(event) {
         console.error('Unhandled rejection:', event.reason);
-        showToast('Error', 'An unexpected error occurred. Please try again later.', 'error');
+        const errorMessage = event.reason?.message || 'An unexpected error occurred';
+        showToast('Error', errorMessage, 'error');
     });
 });
 </script>
