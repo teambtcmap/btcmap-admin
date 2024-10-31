@@ -79,45 +79,49 @@
 {% block scripts %}
 <script src="{{ url_for('static', filename='js/validation.js') }}"></script>
 <script>
-// Global variables for map
 let map = null;
 let geoJsonLayer = null;
 
-// Function to convert and validate numeric values
 function convertAndValidateNumeric(value, type) {
+    if (!value || typeof value !== 'string') {
+        throw new Error('Invalid input value');
+    }
+
+    const trimmedValue = value.trim();
     let numericValue;
-    
+
     if (type === 'integer') {
-        numericValue = parseInt(value, 10);
-        if (isNaN(numericValue) || !Number.isInteger(numericValue) || numericValue.toString() !== value.trim()) {
+        if (!/^\d+$/.test(trimmedValue)) {
             throw new Error('Must be a whole number without decimals');
         }
+        numericValue = parseInt(trimmedValue, 10);
+        if (isNaN(numericValue) || !Number.isInteger(numericValue)) {
+            throw new Error('Must be a valid integer');
+        }
     } else if (type === 'number') {
-        numericValue = parseFloat(value);
-        if (isNaN(numericValue) || numericValue.toString() !== value.trim()) {
+        if (!/^\d*\.?\d*$/.test(trimmedValue)) {
+            throw new Error('Must be a valid number');
+        }
+        numericValue = parseFloat(trimmedValue);
+        if (isNaN(numericValue)) {
             throw new Error('Must be a valid number');
         }
     } else {
-        return value.trim();
+        return trimmedValue;
     }
 
-    if (typeof numericValue !== 'number') {
-        throw new Error(`Invalid ${type} value`);
-    }
-
+    console.log(`Converting ${trimmedValue} to ${type}:`, numericValue, typeof numericValue);
     return numericValue;
 }
 
-// Initialize map function with checks
 function initializeMap() {
     const mapElement = document.getElementById('map');
     if (!mapElement) {
         console.error('Map container not found');
         return;
     }
-    
+
     if (map !== null) {
-        console.warn('Map already initialized');
         return;
     }
 
@@ -144,7 +148,6 @@ document.addEventListener('DOMContentLoaded', function() {
     const areaTypeRequirements = {{ area_type_requirements | tojson | safe }};
     const areaType = "{{ area.tags.get('type', '') }}";
 
-    // Initialize map if not already initialized
     if (!map) {
         initializeMap();
     }
@@ -225,12 +228,19 @@ document.addEventListener('DOMContentLoaded', function() {
         let processedValue;
         try {
             processedValue = convertAndValidateNumeric(rawValue, fieldRequirements.type);
+            
+            // Additional type checking for numeric fields
+            if (fieldRequirements.type === 'integer' || fieldRequirements.type === 'number') {
+                if (typeof processedValue !== 'number') {
+                    throw new Error(`Value must be a ${fieldRequirements.type}`);
+                }
+                console.log(`Sending ${key} with value:`, processedValue, typeof processedValue);
+            }
         } catch (error) {
             showToast('Error', `Invalid ${fieldRequirements.type} value for ${key}: ${error.message}`, 'error');
             return;
         }
 
-        // Make the API call with the properly typed value
         fetch('/api/set_area_tag', {
             method: 'POST',
             headers: {
@@ -331,7 +341,6 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    // Event listeners
     tagsTable.addEventListener('click', function(e) {
         const target = e.target;
         const row = target.closest('tr');
@@ -389,10 +398,8 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
 
-    // Initialize components
     updateOptionalFieldSelect();
 
-    // Global error handling
     window.addEventListener('unhandledrejection', function(event) {
         console.error('Unhandled rejection:', event.reason);
         const errorMessage = event.reason?.message || 'An unexpected error occurred';
