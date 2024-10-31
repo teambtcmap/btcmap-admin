@@ -79,13 +79,49 @@
 {% block scripts %}
 <script src="{{ url_for('static', filename='js/validation.js') }}"></script>
 <script>
+// Global variables for map
 let map = null;
 let geoJsonLayer = null;
 
-// Initialize map function
-function initMap() {
+// Function to convert and validate numeric values
+function convertAndValidateNumeric(value, type) {
+    let numericValue;
+    
+    if (type === 'integer') {
+        numericValue = parseInt(value, 10);
+        if (isNaN(numericValue) || !Number.isInteger(numericValue) || numericValue.toString() !== value.trim()) {
+            throw new Error('Must be a whole number without decimals');
+        }
+    } else if (type === 'number') {
+        numericValue = parseFloat(value);
+        if (isNaN(numericValue) || numericValue.toString() !== value.trim()) {
+            throw new Error('Must be a valid number');
+        }
+    } else {
+        return value.trim();
+    }
+
+    if (typeof numericValue !== 'number') {
+        throw new Error(`Invalid ${type} value`);
+    }
+
+    return numericValue;
+}
+
+// Initialize map function with checks
+function initializeMap() {
     const mapElement = document.getElementById('map');
-    if (!map && mapElement) {
+    if (!mapElement) {
+        console.error('Map container not found');
+        return;
+    }
+    
+    if (map !== null) {
+        console.warn('Map already initialized');
+        return;
+    }
+
+    try {
         map = L.map('map').setView([0, 0], 2);
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
             attribution: '© OpenStreetMap contributors'
@@ -95,6 +131,9 @@ function initMap() {
         geoJsonLayer = L.geoJSON({{ geo_json | tojson | safe }}).addTo(map);
         map.fitBounds(geoJsonLayer.getBounds());
         {% endif %}
+    } catch (error) {
+        console.error('Error initializing map:', error);
+        showToast('Error', 'Failed to initialize map', 'error');
     }
 }
 
@@ -104,6 +143,11 @@ document.addEventListener('DOMContentLoaded', function() {
     const addCustomTagButton = document.getElementById('add-custom-tag-btn');
     const areaTypeRequirements = {{ area_type_requirements | tojson | safe }};
     const areaType = "{{ area.tags.get('type', '') }}";
+
+    // Initialize map if not already initialized
+    if (!map) {
+        initializeMap();
+    }
 
     function updateOptionalFieldSelect() {
         const existingKeys = Array.from(tagsTable.querySelectorAll('tr'))
@@ -175,33 +219,12 @@ document.addEventListener('DOMContentLoaded', function() {
         const content = valueCell.querySelector('.tag-value-content');
         const input = valueCell.querySelector('.tag-input');
         const select = valueCell.querySelector('.tag-select');
-        const newValue = select.style.display === 'block' ? select.value : input.value.trim();
+        const rawValue = select.style.display === 'block' ? select.value : input.value;
         const fieldRequirements = areaTypeRequirements[areaType]?.[key] || { type: 'text' };
 
-        // Convert and validate the value based on field type
         let processedValue;
         try {
-            if (fieldRequirements.type === 'integer') {
-                const numValue = parseInt(newValue, 10);
-                if (isNaN(numValue) || !Number.isInteger(numValue) || numValue.toString() !== newValue) {
-                    throw new Error('Must be a whole number without decimals');
-                }
-                processedValue = numValue;
-            } else if (fieldRequirements.type === 'number') {
-                const numValue = parseFloat(newValue);
-                if (isNaN(numValue)) {
-                    throw new Error('Must be a valid number');
-                }
-                processedValue = numValue;
-            } else {
-                processedValue = newValue;
-            }
-
-            // Verify the type conversion was successful for numeric fields
-            if ((fieldRequirements.type === 'integer' || fieldRequirements.type === 'number') && 
-                typeof processedValue !== 'number') {
-                throw new Error(`Invalid ${fieldRequirements.type} value`);
-            }
+            processedValue = convertAndValidateNumeric(rawValue, fieldRequirements.type);
         } catch (error) {
             showToast('Error', `Invalid ${fieldRequirements.type} value for ${key}: ${error.message}`, 'error');
             return;
@@ -227,7 +250,10 @@ document.addEventListener('DOMContentLoaded', function() {
         })
         .then(data => {
             if (data.error) {
-                throw new Error(typeof data.error === 'string' ? data.error : JSON.stringify(data.error));
+                const errorMessage = typeof data.error === 'string' ? data.error : 
+                                   typeof data.error === 'object' ? JSON.stringify(data.error) :
+                                   'Unknown error occurred';
+                throw new Error(errorMessage);
             }
             showToast('Success', 'Tag updated successfully', 'success');
             content.textContent = processedValue.toString();
@@ -287,7 +313,10 @@ document.addEventListener('DOMContentLoaded', function() {
                 })
                 .then(data => {
                     if (data.error) {
-                        throw new Error(typeof data.error === 'string' ? data.error : JSON.stringify(data.error));
+                        const errorMessage = typeof data.error === 'string' ? data.error :
+                                           typeof data.error === 'object' ? JSON.stringify(data.error) :
+                                           'Unknown error occurred';
+                        throw new Error(errorMessage);
                     }
                     row.remove();
                     showToast('Success', 'Tag deleted successfully', 'success');
@@ -341,7 +370,10 @@ document.addEventListener('DOMContentLoaded', function() {
                 })
                 .then(data => {
                     if (data.error) {
-                        throw new Error(typeof data.error === 'string' ? data.error : JSON.stringify(data.error));
+                        const errorMessage = typeof data.error === 'string' ? data.error :
+                                           typeof data.error === 'object' ? JSON.stringify(data.error) :
+                                           'Unknown error occurred';
+                        throw new Error(errorMessage);
                     }
                     showToast('Success', 'Area removed successfully', 'success');
                     setTimeout(() => {
@@ -358,7 +390,6 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 
     // Initialize components
-    initMap();
     updateOptionalFieldSelect();
 
     // Global error handling
