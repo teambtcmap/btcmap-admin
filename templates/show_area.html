@@ -74,11 +74,11 @@
         <button id="remove-area-btn" class="btn btn-outline-light">Remove Area</button>
     </div>
 </div>
+{% endblock %}
 
 {% block scripts %}
 <script src="{{ url_for('static', filename='js/validation.js') }}"></script>
 <script>
-    // Declare map variable at global scope
     let map = null;
     let geoJsonLayer = null;
 
@@ -173,7 +173,7 @@
             const content = valueCell.querySelector('.tag-value-content');
             const input = valueCell.querySelector('.tag-input');
             const select = valueCell.querySelector('.tag-select');
-            const newValue = select.style.display === 'block' ? select.value : input.value;
+            const newValue = select.style.display === 'block' ? select.value : input.value.trim();
             const fieldRequirements = areaTypeRequirements[areaType]?.[key] || { type: 'text' };
 
             // First validate the input string
@@ -184,20 +184,20 @@
             }
 
             // Then convert to proper type if numeric
-            let processedValue;
+            let processedValue = newValue;
             try {
                 if (fieldRequirements.type === 'integer') {
-                    processedValue = parseInt(newValue, 10);
-                    if (isNaN(processedValue) || processedValue.toString() !== newValue.trim()) {
+                    const numValue = parseInt(newValue, 10);
+                    if (isNaN(numValue) || numValue.toString() !== newValue) {
                         throw new Error('Must be a whole number');
                     }
+                    processedValue = numValue;
                 } else if (fieldRequirements.type === 'number') {
-                    processedValue = parseFloat(newValue);
-                    if (isNaN(processedValue)) {
+                    const numValue = parseFloat(newValue);
+                    if (isNaN(numValue)) {
                         throw new Error('Must be a valid number');
                     }
-                } else {
-                    processedValue = newValue.trim();
+                    processedValue = numValue;
                 }
             } catch (error) {
                 showToast('Error', `Invalid ${fieldRequirements.type} value for ${key}: ${error.message}`, 'error');
@@ -216,13 +216,7 @@
                     value: processedValue
                 }),
             })
-            .then(async response => {
-                const data = await response.json();
-                if (!response.ok) {
-                    throw new Error(data.error || `HTTP error! status: ${response.status}`);
-                }
-                return data;
-            })
+            .then(response => response.json())
             .then(data => {
                 if (data.error) {
                     throw new Error(typeof data.error === 'string' ? data.error : JSON.stringify(data.error));
@@ -278,13 +272,7 @@
                             tag: key
                         }),
                     })
-                    .then(async response => {
-                        const data = await response.json();
-                        if (!response.ok) {
-                            throw new Error(data.error || `HTTP error! status: ${response.status}`);
-                        }
-                        return data;
-                    })
+                    .then(response => response.json())
                     .then(data => {
                         if (data.error) {
                             throw new Error(typeof data.error === 'string' ? data.error : JSON.stringify(data.error));
@@ -333,13 +321,7 @@
                         },
                         body: JSON.stringify({ id: '{{ area.id }}' }),
                     })
-                    .then(async response => {
-                        const data = await response.json();
-                        if (!response.ok) {
-                            throw new Error(data.error || `HTTP error! status: ${response.status}`);
-                        }
-                        return data;
-                    })
+                    .then(response => response.json())
                     .then(data => {
                         if (data.error) {
                             throw new Error(typeof data.error === 'string' ? data.error : JSON.stringify(data.error));
