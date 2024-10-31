@@ -78,23 +78,26 @@
 {% block scripts %}
 <script src="{{ url_for('static', filename='js/validation.js') }}"></script>
 <script>
+    // Declare map variable at global scope
+    let map = null;
+    let geoJsonLayer = null;
+
     document.addEventListener('DOMContentLoaded', function() {
         const tagsTable = document.getElementById('tags-table');
         const addOptionalTagButton = document.getElementById('add-optional-tag-btn');
         const addCustomTagButton = document.getElementById('add-custom-tag-btn');
         const areaTypeRequirements = {{ area_type_requirements | tojson | safe }};
         const areaType = "{{ area.tags.get('type', '') }}";
-        let map;
 
         function initMap() {
-            if (!map) {
+            if (map === null) {
                 map = L.map('map').setView([0, 0], 2);
                 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
                     attribution: '© OpenStreetMap contributors'
                 }).addTo(map);
 
                 {% if geo_json %}
-                var geoJsonLayer = L.geoJSON({{ geo_json | tojson | safe }}).addTo(map);
+                geoJsonLayer = L.geoJSON({{ geo_json | tojson | safe }}).addTo(map);
                 map.fitBounds(geoJsonLayer.getBounds());
                 {% endif %}
             }
@@ -110,11 +113,9 @@
                 .map(([key]) => key);
 
             addOptionalTagButton.disabled = optionalFields.length === 0;
-            if (optionalFields.length === 0) {
-                addOptionalTagButton.title = "All optional fields have been added";
-            } else {
-                addOptionalTagButton.title = "Add an optional field";
-            }
+            addOptionalTagButton.title = optionalFields.length === 0 
+                ? "All optional fields have been added" 
+                : "Add an optional field";
         }
 
         function startEditing(row) {
@@ -145,10 +146,8 @@
                     input.type = 'text';
                     input.pattern = fieldRequirements.type === 'integer' ? '\\d*' : '\\d*\\.?\\d*';
                     input.placeholder = fieldRequirements.type === 'integer' ? 'Enter a whole number' : 'Enter a number';
-                    input.value = content.textContent.trim();
-                } else {
-                    input.type = 'text';
                 }
+                input.value = content.textContent.trim();
                 input.style.display = 'block';
                 select.style.display = 'none';
 
@@ -174,44 +173,38 @@
             const content = valueCell.querySelector('.tag-value-content');
             const input = valueCell.querySelector('.tag-input');
             const select = valueCell.querySelector('.tag-select');
-            const newValue = select.style.display === 'block' ? select.value : input.value.trim();
-
-            if (!newValue) {
-                showToast('Error', 'Value cannot be empty', 'error');
-                return;
-            }
-
+            const newValue = select.style.display === 'block' ? select.value : input.value;
             const fieldRequirements = areaTypeRequirements[areaType]?.[key] || { type: 'text' };
-            
-            // Validate the input value
+
+            // First validate the input string
             const validation = validateValue(newValue, fieldRequirements);
             if (!validation.isValid) {
                 showToast('Error', `Invalid value for ${key}: ${validation.message}`, 'error');
                 return;
             }
 
-            // Convert value based on field type before sending to API
+            // Then convert to proper type if numeric
             let processedValue;
             try {
                 if (fieldRequirements.type === 'integer') {
                     processedValue = parseInt(newValue, 10);
-                    if (isNaN(processedValue)) {
-                        throw new Error('Invalid integer value');
+                    if (isNaN(processedValue) || processedValue.toString() !== newValue.trim()) {
+                        throw new Error('Must be a whole number');
                     }
                 } else if (fieldRequirements.type === 'number') {
                     processedValue = parseFloat(newValue);
                     if (isNaN(processedValue)) {
-                        throw new Error('Invalid numeric value');
+                        throw new Error('Must be a valid number');
                     }
                 } else {
-                    processedValue = newValue;
+                    processedValue = newValue.trim();
                 }
             } catch (error) {
-                showToast('Error', `Invalid ${fieldRequirements.type} value for ${key}`, 'error');
+                showToast('Error', `Invalid ${fieldRequirements.type} value for ${key}: ${error.message}`, 'error');
                 return;
             }
 
-            // Make the API call
+            // Make the API call with the properly typed value
             fetch('/api/set_area_tag', {
                 method: 'POST',
                 headers: {
@@ -235,7 +228,6 @@
                     throw new Error(typeof data.error === 'string' ? data.error : JSON.stringify(data.error));
                 }
                 showToast('Success', 'Tag updated successfully', 'success');
-                // Update the display value with the processed value
                 content.textContent = processedValue.toString();
                 cancelEditing(row);
             })
@@ -378,5 +370,4 @@
         });
     });
 </script>
-{% endblock %}
 {% endblock %}
