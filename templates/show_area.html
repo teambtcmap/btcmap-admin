@@ -3,11 +3,102 @@
 {% block title %}{{ area.tags.get('name', 'Unknown Area') }}{% endblock %}
 
 {% block content %}
-<!-- Previous content remains the same -->
+<div class="starter-template">
+    <h1>Area Details: {{ area.tags.get('name', 'Unknown') }}</h1>
+    <p class="lead">Type: {{ area.tags.get('type', 'Unknown') }}</p>
+
+    <div class="card mb-4">
+        <div class="card-header">
+            <h3 class="mb-0">Metadata</h3>
+        </div>
+        <div class="card-body">
+            <dl class="row">
+                <dt class="col-sm-3">Area ID:</dt>
+                <dd class="col-sm-9">{{ area.id }}</dd>
+
+                <dt class="col-sm-3">Created At:</dt>
+                <dd class="col-sm-9">{{ area.created_at|default('N/A') }}</dd>
+
+                <dt class="col-sm-3">Updated At:</dt>
+                <dd class="col-sm-9">{{ area.updated_at|default('N/A') }}</dd>
+            </dl>
+        </div>
+    </div>
+
+    <div class="map-container position-relative mb-4">
+        <div id="map" style="height: 400px; width: 100%;"></div>
+    </div>
+
+    <h3>Tags</h3>
+    <table class="table table-striped" id="tags-table">
+        <thead>
+            <tr>
+                <th style="width: 30%;">Key</th>
+                <th style="width: 40%;">Value</th>
+                <th style="width: 30%;">Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for key, value in area.tags.items() %}
+            {% if key != 'geo_json' %}
+            <tr data-key="{{ key }}">
+                <td>{{ key }}</td>
+                <td class="tag-value-cell">
+                    <div class="tag-value-content">{{ value }}</div>
+                    <textarea class="form-control tag-input" style="display: none;">{{ value }}</textarea>
+                    <select class="form-control tag-select" style="display: none;"></select>
+                </td>
+                <td>
+                    <button class="btn btn-primary btn-sm edit-tag">Edit</button>
+                    <button class="btn btn-success btn-sm update-tag" style="display: none;">Update</button>
+                    <button class="btn btn-secondary btn-sm cancel-edit" style="display: none;">Cancel</button>
+                    {% if key not in required_tags %}
+                    <button class="btn btn-danger btn-sm delete-tag">Delete</button>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endif %}
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <div class="mb-3">
+        <button id="add-optional-tag-btn" class="btn btn-primary">Add Optional Tag</button>
+        <button id="add-custom-tag-btn" class="btn btn-secondary">Add Custom Tag</button>
+    </div>
+
+    <div class="mt-5 p-3 bg-danger text-white">
+        <h3>Danger Zone</h3>
+        <p>Be careful! Actions in this section can't be undone.</p>
+        <button id="remove-area-btn" class="btn btn-outline-light">Remove Area</button>
+    </div>
+</div>
+
+<style>
+    .tag-value-cell {
+        max-width: 300px;
+        word-wrap: break-word;
+    }
+    
+    .tag-value-content,
+    .tag-input,
+    .tag-select {
+        width: 100%;
+        min-height: 38px;
+    }
+    
+    .tag-value-content {
+        padding: 6px 12px;
+        border: 1px solid transparent;
+    }
+    
+    .tag-input {
+        resize: vertical;
+    }
+</style>
 {% endblock %}
 
 {% block scripts %}
-<script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
 <script>
     document.addEventListener('DOMContentLoaded', function() {
         const tagsTable = document.getElementById('tags-table');
@@ -15,7 +106,15 @@
         const addCustomTagButton = document.getElementById('add-custom-tag-btn');
         const areaTypeRequirements = {{ area_type_requirements | tojson | safe }};
 
-        // Map initialization code remains the same...
+        var map = L.map('map').setView([0, 0], 2);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '© OpenStreetMap contributors'
+        }).addTo(map);
+
+        {% if geo_json %}
+        var geoJsonLayer = L.geoJSON({{ geo_json | tojson | safe }}).addTo(map);
+        map.fitBounds(geoJsonLayer.getBounds());
+        {% endif %}
 
         function validateNumericValue(value, type) {
             if (!value || value.trim() === '') {
@@ -40,6 +139,33 @@
             }
 
             return { isValid: true, value: num };
+        }
+
+        function startEditing(row) {
+            const valueCell = row.querySelector('.tag-value-cell');
+            const content = valueCell.querySelector('.tag-value-content');
+            const input = valueCell.querySelector('.tag-input');
+            const select = valueCell.querySelector('.tag-select');
+            const editBtn = row.querySelector('.edit-tag');
+            const updateBtn = row.querySelector('.update-tag');
+            const cancelBtn = row.querySelector('.cancel-edit');
+            const key = row.dataset.key;
+
+            content.style.display = 'none';
+            editBtn.style.display = 'none';
+            updateBtn.style.display = 'inline-block';
+            cancelBtn.style.display = 'inline-block';
+
+            if (areaTypeRequirements[key] && areaTypeRequirements[key].allowed_values) {
+                select.innerHTML = areaTypeRequirements[key].allowed_values.map(value => 
+                    `<option value="${value}" ${content.textContent.trim() === value ? 'selected' : ''}>${value}</option>`
+                ).join('');
+                select.style.display = 'block';
+                input.style.display = 'none';
+            } else {
+                input.style.display = 'block';
+                select.style.display = 'none';
+            }
         }
 
         function updateTag(row) {
@@ -79,23 +205,148 @@
                     value: processedValue
                 }),
             })
-            .then(response => response.json())
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                return response.json();
+            })
             .then(data => {
                 if (data.error) {
-                    showToast('Error', data.error, 'error');
-                } else {
-                    showToast('Success', 'Tag updated successfully', 'success');
-                    content.textContent = newValue;
-                    cancelEditing(row);
+                    throw new Error(data.error);
                 }
+                showToast('Success', 'Tag updated successfully', 'success');
+                content.textContent = newValue;
+                cancelEditing(row);
             })
             .catch(error => {
-                showToast('Error', 'An unexpected error occurred', 'error');
-                console.error(error);
+                console.error('Error updating tag:', error);
+                let errorMessage = 'An unexpected error occurred';
+                if (error.message) {
+                    errorMessage = error.message;
+                }
+                showToast('Error', errorMessage, 'error');
             });
         }
 
-        // Rest of the code remains the same...
+        function cancelEditing(row) {
+            const valueCell = row.querySelector('.tag-value-cell');
+            const content = valueCell.querySelector('.tag-value-content');
+            const input = valueCell.querySelector('.tag-input');
+            const select = valueCell.querySelector('.tag-select');
+            const editBtn = row.querySelector('.edit-tag');
+            const updateBtn = row.querySelector('.update-tag');
+            const cancelBtn = row.querySelector('.cancel-edit');
+
+            content.style.display = 'block';
+            input.style.display = 'none';
+            select.style.display = 'none';
+            editBtn.style.display = 'inline-block';
+            updateBtn.style.display = 'none';
+            cancelBtn.style.display = 'none';
+        }
+
+        function deleteTag(row) {
+            const key = row.dataset.key;
+            showToast('Confirm', `Are you sure you want to delete the tag "${key}"?`, 'warning', {
+                confirmButtonText: 'Yes, delete it',
+                cancelButtonText: 'Cancel',
+                onConfirm: () => {
+                    fetch('/api/remove_area_tag', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            id: '{{ area.id }}',
+                            tag: key
+                        }),
+                    })
+                    .then(response => {
+                        if (!response.ok) {
+                            throw new Error(`HTTP error! status: ${response.status}`);
+                        }
+                        return response.json();
+                    })
+                    .then(data => {
+                        if (data.error) {
+                            throw new Error(data.error);
+                        }
+                        showToast('Success', 'Tag removed successfully', 'success');
+                        row.remove();
+                    })
+                    .catch(error => {
+                        console.error('Error removing tag:', error);
+                        let errorMessage = 'An unexpected error occurred';
+                        if (error.message) {
+                            errorMessage = error.message;
+                        }
+                        showToast('Error', errorMessage, 'error');
+                    });
+                }
+            });
+        }
+
+        tagsTable.addEventListener('click', function(e) {
+            const target = e.target;
+            const row = target.closest('tr');
+
+            if (target.classList.contains('edit-tag')) {
+                startEditing(row);
+            } else if (target.classList.contains('update-tag')) {
+                updateTag(row);
+            } else if (target.classList.contains('cancel-edit')) {
+                cancelEditing(row);
+            } else if (target.classList.contains('delete-tag')) {
+                deleteTag(row);
+            }
+        });
+
+        const removeAreaBtn = document.getElementById('remove-area-btn');
+        removeAreaBtn.addEventListener('click', function() {
+            showToast('Confirm', 'Are you sure you want to remove this area?', 'warning', {
+                confirmButtonText: 'Yes, remove it',
+                cancelButtonText: 'Cancel',
+                onConfirm: () => {
+                    fetch('/api/remove_area', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({ id: '{{ area.id }}' }),
+                    })
+                    .then(response => {
+                        if (!response.ok) {
+                            throw new Error(`HTTP error! status: ${response.status}`);
+                        }
+                        return response.json();
+                    })
+                    .then(data => {
+                        if (data.error) {
+                            throw new Error(data.error);
+                        }
+                        showToast('Success', 'Area removed successfully', 'success');
+                        setTimeout(() => {
+                            window.location.href = '/select_area';
+                        }, 2000);
+                    })
+                    .catch(error => {
+                        console.error('Error removing area:', error);
+                        let errorMessage = 'An unexpected error occurred';
+                        if (error.message) {
+                            errorMessage = error.message;
+                        }
+                        showToast('Error', errorMessage, 'error');
+                    });
+                }
+            });
+        });
+
+        // Handle unhandled rejections
+        window.addEventListener('unhandledrejection', function(event) {
+            console.error('Unhandled rejection:', event.reason);
+            showToast('Error', 'An unexpected error occurred. Please try again later.', 'error');
+        });
     });
 </script>
 {% endblock %}
