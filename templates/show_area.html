@@ -82,46 +82,15 @@
 let map = null;
 let geoJsonLayer = null;
 
-function convertAndValidateNumeric(value, type) {
-    if (!value || typeof value !== 'string') {
-        throw new Error('Invalid input value');
-    }
-
-    const trimmedValue = value.trim();
-    let numericValue;
-
-    if (type === 'integer') {
-        if (!/^\d+$/.test(trimmedValue)) {
-            throw new Error('Must be a whole number without decimals');
-        }
-        numericValue = parseInt(trimmedValue, 10);
-        if (isNaN(numericValue) || !Number.isInteger(numericValue)) {
-            throw new Error('Must be a valid integer');
-        }
-    } else if (type === 'number') {
-        if (!/^\d*\.?\d*$/.test(trimmedValue)) {
-            throw new Error('Must be a valid number');
-        }
-        numericValue = parseFloat(trimmedValue);
-        if (isNaN(numericValue)) {
-            throw new Error('Must be a valid number');
-        }
-    } else {
-        return trimmedValue;
-    }
-
-    console.log(`Converting ${trimmedValue} to ${type}:`, numericValue, typeof numericValue);
-    return numericValue;
-}
-
 function initializeMap() {
-    const mapElement = document.getElementById('map');
-    if (!mapElement) {
-        console.error('Map container not found');
+    if (map !== null) {
+        console.log('Map is already initialized');
         return;
     }
 
-    if (map !== null) {
+    const mapElement = document.getElementById('map');
+    if (!mapElement) {
+        console.error('Map container not found');
         return;
     }
 
@@ -141,6 +110,50 @@ function initializeMap() {
     }
 }
 
+function convertAndValidateNumeric(value, type) {
+    if (!value || typeof value !== 'string') {
+        throw new Error('Invalid input value');
+    }
+
+    const trimmedValue = value.trim();
+    let numericValue;
+
+    try {
+        if (type === 'integer') {
+            if (!/^\d+$/.test(trimmedValue)) {
+                throw new Error('Must be a whole number without decimals');
+            }
+            numericValue = parseInt(trimmedValue, 10);
+            if (!Number.isInteger(numericValue)) {
+                throw new Error('Must be a valid integer');
+            }
+        } else if (type === 'number') {
+            if (!/^\d*\.?\d*$/.test(trimmedValue)) {
+                throw new Error('Must be a valid number');
+            }
+            numericValue = parseFloat(trimmedValue);
+            if (isNaN(numericValue)) {
+                throw new Error('Must be a valid number');
+            }
+        } else {
+            return trimmedValue;
+        }
+
+        console.log(`Converting ${trimmedValue} (${typeof trimmedValue}) to ${type}:`, numericValue, typeof numericValue);
+        
+        if (type === 'integer' || type === 'number') {
+            if (typeof numericValue !== 'number') {
+                throw new Error(`Failed to convert to ${type}`);
+            }
+        }
+
+        return numericValue;
+    } catch (error) {
+        console.error('Conversion error:', error);
+        throw error;
+    }
+}
+
 document.addEventListener('DOMContentLoaded', function() {
     const tagsTable = document.getElementById('tags-table');
     const addOptionalTagButton = document.getElementById('add-optional-tag-btn');
@@ -148,9 +161,8 @@ document.addEventListener('DOMContentLoaded', function() {
     const areaTypeRequirements = {{ area_type_requirements | tojson | safe }};
     const areaType = "{{ area.tags.get('type', '') }}";
 
-    if (!map) {
-        initializeMap();
-    }
+    // Initialize map once
+    initializeMap();
 
     function updateOptionalFieldSelect() {
         const existingKeys = Array.from(tagsTable.querySelectorAll('tr'))
@@ -228,29 +240,34 @@ document.addEventListener('DOMContentLoaded', function() {
         let processedValue;
         try {
             processedValue = convertAndValidateNumeric(rawValue, fieldRequirements.type);
-            
-            // Additional type checking for numeric fields
+            console.log('Processed value before API call:', processedValue, typeof processedValue);
+
             if (fieldRequirements.type === 'integer' || fieldRequirements.type === 'number') {
                 if (typeof processedValue !== 'number') {
                     throw new Error(`Value must be a ${fieldRequirements.type}`);
                 }
-                console.log(`Sending ${key} with value:`, processedValue, typeof processedValue);
             }
         } catch (error) {
+            console.error('Validation error:', error);
             showToast('Error', `Invalid ${fieldRequirements.type} value for ${key}: ${error.message}`, 'error');
             return;
         }
+
+        const requestBody = {
+            id: '{{ area.id }}',
+            name: key,
+            value: processedValue
+        };
+
+        console.log('Sending request body:', requestBody);
+        console.log('Value type in request:', typeof requestBody.value);
 
         fetch('/api/set_area_tag', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
             },
-            body: JSON.stringify({
-                id: '{{ area.id }}',
-                name: key,
-                value: processedValue
-            }),
+            body: JSON.stringify(requestBody)
         })
         .then(response => {
             if (!response.ok) {
@@ -260,10 +277,7 @@ document.addEventListener('DOMContentLoaded', function() {
         })
         .then(data => {
             if (data.error) {
-                const errorMessage = typeof data.error === 'string' ? data.error : 
-                                   typeof data.error === 'object' ? JSON.stringify(data.error) :
-                                   'Unknown error occurred';
-                throw new Error(errorMessage);
+                throw new Error(typeof data.error === 'string' ? data.error : JSON.stringify(data.error));
             }
             showToast('Success', 'Tag updated successfully', 'success');
             content.textContent = processedValue.toString();
@@ -315,18 +329,10 @@ document.addEventListener('DOMContentLoaded', function() {
                         tag: key
                     }),
                 })
-                .then(response => {
-                    if (!response.ok) {
-                        throw new Error(`HTTP error! status: ${response.status}`);
-                    }
-                    return response.json();
-                })
+                .then(response => response.json())
                 .then(data => {
                     if (data.error) {
-                        const errorMessage = typeof data.error === 'string' ? data.error :
-                                           typeof data.error === 'object' ? JSON.stringify(data.error) :
-                                           'Unknown error occurred';
-                        throw new Error(errorMessage);
+                        throw new Error(typeof data.error === 'string' ? data.error : JSON.stringify(data.error));
                     }
                     row.remove();
                     showToast('Success', 'Tag deleted successfully', 'success');
@@ -371,18 +377,10 @@ document.addEventListener('DOMContentLoaded', function() {
                     },
                     body: JSON.stringify({ id: '{{ area.id }}' }),
                 })
-                .then(response => {
-                    if (!response.ok) {
-                        throw new Error(`HTTP error! status: ${response.status}`);
-                    }
-                    return response.json();
-                })
+                .then(response => response.json())
                 .then(data => {
                     if (data.error) {
-                        const errorMessage = typeof data.error === 'string' ? data.error :
-                                           typeof data.error === 'object' ? JSON.stringify(data.error) :
-                                           'Unknown error occurred';
-                        throw new Error(errorMessage);
+                        throw new Error(typeof data.error === 'string' ? data.error : JSON.stringify(data.error));
                     }
                     showToast('Success', 'Area removed successfully', 'success');
                     setTimeout(() => {
@@ -399,12 +397,6 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 
     updateOptionalFieldSelect();
-
-    window.addEventListener('unhandledrejection', function(event) {
-        console.error('Unhandled rejection:', event.reason);
-        const errorMessage = event.reason?.message || 'An unexpected error occurred';
-        showToast('Error', errorMessage, 'error');
-    });
 });
 </script>
 {% endblock %}
