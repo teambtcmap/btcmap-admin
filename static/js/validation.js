@@ -18,16 +18,21 @@ function validateNumericValue(value, type) {
         return { isValid: false, message: 'Value cannot be empty' };
     }
 
+    value = value.toString().trim();
+    
     if (type === 'integer') {
-        const num = parseInt(value, 10);
-        if (isNaN(num) || !Number.isInteger(parseFloat(value))) {
-            return { isValid: false, message: 'Value must be a valid integer' };
+        if (!/^\d+$/.test(value)) {
+            return { isValid: false, message: 'Value must be a valid integer (no decimal points)' };
         }
+        const num = parseInt(value, 10);
         if (num < 0) {
             return { isValid: false, message: 'Value must be non-negative' };
         }
         return { isValid: true, value: num };
     } else if (type === 'number') {
+        if (!/^\d*\.?\d*$/.test(value)) {
+            return { isValid: false, message: 'Value must contain only digits and at most one decimal point' };
+        }
         const num = parseFloat(value);
         if (isNaN(num)) {
             return { isValid: false, message: 'Value must be a valid number' };
