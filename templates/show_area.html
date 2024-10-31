@@ -84,6 +84,21 @@
         const addCustomTagButton = document.getElementById('add-custom-tag-btn');
         const areaTypeRequirements = {{ area_type_requirements | tojson | safe }};
         const areaType = "{{ area.tags.get('type', '') }}";
+        let map;
+
+        function initMap() {
+            if (!map) {
+                map = L.map('map').setView([0, 0], 2);
+                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                    attribution: '© OpenStreetMap contributors'
+                }).addTo(map);
+
+                {% if geo_json %}
+                var geoJsonLayer = L.geoJSON({{ geo_json | tojson | safe }}).addTo(map);
+                map.fitBounds(geoJsonLayer.getBounds());
+                {% endif %}
+            }
+        }
 
         function updateOptionalFieldSelect() {
             const existingKeys = Array.from(tagsTable.querySelectorAll('tr'))
@@ -101,16 +116,6 @@
                 addOptionalTagButton.title = "Add an optional field";
             }
         }
-
-        var map = L.map('map').setView([0, 0], 2);
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            attribution: '© OpenStreetMap contributors'
-        }).addTo(map);
-
-        {% if geo_json %}
-        var geoJsonLayer = L.geoJSON({{ geo_json | tojson | safe }}).addTo(map);
-        map.fitBounds(geoJsonLayer.getBounds());
-        {% endif %}
 
         function startEditing(row) {
             const valueCell = row.querySelector('.tag-value-cell');
@@ -140,13 +145,13 @@
                     input.type = 'text';
                     input.pattern = fieldRequirements.type === 'integer' ? '\\d*' : '\\d*\\.?\\d*';
                     input.placeholder = fieldRequirements.type === 'integer' ? 'Enter a whole number' : 'Enter a number';
+                    input.value = content.textContent.trim();
                 } else {
                     input.type = 'text';
                 }
                 input.style.display = 'block';
                 select.style.display = 'none';
 
-                // Add real-time validation
                 input.addEventListener('input', function() {
                     const validation = validateValue(this.value, fieldRequirements);
                     const feedback = this.nextElementSibling;
@@ -185,20 +190,25 @@
                 return;
             }
 
-            // Convert value based on field type
-            let processedValue = validation.value;
-            if (fieldRequirements.type === 'integer') {
-                processedValue = parseInt(processedValue, 10);
-                if (isNaN(processedValue)) {
-                    showToast('Error', `Invalid integer value for ${key}`, 'error');
-                    return;
+            // Convert value based on field type before sending to API
+            let processedValue;
+            try {
+                if (fieldRequirements.type === 'integer') {
+                    processedValue = parseInt(newValue, 10);
+                    if (isNaN(processedValue)) {
+                        throw new Error('Invalid integer value');
+                    }
+                } else if (fieldRequirements.type === 'number') {
+                    processedValue = parseFloat(newValue);
+                    if (isNaN(processedValue)) {
+                        throw new Error('Invalid numeric value');
+                    }
+                } else {
+                    processedValue = newValue;
                 }
-            } else if (fieldRequirements.type === 'number') {
-                processedValue = parseFloat(processedValue);
-                if (isNaN(processedValue)) {
-                    showToast('Error', `Invalid numeric value for ${key}`, 'error');
-                    return;
-                }
+            } catch (error) {
+                showToast('Error', `Invalid ${fieldRequirements.type} value for ${key}`, 'error');
+                return;
             }
 
             // Make the API call
@@ -225,6 +235,7 @@
                     throw new Error(typeof data.error === 'string' ? data.error : JSON.stringify(data.error));
                 }
                 showToast('Success', 'Tag updated successfully', 'success');
+                // Update the display value with the processed value
                 content.textContent = processedValue.toString();
                 cancelEditing(row);
             })
@@ -356,6 +367,7 @@
         });
 
         // Initialize
+        initMap();
         updateOptionalFieldSelect();
 
         // Global error handling
