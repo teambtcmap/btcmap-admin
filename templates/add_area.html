@@ -189,7 +189,6 @@ document.addEventListener('DOMContentLoaded', function() {
             });
         }
 
-        // Add validation for numeric fields
         if (isNumericField) {
             const input = row.querySelector('input[type="number"]');
             input.addEventListener('input', function() {
@@ -211,7 +210,7 @@ document.addEventListener('DOMContentLoaded', function() {
         const keys = [];
         tagsTable.querySelectorAll('tr').forEach(row => {
             const keyElement = row.querySelector('td:first-child');
-            const key = keyElement.textContent.trim() || keyElement.querySelector('input')?.value.trim();
+            const key = keyElement.textContent.trim() || keyElement.querySelector('input')?.value?.trim();
             if (key) {
                 keys.push(key);
             }
@@ -329,6 +328,105 @@ document.addEventListener('DOMContentLoaded', function() {
         tagsTable.appendChild(newRow);
     }
 
+    submitAreaBtn.addEventListener('click', function(e) {
+        e.preventDefault();
+        const selectedType = typeSelect.value;
+        if (!selectedType) {
+            showToast('Error', 'Please select an area type', 'error');
+            return;
+        }
+
+        const tags = {};
+        let isValid = true;
+        let errorMessages = [];
+
+        // Validate all fields
+        tagsTable.querySelectorAll('tr').forEach(row => {
+            const keyElement = row.querySelector('td:first-child');
+            const key = keyElement.textContent.trim() || keyElement.querySelector('input')?.value?.trim();
+            const valueInput = row.querySelector('td:nth-child(2) input, td:nth-child(2) select');
+            
+            if (!key || key === '') {
+                isValid = false;
+                errorMessages.push('Key cannot be empty');
+                return;
+            }
+
+            if (valueInput) {
+                const value = valueInput.value.trim();
+                const requirements = areaTypeRequirements[selectedType]?.[key] || { type: 'text', required: false };
+
+                // Check if the field is required
+                if (requirements.required && !value) {
+                    isValid = false;
+                    errorMessages.push(`${key} is required`);
+                    valueInput.classList.add('is-invalid');
+                    return;
+                }
+
+                // Handle numeric fields
+                if (value) {
+                    if (key === 'population') {
+                        const validation = validateNumericValue(value, 'integer');
+                        if (!validation.isValid) {
+                            isValid = false;
+                            errorMessages.push(`${key}: ${validation.message}`);
+                            valueInput.classList.add('is-invalid');
+                        } else {
+                            tags[key] = validation.value;
+                        }
+                    } else if (key === 'area_km2' || requirements.type === 'number') {
+                        const validation = validateNumericValue(value, 'number');
+                        if (!validation.isValid) {
+                            isValid = false;
+                            errorMessages.push(`${key}: ${validation.message}`);
+                            valueInput.classList.add('is-invalid');
+                        } else {
+                            tags[key] = validation.value;
+                        }
+                    } else {
+                        tags[key] = value;
+                    }
+                }
+            }
+        });
+
+        if (!isValid) {
+            showToast('Error', errorMessages.join('\n'), 'error');
+            return;
+        }
+
+        // Add type and GeoJSON
+        tags['type'] = selectedType;
+        if (currentGeoJson) {
+            tags['geo_json'] = JSON.stringify(currentGeoJson);
+        }
+
+        // Submit the form
+        fetch('/add_area', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(tags)
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.error) {
+                showToast('Error', data.error.message, 'error');
+            } else {
+                showToast('Success', 'Area added successfully', 'success');
+                setTimeout(() => {
+                    window.location.href = '/select_area';
+                }, 2000);
+            }
+        })
+        .catch(error => {
+            showToast('Error', 'An unexpected error occurred while adding the area', 'error');
+            console.error('Error:', error);
+        });
+    });
+
     // GeoJSON editing functionality
     const editGeoJsonBtn = document.getElementById('edit-geojson-btn');
     const geojsonInput = document.getElementById('geojson-input');
@@ -387,93 +485,6 @@ document.addEventListener('DOMContentLoaded', function() {
     typeSelect.addEventListener('change', updateFields);
     addOptionalFieldBtn.addEventListener('click', addOptionalField);
     addCustomFieldBtn.addEventListener('click', addCustomField);
-
-    submitAreaBtn.addEventListener('click', function(e) {
-        e.preventDefault();
-        const selectedType = typeSelect.value;
-        if (!selectedType) {
-            showToast('Error', 'Please select an area type', 'error');
-            return;
-        }
-
-        const tags = {};
-        let isValid = true;
-        let errorMessages = [];
-
-        // Validate all fields
-        tagsTable.querySelectorAll('tr').forEach(row => {
-            const keyElement = row.querySelector('td:first-child');
-            const key = keyElement.textContent.trim() || keyElement.querySelector('select, input')?.value?.trim();
-            const valueInput = row.querySelector('td:nth-child(2) input, td:nth-child(2) select');
-            
-            if (!key || key === '') {
-                isValid = false;
-                errorMessages.push('Key cannot be empty');
-                return;
-            }
-
-            if (valueInput) {
-                const value = valueInput.value.trim();
-                const isNumericField = key === 'population' || key === 'area_km2';
-
-                if (isNumericField) {
-                    const validation = validateNumericValue(value, key === 'population' ? 'integer' : 'number');
-                    if (!validation.isValid) {
-                        isValid = false;
-                        errorMessages.push(`${key}: ${validation.message}`);
-                        valueInput.classList.add('is-invalid');
-                    } else {
-                        tags[key] = validation.value; // Store as number
-                    }
-                } else {
-                    if (value === '' && areaTypeRequirements[selectedType]?.[key]?.required) {
-                        isValid = false;
-                        errorMessages.push(`${key} is required`);
-                        valueInput.classList.add('is-invalid');
-                    } else if (value !== '') {
-                        tags[key] = value;
-                    }
-                }
-            }
-        });
-
-        if (!isValid) {
-            showToast('Error', errorMessages.join('\n'), 'error');
-            return;
-        }
-
-        // Add type tag
-        tags['type'] = selectedType;
-
-        // Add GeoJSON if present
-        if (currentGeoJson) {
-            tags['geo_json'] = JSON.stringify(currentGeoJson);
-        }
-
-        fetch('/add_area', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(tags)
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.error) {
-                showToast('Error', data.error.message, 'error');
-            } else {
-                showToast('Success', 'Area added successfully', 'success');
-                setTimeout(() => {
-                    window.location.href = '/select_area';
-                }, 2000);
-            }
-        })
-        .catch(error => {
-            showToast('Error', 'An unexpected error occurred while adding the area', 'error');
-            console.error('Error:', error);
-        });
-    });
-
     updateFields();
 });
 </script>
