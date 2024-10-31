@@ -87,17 +87,14 @@
         const areaType = "{{ area.tags.get('type', '') }}";
         
         function updateOptionalFieldSelect() {
-            // Get all existing keys
             const existingKeys = Array.from(tagsTable.querySelectorAll('tr'))
                 .map(row => row.dataset.key)
                 .filter(key => key);
 
-            // Get all available optional fields
             const optionalFields = Object.entries(areaTypeRequirements[areaType] || {})
                 .filter(([key, req]) => !req.required && !existingKeys.includes(key))
                 .map(([key]) => key);
 
-            // Update the UI or button state based on available optional fields
             addOptionalTagButton.disabled = optionalFields.length === 0;
             if (optionalFields.length === 0) {
                 addOptionalTagButton.title = "All optional fields have been added";
@@ -140,10 +137,12 @@
                 select.style.display = 'block';
                 input.style.display = 'none';
             } else {
-                input.type = fieldRequirements.type === 'number' || fieldRequirements.type === 'integer' ? 'number' : 'text';
-                if (input.type === 'number') {
+                if (fieldRequirements.type === 'number' || fieldRequirements.type === 'integer') {
+                    input.type = 'number';
                     input.min = '0';
                     input.step = fieldRequirements.type === 'integer' ? '1' : '0.01';
+                } else {
+                    input.type = 'text';
                 }
                 input.style.display = 'block';
                 select.style.display = 'none';
@@ -162,8 +161,24 @@
             const validation = validateValue(newValue, fieldRequirements);
 
             if (!validation.isValid) {
-                showToast('Error', validation.message, 'error');
+                showToast('Error', `Invalid value for ${key}: ${validation.message}`, 'error');
                 return;
+            }
+
+            // Convert value based on field type
+            let processedValue = validation.value;
+            if (fieldRequirements.type === 'integer') {
+                processedValue = parseInt(processedValue, 10);
+                if (isNaN(processedValue)) {
+                    showToast('Error', `Invalid integer value for ${key}`, 'error');
+                    return;
+                }
+            } else if (fieldRequirements.type === 'number') {
+                processedValue = parseFloat(processedValue);
+                if (isNaN(processedValue)) {
+                    showToast('Error', `Invalid numeric value for ${key}`, 'error');
+                    return;
+                }
             }
 
             fetch('/api/set_area_tag', {
@@ -174,26 +189,28 @@
                 body: JSON.stringify({
                     id: '{{ area.id }}',
                     name: key,
-                    value: validation.value
+                    value: processedValue
                 }),
             })
-            .then(response => {
+            .then(async response => {
+                const data = await response.json();
                 if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
+                    const errorMessage = data.error || `HTTP error! status: ${response.status}`;
+                    throw new Error(errorMessage);
                 }
-                return response.json();
+                return data;
             })
             .then(data => {
                 if (data.error) {
-                    throw new Error(data.error);
+                    throw new Error(typeof data.error === 'string' ? data.error : JSON.stringify(data.error));
                 }
                 showToast('Success', 'Tag updated successfully', 'success');
-                content.textContent = validation.value;
+                content.textContent = processedValue.toString();
                 cancelEditing(row);
             })
             .catch(error => {
                 console.error('Error updating tag:', error);
-                let errorMessage = error.message || 'An unexpected error occurred';
+                const errorMessage = error?.message || 'An unexpected error occurred while updating the tag';
                 showToast('Error', errorMessage, 'error');
             });
         }
@@ -219,6 +236,8 @@
             const target = e.target;
             const row = target.closest('tr');
 
+            if (!row) return;
+
             if (target.classList.contains('edit-tag')) {
                 startEditing(row);
             } else if (target.classList.contains('update-tag')) {
@@ -230,7 +249,6 @@
             }
         });
 
-        // Handle numeric input validation
         tagsTable.addEventListener('input', function(e) {
             const target = e.target;
             if (target.classList.contains('tag-input')) {
@@ -267,15 +285,16 @@
                         },
                         body: JSON.stringify({ id: '{{ area.id }}' }),
                     })
-                    .then(response => {
+                    .then(async response => {
+                        const data = await response.json();
                         if (!response.ok) {
-                            throw new Error(`HTTP error! status: ${response.status}`);
+                            throw new Error(data.error || `HTTP error! status: ${response.status}`);
                         }
-                        return response.json();
+                        return data;
                     })
                     .then(data => {
                         if (data.error) {
-                            throw new Error(data.error);
+                            throw new Error(typeof data.error === 'string' ? data.error : JSON.stringify(data.error));
                         }
                         showToast('Success', 'Area removed successfully', 'success');
                         setTimeout(() => {
@@ -284,20 +303,19 @@
                     })
                     .catch(error => {
                         console.error('Error removing area:', error);
-                        let errorMessage = error.message || 'An unexpected error occurred';
+                        const errorMessage = error?.message || 'An unexpected error occurred while removing the area';
                         showToast('Error', errorMessage, 'error');
                     });
                 }
             });
         });
 
-        // Initialize the optional fields button state
         updateOptionalFieldSelect();
 
-        // Handle unhandled rejections
         window.addEventListener('unhandledrejection', function(event) {
             console.error('Unhandled rejection:', event.reason);
-            showToast('Error', 'An unexpected error occurred. Please try again later.', 'error');
+            const errorMessage = event.reason?.message || 'An unexpected error occurred';
+            showToast('Error', errorMessage, 'error');
         });
     });
 </script>
