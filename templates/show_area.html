@@ -25,9 +25,16 @@
         </div>
     </div>
 
-    <div class="map-container position-relative mb-4">
-        <div id="map" style="height: 400px; width: 100%;"></div>
+    {% if geo_json %}
+    <div class="card mb-4">
+        <div class="card-header">
+            <h3 class="mb-0">Area Map</h3>
+        </div>
+        <div class="card-body p-0">
+            <div id="map" class="map-container"></div>
+        </div>
     </div>
+    {% endif %}
 
     <h3>Tags</h3>
     <table class="table table-striped" id="tags-table">
@@ -53,20 +60,12 @@
                     <button class="btn btn-primary btn-sm edit-tag">Edit</button>
                     <button class="btn btn-success btn-sm update-tag" style="display: none;">Update</button>
                     <button class="btn btn-secondary btn-sm cancel-edit" style="display: none;">Cancel</button>
-                    {% if key not in required_tags %}
-                    <button class="btn btn-danger btn-sm delete-tag">Delete</button>
-                    {% endif %}
                 </td>
             </tr>
             {% endif %}
             {% endfor %}
         </tbody>
     </table>
-
-    <div class="mb-3">
-        <button id="add-optional-tag-btn" class="btn btn-primary">Add Optional Tag</button>
-        <button id="add-custom-tag-btn" class="btn btn-secondary">Add Custom Tag</button>
-    </div>
 
     <div class="mt-5 p-3 bg-danger text-white">
         <h3>Danger Zone</h3>
@@ -82,141 +81,182 @@
 let map = null;
 let geoJsonLayer = null;
 
-function initializeMap() {
-    // Always remove existing map instance if it exists
-    if (map) {
-        map.remove();
-        map = null;
-        geoJsonLayer = null;
+function cleanupMap() {
+    try {
+        if (geoJsonLayer && map) {
+            map.removeLayer(geoJsonLayer);
+            geoJsonLayer = null;
+        }
+        if (map) {
+            map.remove();
+            map = null;
+        }
+    } catch (error) {
+        console.error('Error cleaning up map:', error);
     }
+}
 
-    const mapElement = document.getElementById('map');
-    if (!mapElement) {
+function initializeMap() {
+    const mapContainer = document.getElementById('map');
+    if (!mapContainer) {
         console.error('Map container not found');
-        return;
+        return false;
     }
 
     try {
-        map = L.map('map').setView([0, 0], 2);
+        if (map) {
+            cleanupMap();
+        }
+
+        map = L.map('map', {
+            attributionControl: true,
+            zoomControl: true,
+            minZoom: 2,
+            maxZoom: 18
+        });
+
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            attribution: '© OpenStreetMap contributors'
+            attribution: '© OpenStreetMap contributors',
+            maxZoom: 19
         }).addTo(map);
 
         {% if geo_json %}
         try {
-            geoJsonLayer = L.geoJSON({{ geo_json | tojson | safe }}).addTo(map);
-            map.fitBounds(geoJsonLayer.getBounds());
-        } catch (geoError) {
-            console.error('Error adding GeoJSON to map:', geoError);
-            showToast('Error', `Failed to display GeoJSON: ${geoError.message}`, 'error');
+            const geoJson = {{ geo_json | tojson | safe }};
+            if (!geoJson) {
+                throw new Error('No GeoJSON data available');
+            }
+
+            geoJsonLayer = L.geoJSON(geoJson, {
+                style: {
+                    color: '#3388ff',
+                    weight: 2,
+                    opacity: 1,
+                    fillOpacity: 0.2
+                }
+            }).addTo(map);
+
+            const bounds = geoJsonLayer.getBounds();
+            if (bounds.isValid()) {
+                map.fitBounds(bounds, {
+                    padding: [50, 50],
+                    maxZoom: 16
+                });
+            } else {
+                console.warn('Invalid bounds for GeoJSON layer');
+                map.setView([0, 0], 2);
+            }
+        } catch (error) {
+            console.error('Error adding GeoJSON to map:', error);
+            showToast('Error', `Failed to display area boundaries: ${error.message}`, 'error');
+            map.setView([0, 0], 2);
         }
         {% endif %}
+
+        return true;
     } catch (error) {
         console.error('Error initializing map:', error);
         showToast('Error', `Failed to initialize map: ${error.message}`, 'error');
+        cleanupMap();
+        return false;
     }
 }
 
-function validateAndConvertNumericValue(value, type) {
-    if (value === null || value === undefined) {
+function validateAndConvertValue(value, type) {
+    if (!value || value.toString().trim() === '') {
         throw new Error('Value cannot be empty');
     }
 
-    const stringValue = String(value).trim();
-    if (!stringValue) {
-        throw new Error('Value cannot be empty');
-    }
+    const stringValue = value.toString().trim();
 
-    if (type === 'integer') {
-        if (!/^\d+$/.test(stringValue)) {
-            throw new Error('Must be a whole number without decimals');
-        }
-        const numValue = parseInt(stringValue, 10);
-        if (isNaN(numValue) || numValue < 0) {
-            throw new Error('Must be a valid non-negative integer');
-        }
-        return numValue;
+    switch (type) {
+        case 'integer':
+            if (!/^\d+$/.test(stringValue)) {
+                throw new Error('Must be a whole number');
+            }
+            const intValue = parseInt(stringValue, 10);
+            if (intValue < 0) {
+                throw new Error('Must be non-negative');
+            }
+            return intValue;
+
+        case 'number':
+            if (!/^\d*\.?\d+$/.test(stringValue)) {
+                throw new Error('Must be a valid number');
+            }
+            const floatValue = parseFloat(stringValue);
+            if (floatValue < 0) {
+                throw new Error('Must be non-negative');
+            }
+            return Math.round(floatValue * 100) / 100;
+
+        default:
+            return stringValue;
     }
-    
-    if (type === 'number') {
-        if (!/^\d*\.?\d+$/.test(stringValue)) {
-            throw new Error('Must be a valid number');
-        }
-        const numValue = parseFloat(stringValue);
-        if (isNaN(numValue) || numValue < 0) {
-            throw new Error('Must be a valid non-negative number');
-        }
-        return Math.round(numValue * 100) / 100; // Round to 2 decimal places
-    }
-    
-    return stringValue;
 }
 
 document.addEventListener('DOMContentLoaded', function() {
     const tagsTable = document.getElementById('tags-table');
-    const addOptionalTagButton = document.getElementById('add-optional-tag-btn');
-    const addCustomTagButton = document.getElementById('add-custom-tag-btn');
-    const areaTypeRequirements = {{ area_type_requirements | tojson | safe }};
     const areaType = "{{ area.tags.get('type', '') }}";
+    const areaTypeRequirements = {{ area_type_requirements | tojson | safe }};
 
-    initializeMap();
+    {% if geo_json %}
+    // Initialize map after DOM is loaded
+    window.addEventListener('load', function() {
+        initializeMap();
+    });
 
-    function updateOptionalFieldSelect() {
-        const existingKeys = Array.from(tagsTable.querySelectorAll('tr'))
-            .map(row => row.dataset.key)
-            .filter(key => key);
+    // Handle window resize with debounce
+    let resizeTimeout;
+    window.addEventListener('resize', () => {
+        clearTimeout(resizeTimeout);
+        resizeTimeout = setTimeout(() => {
+            if (map) {
+                map.invalidateSize();
+            }
+        }, 250);
+    });
 
-        const optionalFields = Object.entries(areaTypeRequirements[areaType] || {})
-            .filter(([key, req]) => !req.required && !existingKeys.includes(key))
-            .map(([key]) => key);
-
-        addOptionalTagButton.disabled = optionalFields.length === 0;
-    }
+    // Cleanup on page unload
+    window.addEventListener('beforeunload', cleanupMap);
+    {% endif %}
 
     function startEditing(row) {
         const valueCell = row.querySelector('.tag-value-cell');
         const content = valueCell.querySelector('.tag-value-content');
         const input = valueCell.querySelector('.tag-input');
         const select = valueCell.querySelector('.tag-select');
-        const editBtn = row.querySelector('.edit-tag');
-        const updateBtn = row.querySelector('.update-tag');
-        const cancelBtn = row.querySelector('.cancel-edit');
         const key = row.dataset.key;
 
+        // Reset validation state
+        input.classList.remove('is-invalid');
+        select.classList.remove('is-invalid');
+        valueCell.querySelector('.invalid-feedback').style.display = 'none';
+
+        const currentValue = content.textContent.trim();
         const fieldRequirements = areaTypeRequirements[areaType]?.[key] || { type: 'text' };
 
-        // Clear any previous validation state
-        input.classList.remove('is-invalid');
-        const feedback = input.nextElementSibling;
-        if (feedback) {
-            feedback.style.display = 'none';
-        }
-
         content.style.display = 'none';
-        editBtn.style.display = 'none';
-        updateBtn.style.display = 'inline-block';
-        cancelBtn.style.display = 'inline-block';
+        row.querySelector('.edit-tag').style.display = 'none';
+        row.querySelector('.update-tag').style.display = 'inline-block';
+        row.querySelector('.cancel-edit').style.display = 'inline-block';
 
         if (fieldRequirements.allowed_values) {
-            select.innerHTML = fieldRequirements.allowed_values
-                .map(value => `<option value="${value}" ${content.textContent.trim() === value ? 'selected' : ''}>${value}</option>`)
-                .join('');
+            select.innerHTML = `
+                <option value="">Select ${key}</option>
+                ${fieldRequirements.allowed_values
+                    .map(value => `<option value="${value}"${currentValue === value ? ' selected' : ''}>${value}</option>`)
+                    .join('')}
+            `;
             select.style.display = 'block';
             input.style.display = 'none';
         } else {
-            const currentValue = content.textContent.trim();
             input.value = currentValue;
-            
-            if (fieldRequirements.type === 'integer' || fieldRequirements.type === 'number') {
-                input.type = 'text';
-                input.pattern = fieldRequirements.type === 'integer' ? '\\d+' : '\\d*\\.?\\d+';
-                input.placeholder = fieldRequirements.type === 'integer' ? 'Enter a whole number' : 'Enter a number';
-            } else {
-                input.type = 'text';
-                input.pattern = '';
-                input.placeholder = '';
+            input.type = fieldRequirements.type === 'integer' || fieldRequirements.type === 'number' ? 'number' : 'text';
+            if (input.type === 'number') {
+                input.min = '0';
+                input.step = fieldRequirements.type === 'integer' ? '1' : '0.01';
             }
-            
             input.style.display = 'block';
             select.style.display = 'none';
         }
@@ -228,17 +268,21 @@ document.addEventListener('DOMContentLoaded', function() {
         const content = valueCell.querySelector('.tag-value-content');
         const input = valueCell.querySelector('.tag-input');
         const select = valueCell.querySelector('.tag-select');
-        const rawValue = select.style.display === 'block' ? select.value : input.value;
-        const fieldRequirements = areaTypeRequirements[areaType]?.[key] || { type: 'text' };
+        const feedback = valueCell.querySelector('.invalid-feedback');
+
+        // Reset validation state
+        input.classList.remove('is-invalid');
+        select.classList.remove('is-invalid');
+        feedback.style.display = 'none';
 
         try {
-            const processedValue = validateAndConvertNumericValue(rawValue, fieldRequirements.type);
-            
+            const rawValue = select.style.display === 'block' ? select.value : input.value;
+            const fieldRequirements = areaTypeRequirements[areaType]?.[key] || { type: 'text' };
+            const processedValue = validateAndConvertValue(rawValue, fieldRequirements.type);
+
             fetch('/api/set_area_tag', {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
+                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     id: '{{ area.id }}',
                     name: key,
@@ -248,67 +292,56 @@ document.addEventListener('DOMContentLoaded', function() {
             .then(response => {
                 if (!response.ok) {
                     return response.json().then(data => {
-                        throw new Error(data.error || `HTTP error! status: ${response.status}`);
+                        throw new Error(data.error?.message || `Server error: ${response.status}`);
                     });
                 }
                 return response.json();
             })
             .then(data => {
                 if (data.error) {
-                    throw new Error(typeof data.error === 'string' ? data.error : JSON.stringify(data.error));
+                    throw new Error(data.error.message || 'Server error');
                 }
-                showToast('Success', 'Tag updated successfully', 'success');
                 content.textContent = String(processedValue);
+                showToast('Success', 'Tag updated successfully', 'success');
                 cancelEditing(row);
             })
             .catch(error => {
-                console.error('Error updating tag:', error);
                 const errorMessage = error.message || 'Failed to update tag';
                 showToast('Error', errorMessage, 'error');
-                input.classList.add('is-invalid');
-                const feedback = input.nextElementSibling;
-                if (feedback) {
-                    feedback.textContent = errorMessage;
-                    feedback.style.display = 'block';
-                }
-            });
-        } catch (error) {
-            console.error('Validation error:', error);
-            const errorMessage = `Invalid value for ${key}: ${error.message}`;
-            showToast('Error', errorMessage, 'error');
-            input.classList.add('is-invalid');
-            const feedback = input.nextElementSibling;
-            if (feedback) {
+                
+                const activeInput = select.style.display === 'block' ? select : input;
+                activeInput.classList.add('is-invalid');
                 feedback.textContent = errorMessage;
                 feedback.style.display = 'block';
-            }
+            });
+        } catch (error) {
+            const errorMessage = error.message || 'Invalid value';
+            showToast('Error', errorMessage, 'error');
+            
+            const activeInput = select.style.display === 'block' ? select : input;
+            activeInput.classList.add('is-invalid');
+            feedback.textContent = errorMessage;
+            feedback.style.display = 'block';
         }
     }
 
     function cancelEditing(row) {
         const valueCell = row.querySelector('.tag-value-cell');
-        const content = valueCell.querySelector('.tag-value-content');
-        const input = valueCell.querySelector('.tag-input');
-        const select = valueCell.querySelector('.tag-select');
-        const editBtn = row.querySelector('.edit-tag');
-        const updateBtn = row.querySelector('.update-tag');
-        const cancelBtn = row.querySelector('.cancel-edit');
+        
+        valueCell.querySelector('.tag-value-content').style.display = 'block';
+        valueCell.querySelector('.tag-input').style.display = 'none';
+        valueCell.querySelector('.tag-select').style.display = 'none';
+        row.querySelector('.edit-tag').style.display = 'inline-block';
+        row.querySelector('.update-tag').style.display = 'none';
+        row.querySelector('.cancel-edit').style.display = 'none';
 
-        content.style.display = 'block';
-        input.style.display = 'none';
-        select.style.display = 'none';
-        editBtn.style.display = 'inline-block';
-        updateBtn.style.display = 'none';
-        cancelBtn.style.display = 'none';
-
-        // Clear any validation state
-        input.classList.remove('is-invalid');
-        const feedback = input.nextElementSibling;
-        if (feedback) {
-            feedback.style.display = 'none';
-        }
+        // Reset validation states
+        valueCell.querySelector('.tag-input').classList.remove('is-invalid');
+        valueCell.querySelector('.tag-select').classList.remove('is-invalid');
+        valueCell.querySelector('.invalid-feedback').style.display = 'none';
     }
 
+    // Event delegation for tag actions
     tagsTable.addEventListener('click', function(e) {
         const target = e.target;
         const row = target.closest('tr');
@@ -321,76 +354,44 @@ document.addEventListener('DOMContentLoaded', function() {
             updateTag(row);
         } else if (target.classList.contains('cancel-edit')) {
             cancelEditing(row);
-        } else if (target.classList.contains('delete-tag')) {
-            deleteTag(row);
         }
     });
 
-    function deleteTag(row) {
-        const key = row.dataset.key;
-        showToast('Confirm', `Are you sure you want to delete the tag "${key}"?`, 'warning', {
-            confirmButtonText: 'Yes, delete it',
-            cancelButtonText: 'Cancel',
-            onConfirm: () => {
-                fetch('/api/remove_area_tag', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
-                        id: '{{ area.id }}',
-                        tag: key
-                    }),
-                })
-                .then(response => response.json())
-                .then(data => {
-                    if (data.error) {
-                        throw new Error(typeof data.error === 'string' ? data.error : JSON.stringify(data.error));
-                    }
-                    row.remove();
-                    showToast('Success', 'Tag deleted successfully', 'success');
-                    updateOptionalFieldSelect();
-                })
-                .catch(error => {
-                    console.error('Error deleting tag:', error);
-                    showToast('Error', error.message || 'Failed to delete tag', 'error');
-                });
-            }
+    // Remove area button handling
+    const removeAreaBtn = document.getElementById('remove-area-btn');
+    if (removeAreaBtn) {
+        removeAreaBtn.addEventListener('click', function() {
+            showToast('Confirm', 'Are you sure you want to remove this area?', 'warning', {
+                confirmButtonText: 'Yes, remove it',
+                cancelButtonText: 'Cancel',
+                onConfirm: () => {
+                    fetch('/api/remove_area', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ id: '{{ area.id }}' })
+                    })
+                    .then(response => {
+                        if (!response.ok) {
+                            return response.json().then(data => {
+                                throw new Error(data.error?.message || `Server error: ${response.status}`);
+                            });
+                        }
+                        return response.json();
+                    })
+                    .then(data => {
+                        if (data.error) {
+                            throw new Error(data.error.message || 'Failed to remove area');
+                        }
+                        window.location.href = '/select_area';
+                    })
+                    .catch(error => {
+                        console.error('Error removing area:', error);
+                        showToast('Error', error.message || 'Failed to remove area', 'error');
+                    });
+                }
+            });
         });
     }
-
-    const removeAreaBtn = document.getElementById('remove-area-btn');
-    removeAreaBtn.addEventListener('click', function() {
-        showToast('Confirm', 'Are you sure you want to remove this area?', 'warning', {
-            confirmButtonText: 'Yes, remove it',
-            cancelButtonText: 'Cancel',
-            onConfirm: () => {
-                fetch('/api/remove_area', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({ id: '{{ area.id }}' }),
-                })
-                .then(response => response.json())
-                .then(data => {
-                    if (data.error) {
-                        throw new Error(typeof data.error === 'string' ? data.error : JSON.stringify(data.error));
-                    }
-                    showToast('Success', 'Area removed successfully', 'success');
-                    setTimeout(() => {
-                        window.location.href = '/select_area';
-                    }, 2000);
-                })
-                .catch(error => {
-                    console.error('Error removing area:', error);
-                    showToast('Error', error.message || 'Failed to remove area', 'error');
-                });
-            }
-        });
-    });
-
-    updateOptionalFieldSelect();
 });
 </script>
 {% endblock %}
