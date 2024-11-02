@@ -47,7 +47,7 @@ AREA_TYPE_REQUIREMENTS = {
         },
         'population': {
             'required': True,
-            'type': 'integer'
+            'type': 'number'
         },
         'population:date': {
             'required': True,
@@ -206,6 +206,79 @@ def show_area(area_id):
                                geo_json=geo_json)
     return render_template('error.html', error="Area not found"), 404
 
+@app.route('/add_area', methods=['GET', 'POST'])
+def add_area():
+    if request.method == 'POST':
+        app.logger.info(
+            f"Received POST request to add_area. Request data: {request.data}")
+        try:
+            tags = request.json
+            app.logger.info(f"Parsed JSON data: {tags}")
+        except Exception as e:
+            app.logger.error(f"Error parsing JSON data: {str(e)}")
+            return jsonify({'error': {'message': 'Invalid JSON data'}}), 400
+
+        if not tags:
+            app.logger.error("Invalid request data: tags are empty")
+            return jsonify(
+                {'error': {
+                    'message': 'Invalid request data: tags are empty'
+                }}), 400
+
+        app.logger.info(f"Tags object: {tags}")
+        area_type = tags.get('type')
+        app.logger.info(f"Extracted area type: {area_type}")
+
+        if not area_type:
+            app.logger.error("Missing area type")
+            return jsonify({'error': {'message': 'Missing area type'}}), 400
+        if area_type not in AREA_TYPES:
+            app.logger.error(f"Invalid area type: {area_type}")
+            return jsonify(
+                {'error': {
+                    'message': f'Invalid area type: {area_type}'
+                }}), 400
+
+        validation_errors = []
+
+        for key, requirements in AREA_TYPE_REQUIREMENTS.get(area_type,
+                                                            {}).items():
+            if requirements['required'] and key not in tags:
+                validation_errors.append(f'Missing required field: {key}')
+            elif key in tags:
+                value = tags[key]
+                validation_funcs = validation_functions.get(
+                    requirements['type'], [validate_general])
+                for validation_func in validation_funcs:
+                    is_valid, error_message = validation_func(
+                        value, requirements.get('allowed_values'))
+                    if not is_valid:
+                        validation_errors.append(f'{key}: {error_message}')
+
+        if validation_errors:
+            app.logger.error(f"Validation errors: {validation_errors}")
+            return jsonify(
+                {'error': {
+                    'message': '; '.join(validation_errors)
+                }}), 400
+
+        if 'geo_json' in tags:
+            is_valid, result = validate_geo_json(tags['geo_json'])
+            if not is_valid:
+                return jsonify({'error': {'message': result}}), 400
+            tags['geo_json'] = result['geo_json']
+            tags['area_km2'] = result['area_km2']
+
+        result = rpc_call('add_area', {'tags': tags})
+
+        if 'error' not in result:
+            return jsonify({'success': True})
+        app.logger.error(f"Error from RPC call: {result['error']}")
+        return jsonify({'error': result['error']}), 400
+
+    return render_template('add_area.html',
+                           area_type_requirements=AREA_TYPE_REQUIREMENTS)
+
 @app.route('/api/set_area_tag', methods=['POST'])
 def set_area_tag():
     data = request.json
@@ -225,32 +298,8 @@ def set_area_tag():
         return jsonify({'error': 'Invalid area type'}), 400
 
     requirements = AREA_TYPE_REQUIREMENTS.get(area_type, {}).get(key, {})
-    field_type = requirements.get('type', 'text')
 
-    # Convert value to appropriate type based on field requirements
-    try:
-        if field_type == 'integer':
-            # Handle both string and number inputs
-            if isinstance(value, (int, float)):
-                value = int(value)
-            elif isinstance(value, str):
-                value = int(value.strip())
-            else:
-                raise ValueError("Invalid integer value")
-        elif field_type == 'number':
-            # Handle both string and number inputs
-            if isinstance(value, (int, float)):
-                value = float(value)
-            elif isinstance(value, str):
-                value = float(value.strip())
-            else:
-                raise ValueError("Invalid number value")
-    except (ValueError, TypeError) as e:
-        app.logger.error(f"Type conversion error for {key}: {str(e)}")
-        return jsonify({'error': f'{key} must be a valid {field_type}'}), 400
-
-    # Validate the converted value
-    validation_funcs = validation_functions.get(field_type, [validate_general])
+    validation_funcs = validation_functions.get(requirements.get('type', 'text'), [validate_general])
     for validation_func in validation_funcs:
         is_valid, error_message = validation_func(value, requirements.get('allowed_values'))
         if not is_valid:
@@ -284,7 +333,6 @@ def set_area_tag():
 
         return jsonify({'success': True, 'message': 'GeoJSON and area updated successfully'})
     else:
-        app.logger.info(f"Sending value to RPC: {value} (type: {type(value)})")
         result = rpc_call('set_area_tag', {
             'id': area_id,
             'name': key,
@@ -438,8 +486,77 @@ def validate_date(value, allowed_values=None):
     except ValueError:
         return False, "Invalid date format. Please use YYYY-MM-DD"
 
+def validate_allowed_values(value, allowed_values):
+    if allowed_values and value.lower() in allowed_values:
+        return True, None
+    else:
+        return False, f"Invalid value. Please choose from {', '.join(allowed_values)}"
+
+def validate_geo_json(value):
+    try:
+        if isinstance(value, str):
+            geo_json = json.loads(value)
+        elif isinstance(value, dict):
+            geo_json = value
+        else:
+            return False, "Invalid GeoJSON: must be a JSON object or a valid JSON string"
+
+        if not isinstance(geo_json, dict):
+            return False, "Invalid GeoJSON: must be a JSON object"
+
+        try:
+            geom = shape(geo_json)
+            if not geom.is_valid:
+                return False, "Invalid GeoJSON: geometry is not valid"
+            if geom.geom_type not in ['Polygon', 'MultiPolygon']:
+                return False, "Invalid GeoJSON: only valid Polygon and MultiPolygon types are accepted"
+        except Exception as e:
+            return False, f"Invalid GeoJSON structure: {str(e)}"
+
+        rewound = rewind(geo_json)
+        
+        area_km2 = calculate_area(rewound)
+
+        return True, {
+            "geo_json": rewound,
+            "area_km2": area_km2
+        }
+    except json.JSONDecodeError:
+        return False, "Invalid JSON format"
+    except Exception as e:
+        return False, f"Error validating GeoJSON: {str(e)}"
+
+def validate_general(value, allowed_values=None):
+    if allowed_values:
+        return validate_allowed_values(value, allowed_values)
+    return len(str(value).strip()) > 0, "Value cannot be empty"
+
+def validate_url(value, allowed_values=None):
+    try:
+        result = urlparse(value)
+        return all([result.scheme, result.netloc]), "Invalid URL format"
+    except:
+        return False, "Invalid URL"
+
+def validate_email(value, allowed_values=None):
+    email_regex = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+    return bool(re.match(email_regex, value)), "Invalid email format"
+
+def validate_phone(value, allowed_values=None):
+    phone_regex = r'^\+?1?\d{9,15}$'
+    return bool(re.match(phone_regex, value)), "Invalid phone number format"
+
 validation_functions = {
-    'integer': [validate_non_negative_integer],
     'number': [validate_non_negative_number],
-    'date': [validate_date]
+    'integer': [validate_non_negative_integer],
+    'date': [validate_date],
+    'select': [validate_allowed_values],
+    'geo_json': [validate_geo_json],
+    'text': [validate_general],
+    'url': [validate_url],
+    'email': [validate_email],
+    'tel': [validate_phone]
 }
+
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', port=5000, debug=True)
