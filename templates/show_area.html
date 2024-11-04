@@ -3,10 +3,204 @@
 {% block title %}{{ area.tags.get('name', 'Unknown Area') }}{% endblock %}
 
 {% block content %}
-<!-- [Previous HTML content remains unchanged until line 391] -->
-{% raw %}
+<div class="container">
+    <h1>Area Details</h1>
+    <h2>{{ area.tags.get('name', 'Unnamed Area') }} ({{ area.tags.get('type', 'Unknown Type') }})</h2>
+
+    <!-- Map container -->
+    <div id="map" class="mb-3"></div>
+
+    <!-- GeoJSON editing section -->
+    <div id="geojson-editor" class="mb-3" style="display: none;">
+        <textarea id="geojson-input" class="form-control mb-2" rows="10"></textarea>
+        <div class="btn-group">
+            <button id="show-btn" class="btn btn-primary">Show</button>
+            <button id="update-btn" class="btn btn-success">Update</button>
+            <button id="cancel-btn" class="btn btn-secondary">Cancel</button>
+        </div>
+    </div>
+
+    <!-- Area Tags -->
+    <div class="card">
+        <div class="card-body">
+            <h3 class="card-title">Area Tags</h3>
+            <table class="table" id="tags-table">
+                <thead>
+                    <tr>
+                        <th>Key</th>
+                        <th>Value</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for key, value in area.tags.items() %}
+                    <tr>
+                        <td>{{ key }}</td>
+                        <td>{{ value }}</td>
+                        <td>
+                            {% if key != 'geo_json' %}
+                            <button class="btn btn-sm btn-danger remove-tag" data-key="{{ key }}">Remove</button>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            
+            <div class="mt-3">
+                <button id="add-optional-tag-btn" class="btn btn-secondary">Add Optional Field</button>
+                <button id="add-custom-tag-btn" class="btn btn-secondary">Add Custom Field</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Map Controls -->
+    <div class="mt-3">
+        <button id="edit-geojson-btn" class="btn btn-primary">Edit GeoJSON</button>
+    </div>
+
+    <!-- Danger Zone -->
+    <div class="card mt-4 border-danger">
+        <div class="card-header bg-danger text-white">
+            Danger Zone
+        </div>
+        <div class="card-body">
+            <button id="remove-area-btn" class="btn btn-danger">Remove Area</button>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Turf.js/6.5.0/turf.min.js"></script>
+<script src="{{ url_for('static', filename='js/validation.js') }}"></script>
 <script>
-// [Previous JavaScript content remains unchanged until handleGeoJsonUpdate function]
+let map;
+let geoJsonLayer;
+let mapInitialized = false;
+
+// Initialize map
+function initializeMap() {
+    try {
+        if (mapInitialized) {
+            console.log('Map already initialized');
+            return;
+        }
+
+        console.log('Initializing map...');
+        map = L.map('map').setView([0, 0], 2);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '© OpenStreetMap contributors'
+        }).addTo(map);
+
+        {% if geo_json %}
+        try {
+            console.log('Adding GeoJSON to map...');
+            const geoJson = {{ geo_json | tojson | safe }};
+            if (geoJson) {
+                geoJsonLayer = L.geoJSON(geoJson).addTo(map);
+                map.fitBounds(geoJsonLayer.getBounds());
+            }
+        } catch (error) {
+            console.error('Error initializing GeoJSON:', error.message);
+            showToast('Error', 'Failed to initialize GeoJSON: ' + error.message, 'error');
+        }
+        {% endif %}
+
+        mapInitialized = true;
+        console.log('Map initialized successfully');
+    } catch (error) {
+        console.error('Error initializing map:', error.message);
+        showToast('Error', 'Failed to initialize map: ' + error.message, 'error');
+    }
+}
+
+function cleanupMap() {
+    try {
+        if (geoJsonLayer) {
+            map.removeLayer(geoJsonLayer);
+        }
+        if (map) {
+            map.remove();
+        }
+        map = null;
+        mapInitialized = false;
+    } catch (error) {
+        console.error('Error cleaning up map:', error.message);
+        showToast('Error', 'Failed to cleanup map: ' + error.message, 'error');
+    }
+}
+
+function updateMap(geoJson, fitBounds = true) {
+    try {
+        if (geoJsonLayer) {
+            map.removeLayer(geoJsonLayer);
+        }
+
+        geoJsonLayer = L.geoJSON(geoJson).addTo(map);
+        if (fitBounds) {
+            map.fitBounds(geoJsonLayer.getBounds());
+        }
+        return true;
+    } catch (error) {
+        console.error('Error updating map:', error.message);
+        showToast('Error', 'Failed to update map: ' + error.message, 'error');
+        return false;
+    }
+}
+
+function showGeoJsonEditor() {
+    const editor = document.getElementById('geojson-editor');
+    const textarea = document.getElementById('geojson-input');
+    const currentGeoJson = geoJsonLayer ? geoJsonLayer.toGeoJSON() : null;
+    
+    if (currentGeoJson) {
+        textarea.value = JSON.stringify(currentGeoJson, null, 2);
+    }
+    editor.style.display = 'block';
+}
+
+function hideGeoJsonEditor() {
+    const editor = document.getElementById('geojson-editor');
+    editor.style.display = 'none';
+}
+
+function validateGeoJson(jsonString) {
+    try {
+        const geoJson = JSON.parse(jsonString);
+        if (!geoJson.type || !geoJson.coordinates) {
+            return { isValid: false, error: 'Invalid GeoJSON structure' };
+        }
+        return { isValid: true, data: geoJson };
+    } catch (error) {
+        return { 
+            isValid: false, 
+            error: `Validation error: ${error.message}` 
+        };
+    }
+}
+
+function calculateAreaKm2(geoJson) {
+    try {
+        const area = turf.area(geoJson);
+        return Math.round(area / 1000000 * 100) / 100;
+    } catch (error) {
+        throw new Error('Failed to calculate area: ' + error.message);
+    }
+}
+
+function getExistingKeys() {
+    const keys = [];
+    document.querySelectorAll('#tags-table tbody tr').forEach(row => {
+        const keyCell = row.querySelector('td:first-child');
+        if (keyCell) {
+            const keyText = keyCell.textContent.trim();
+            if (keyText) keys.push(keyText);
+        }
+    });
+    return keys;
+}
 
 async function handleGeoJsonUpdate() {
     const textarea = document.getElementById('geojson-input');
@@ -18,138 +212,138 @@ async function handleGeoJsonUpdate() {
         }
 
         const geoJson = validation.data;
-        const geoJsonString = JSON.stringify(geoJson);
+        console.log('Updating GeoJSON:', geoJson);
         
         const requestData = {
             'id': '{{ area.id }}',
             'name': 'geo_json',
-            'value': geoJsonString  // Removed single quotes as requested
+            'value': JSON.stringify(geoJson)
         };
 
         console.log('Sending GeoJSON update request:', requestData);
 
-        const geoJsonResponse = await fetch('/api/set_area_tag', {
+        const response = await fetch('/api/set_area_tag', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(requestData)
         });
 
-        let errorData;
-        if (!geoJsonResponse.ok) {
-            try {
-                errorData = await geoJsonResponse.json();
-                throw new Error(errorData.error || `Server error: ${geoJsonResponse.status}`);
-            } catch (e) {
-                throw new Error(`Failed to parse server response: ${e.message}`);
-            }
+        const responseData = await response.json();
+        console.log('Server response:', responseData);
+
+        if (!response.ok) {
+            throw new Error(responseData.error || `Server error: ${response.status}`);
         }
 
-        const geoJsonResult = await geoJsonResponse.json();
-        if (geoJsonResult.error) {
-            console.error('Server returned error:', geoJsonResult.error);
-            throw new Error(typeof geoJsonResult.error === 'string' ? geoJsonResult.error : JSON.stringify(geoJsonResult.error));
+        if (responseData.error) {
+            throw new Error(responseData.error);
         }
 
-        const areaKm2 = calculateAreaKm2(geoJson);
-        const areaRequestData = {
-            'id': '{{ area.id }}',
-            'name': 'area_km2',
-            'value': areaKm2.toString()
-        };
-
-        const areaResponse = await fetch('/api/set_area_tag', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(areaRequestData)
-        });
-
-        if (!areaResponse.ok) {
-            try {
-                errorData = await areaResponse.json();
-                throw new Error(errorData.error || `Server error: ${areaResponse.status}`);
-            } catch (e) {
-                throw new Error(`Failed to update area: ${e.message}`);
-            }
+        if (!updateMap(geoJson)) {
+            throw new Error('Failed to update map visualization');
         }
 
-        const areaResult = await areaResponse.json();
-        if (areaResult.error) {
-            console.error('Server returned error for area update:', areaResult.error);
-            throw new Error(typeof areaResult.error === 'string' ? areaResult.error : JSON.stringify(areaResult.error));
-        }
-
-        if (!updateMap(geoJson, true)) {
-            throw new Error('Failed to update map with new GeoJSON');
-        }
-
-        showToast('Success', 'GeoJSON and area updated successfully', 'success');
+        showToast('Success', 'GeoJSON updated successfully', 'success');
         hideGeoJsonEditor();
     } catch (error) {
-        console.error('Error in GeoJSON update process:', error);
-        
-        let errorMessage;
-        if (error.name === 'TypeError' && error.message.includes('Failed to fetch')) {
-            errorMessage = 'Network error: Unable to connect to server';
-        } else if (error.message.includes('Server error')) {
-            errorMessage = `Server error: ${error.message.split('Server error:')[1].trim()}`;
-        } else {
-            errorMessage = error.message || 'Failed to process update';
-        }
-
-        showToast('Error', errorMessage, 'error');
+        console.error('Error in GeoJSON update:', error);
+        showToast('Error', error.message, 'error');
     }
 }
 
 function updateOptionalFieldSelect() {
     try {
-        const areaType = "{{ area.tags.get('type', '') }}";
+        console.log('Updating optional field select...');
+        
+        // Get current area type from the page
+        const areaType = '{{ area.tags.get("type", "") }}';
         console.log('Current area type:', areaType);
-
+        
         if (!areaType) {
             throw new Error('Area type is not defined');
         }
 
-        const areaTypeRequirements = {{ area_type_requirements | tojson | safe }};
-        console.log('Area type requirements:', areaTypeRequirements);
+        // Parse area type requirements
+        try {
+            const areaTypeRequirements = JSON.parse('{{ area_type_requirements | tojson | safe }}');
+            console.log('Area type requirements:', areaTypeRequirements);
 
-        if (!areaTypeRequirements) {
-            throw new Error('Area type requirements object is missing');
-        }
+            if (!areaTypeRequirements || !areaTypeRequirements[areaType]) {
+                throw new Error('Requirements not found for area type: ' + areaType);
+            }
 
-        if (!areaTypeRequirements[areaType]) {
-            throw new Error(`Requirements not found for area type: ${areaType}`);
-        }
+            const existingKeys = getExistingKeys();
+            console.log('Existing keys:', existingKeys);
 
-        const existingKeys = getExistingKeys();
-        console.log('Existing keys:', existingKeys);
+            // Filter optional fields
+            const optionalFields = Object.entries(areaTypeRequirements[areaType])
+                .filter(([key, req]) => !req.required && !existingKeys.includes(key))
+                .map(([key]) => key);
 
-        const optionalFields = Object.entries(areaTypeRequirements[areaType])
-            .filter(([key, req]) => !req.required && !existingKeys.includes(key))
-            .map(([key]) => key);
+            console.log('Available optional fields:', optionalFields);
 
-        console.log('Available optional fields:', optionalFields);
+            // Update all optional field selects
+            document.querySelectorAll('.optional-field-select').forEach(select => {
+                const currentValue = select.value;
+                select.innerHTML = `
+                    <option value="">Select Optional Field</option>
+                    ${optionalFields.map(field => 
+                        `<option value="${field}" ${currentValue === field ? 'selected' : ''}>${field}</option>`
+                    ).join('')}
+                `;
+            });
 
-        document.querySelectorAll('.optional-field-select').forEach(select => {
-            const currentValue = select.value;
-            select.innerHTML = `
-                <option value="">Select Optional Field</option>
-                ${optionalFields.map(field => 
-                    `<option value="${field}" ${currentValue === field ? 'selected' : ''}>${field}</option>`
-                ).join('')}
-            `;
-        });
-
-        const addOptionalTagBtn = document.getElementById('add-optional-tag-btn');
-        if (addOptionalTagBtn) {
-            addOptionalTagBtn.disabled = optionalFields.length === 0;
+            // Update add optional tag button state
+            const addOptionalTagBtn = document.getElementById('add-optional-tag-btn');
+            if (addOptionalTagBtn) {
+                addOptionalTagBtn.disabled = optionalFields.length === 0;
+            }
+        } catch (error) {
+            throw new Error('Failed to parse area type requirements: ' + error.message);
         }
     } catch (error) {
         console.error('Error updating optional field select:', error);
-        showToast('Error', `Failed to update optional fields: ${error.message}`, 'error');
+        showToast('Error', error.message, 'error');
     }
 }
 
-// [Rest of the JavaScript code remains unchanged]
+document.addEventListener('DOMContentLoaded', function() {
+    try {
+        console.log('Initializing page...');
+        
+        // Initialize map
+        initializeMap();
+
+        // Add event listeners
+        document.getElementById('edit-geojson-btn')?.addEventListener('click', showGeoJsonEditor);
+        document.getElementById('show-btn')?.addEventListener('click', function() {
+            try {
+                const textarea = document.getElementById('geojson-input');
+                const validation = validateGeoJson(textarea.value);
+                if (!validation.isValid) {
+                    throw new Error(validation.error);
+                }
+                updateMap(validation.data);
+            } catch (error) {
+                console.error('Error showing GeoJSON:', error);
+                showToast('Error', error.message, 'error');
+            }
+        });
+
+        document.getElementById('update-btn')?.addEventListener('click', handleGeoJsonUpdate);
+        document.getElementById('cancel-btn')?.addEventListener('click', hideGeoJsonEditor);
+
+        // Initialize optional fields
+        updateOptionalFieldSelect();
+
+        // Clean up map when leaving the page
+        window.addEventListener('beforeunload', cleanupMap);
+
+        console.log('Page initialization complete');
+    } catch (error) {
+        console.error('Error in page initialization:', error);
+        showToast('Error', 'Failed to initialize page: ' + error.message, 'error');
+    }
+});
 </script>
-{% endraw %}
 {% endblock %}
