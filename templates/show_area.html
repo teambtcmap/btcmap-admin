@@ -26,7 +26,19 @@
     </div>
 
     <div class="map-container position-relative mb-4">
-        <div id="map" style="height: 400px; width: 100%;"></div>
+        <div id="map" style="height: 400px; width: 100%;">
+            <button id="edit-geojson-btn" class="btn btn-primary btn-sm position-absolute" style="top: 10px; right: 10px; z-index: 1000;">Edit GeoJSON</button>
+        </div>
+    </div>
+
+    <!-- GeoJSON editing section -->
+    <div id="geojson-editor" class="mb-4">
+        <textarea id="geojson-input" class="form-control mb-2" rows="5" style="display: none;"></textarea>
+        <div class="btn-group" style="display: none;">
+            <button id="show-btn" class="btn btn-primary">Show</button>
+            <button id="save-locally-btn" class="btn btn-success">Save Locally</button>
+            <button id="cancel-geojson-btn" class="btn btn-secondary">Cancel</button>
+        </div>
     </div>
 
     <h3>Tags</h3>
@@ -79,11 +91,14 @@
 {% endblock %}
 
 {% block scripts %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Turf.js/6.5.0/turf.min.js"></script>
 <script src="{{ url_for('static', filename='js/validation.js') }}"></script>
 <script>
 let map = null;
 let geoJsonLayer = null;
 let mapInitialized = false;
+let currentGeoJson = null;
+let previouslySavedGeoJson = null;
 
 function cleanupMap() {
     if (map) {
@@ -118,6 +133,8 @@ function initializeMap() {
         try {
             const geoJsonData = {{ geo_json | tojson | safe }};
             if (typeof geoJsonData === 'object' && geoJsonData !== null) {
+                currentGeoJson = geoJsonData;
+                previouslySavedGeoJson = JSON.parse(JSON.stringify(geoJsonData));
                 geoJsonLayer = L.geoJSON(geoJsonData).addTo(map);
                 if (geoJsonLayer && geoJsonLayer.getBounds().isValid()) {
                     map.fitBounds(geoJsonLayer.getBounds());
@@ -136,12 +153,162 @@ function initializeMap() {
     }
 }
 
+function updateMap(geoJson) {
+    if (geoJsonLayer) {
+        map.removeLayer(geoJsonLayer);
+        geoJsonLayer = null;
+    }
+
+    try {
+        geoJsonLayer = L.geoJSON(geoJson).addTo(map);
+        map.fitBounds(geoJsonLayer.getBounds());
+        currentGeoJson = geoJson;
+        showToast('Success', 'GeoJSON updated successfully', 'success');
+    } catch (error) {
+        console.error('Error updating map:', error);
+        showToast('Error', 'Failed to update map with new GeoJSON', 'error');
+    }
+}
+
+function validateAndShowGeoJson() {
+    const textarea = document.getElementById('geojson-input');
+    let geoJson;
+
+    try {
+        geoJson = JSON.parse(textarea.value);
+    } catch (error) {
+        showToast('Error', 'Invalid JSON format', 'error');
+        return false;
+    }
+
+    try {
+        const geojsonObject = typeof geoJson === 'string' ? JSON.parse(geoJson) : geoJson;
+        
+        if (!geojsonObject.type || !geojsonObject.coordinates) {
+            throw new Error('Invalid GeoJSON structure');
+        }
+
+        if (!['Polygon', 'MultiPolygon'].includes(geojsonObject.type)) {
+            throw new Error('GeoJSON must be a Polygon or MultiPolygon');
+        }
+
+        updateMap(geojsonObject);
+        return true;
+    } catch (error) {
+        console.error('GeoJSON validation error:', error);
+        showToast('Error', `Invalid GeoJSON: ${error.message}`, 'error');
+        return false;
+    }
+}
+
+function calculateAreaKm2(geoJson) {
+    try {
+        const area = turf.area(geoJson);
+        return Math.round(area / 1000000 * 100) / 100; // Convert to km² and round to 2 decimal places
+    } catch (error) {
+        console.error('Error calculating area:', error);
+        return null;
+    }
+}
+
+function saveGeoJson() {
+    if (!currentGeoJson) {
+        showToast('Error', 'No valid GeoJSON to save', 'error');
+        return;
+    }
+
+    const areaKm2 = calculateAreaKm2(currentGeoJson);
+    if (areaKm2 === null) {
+        showToast('Error', 'Failed to calculate area', 'error');
+        return;
+    }
+
+    // Update both GeoJSON and area_km2
+    Promise.all([
+        fetch('/api/set_area_tag', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                id: '{{ area.id }}',
+                name: 'geo_json',
+                value: currentGeoJson
+            })
+        }),
+        fetch('/api/set_area_tag', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                id: '{{ area.id }}',
+                name: 'area_km2',
+                value: areaKm2
+            })
+        })
+    ])
+    .then(responses => Promise.all(responses.map(r => r.json())))
+    .then(([geoJsonResult, areaResult]) => {
+        if (geoJsonResult.error || areaResult.error) {
+            throw new Error(geoJsonResult.error || areaResult.error);
+        }
+        previouslySavedGeoJson = JSON.parse(JSON.stringify(currentGeoJson));
+        showToast('Success', 'GeoJSON and area updated successfully', 'success');
+        hideGeoJsonEditor();
+    })
+    .catch(error => {
+        console.error('Error saving GeoJSON:', error);
+        showToast('Error', error.message || 'Failed to save GeoJSON', 'error');
+    });
+}
+
+function showGeoJsonEditor() {
+    const textarea = document.getElementById('geojson-input');
+    const buttonGroup = textarea.nextElementSibling;
+    
+    textarea.value = JSON.stringify(currentGeoJson, null, 2);
+    textarea.style.display = 'block';
+    buttonGroup.style.display = 'block';
+}
+
+function hideGeoJsonEditor() {
+    const textarea = document.getElementById('geojson-input');
+    const buttonGroup = textarea.nextElementSibling;
+    
+    textarea.style.display = 'none';
+    buttonGroup.style.display = 'none';
+}
+
 document.addEventListener('DOMContentLoaded', function() {
     const tagsTable = document.getElementById('tags-table');
     const areaTypeRequirements = {{ area_type_requirements | tojson | safe }};
     const areaType = "{{ area.tags.get('type', '') }}";
+    const editGeoJsonBtn = document.getElementById('edit-geojson-btn');
+    const showBtn = document.getElementById('show-btn');
+    const saveLocallyBtn = document.getElementById('save-locally-btn');
+    const cancelGeoJsonBtn = document.getElementById('cancel-geojson-btn');
 
     initializeMap();
+
+    editGeoJsonBtn.addEventListener('click', showGeoJsonEditor);
+    
+    showBtn.addEventListener('click', function() {
+        validateAndShowGeoJson();
+    });
+
+    saveLocallyBtn.addEventListener('click', function() {
+        if (validateAndShowGeoJson()) {
+            saveGeoJson();
+        }
+    });
+
+    cancelGeoJsonBtn.addEventListener('click', function() {
+        if (previouslySavedGeoJson) {
+            updateMap(previouslySavedGeoJson);
+        }
+        hideGeoJsonEditor();
+    });
 
     function startEditing(row) {
         const valueCell = row.querySelector('.tag-value-cell');
