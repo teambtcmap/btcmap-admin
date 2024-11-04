@@ -100,6 +100,9 @@ let mapInitialized = false;
 let currentGeoJson = null;
 let previouslySavedGeoJson = null;
 
+// Debug logging
+console.log('Initial GeoJSON data:', {{ geo_json | tojson | safe if geo_json else 'null' }});
+
 function cleanupMap() {
     if (map) {
         try {
@@ -110,6 +113,7 @@ function cleanupMap() {
             map.remove();
             map = null;
             mapInitialized = false;
+            console.log('Map cleaned up successfully');
         } catch (error) {
             console.error('Error cleaning up map:', error);
             showToast('Error', 'Failed to cleanup map: ' + (error.message || 'Unknown error'), 'error');
@@ -132,22 +136,35 @@ function initializeMap() {
 
         {% if geo_json %}
         try {
+            console.log('Initializing map with GeoJSON data');
             const geoJsonData = {{ geo_json | tojson | safe }};
+            console.log('Parsed GeoJSON data:', geoJsonData);
+
             if (typeof geoJsonData === 'object' && geoJsonData !== null) {
                 currentGeoJson = JSON.parse(JSON.stringify(geoJsonData));
                 previouslySavedGeoJson = JSON.parse(JSON.stringify(geoJsonData));
+                console.log('GeoJSON data stored:', currentGeoJson);
+
                 geoJsonLayer = L.geoJSON(geoJsonData).addTo(map);
                 if (geoJsonLayer && geoJsonLayer.getBounds().isValid()) {
                     map.fitBounds(geoJsonLayer.getBounds());
+                    console.log('Map bounds set to GeoJSON bounds');
                 }
+            } else {
+                console.warn('Invalid GeoJSON data format:', geoJsonData);
+                showToast('Warning', 'No valid GeoJSON data available for this area', 'warning');
             }
         } catch (error) {
             console.error('Error adding GeoJSON to map:', error);
             showToast('Error', 'Failed to display GeoJSON data: ' + (error.message || 'Unknown error'), 'error');
         }
+        {% else %}
+        console.log('No GeoJSON data available for this area');
+        showToast('Info', 'No geographical data available for this area', 'info');
         {% endif %}
 
         mapInitialized = true;
+        console.log('Map initialization completed');
     } catch (error) {
         console.error('Error initializing map:', error);
         showToast('Error', 'Failed to initialize map: ' + (error.message || 'Unknown error'), 'error');
@@ -161,6 +178,8 @@ function updateMap(geoJson, isSaved = false) {
     }
 
     try {
+        console.log('Updating map with GeoJSON:', geoJson);
+        
         if (geoJsonLayer) {
             map.removeLayer(geoJsonLayer);
             geoJsonLayer = null;
@@ -177,6 +196,7 @@ function updateMap(geoJson, isSaved = false) {
             showToast('Success', 'Map updated successfully', 'success');
         }
         
+        console.log('Map updated successfully');
         return true;
     } catch (error) {
         console.error('Error updating map:', error);
@@ -187,6 +207,7 @@ function updateMap(geoJson, isSaved = false) {
 
 function validateGeoJson(jsonString) {
     try {
+        console.log('Validating GeoJSON:', jsonString);
         const geoJson = JSON.parse(jsonString);
         
         if (!geoJson || typeof geoJson !== 'object') {
@@ -201,8 +222,10 @@ function validateGeoJson(jsonString) {
             throw new Error('GeoJSON must be a Polygon or MultiPolygon');
         }
 
+        console.log('GeoJSON validation successful');
         return { isValid: true, data: geoJson };
     } catch (error) {
+        console.error('GeoJSON validation failed:', error);
         return { 
             isValid: false, 
             error: error.message || 'Invalid GeoJSON format'
@@ -224,7 +247,16 @@ function showGeoJsonEditor() {
     const textarea = document.getElementById('geojson-input');
     const buttonGroup = textarea.nextElementSibling;
     
-    textarea.value = JSON.stringify(currentGeoJson || previouslySavedGeoJson, null, 2);
+    if (!currentGeoJson && !previouslySavedGeoJson) {
+        textarea.value = JSON.stringify({
+            "type": "Polygon",
+            "coordinates": [[]]
+        }, null, 2);
+        showToast('Info', 'No existing GeoJSON data. Starting with empty polygon.', 'info');
+    } else {
+        textarea.value = JSON.stringify(currentGeoJson || previouslySavedGeoJson, null, 2);
+    }
+    
     textarea.style.display = 'block';
     buttonGroup.style.display = 'block';
 }
@@ -301,9 +333,136 @@ document.addEventListener('DOMContentLoaded', function() {
     const showBtn = document.getElementById('show-btn');
     const updateBtn = document.getElementById('update-btn');
     const cancelGeoJsonBtn = document.getElementById('cancel-geojson-btn');
+    const addOptionalTagBtn = document.getElementById('add-optional-tag-btn');
+    const addCustomTagBtn = document.getElementById('add-custom-tag-btn');
+
+    console.log('Area type:', areaType);
+    console.log('Area type requirements:', areaTypeRequirements);
 
     // Initialize map
     initializeMap();
+
+    function getExistingTags() {
+        const tags = [];
+        tagsTable.querySelectorAll('tr').forEach(row => {
+            const key = row.dataset.key;
+            if (key) {
+                tags.push(key);
+            }
+        });
+        return tags;
+    }
+
+    function createTagRow(key = '', value = '', isEditing = true) {
+        const row = document.createElement('tr');
+        if (key) {
+            row.dataset.key = key;
+        }
+
+        const requirements = areaTypeRequirements[areaType]?.[key] || { type: 'text' };
+        const isNumeric = requirements.type === 'integer' || requirements.type === 'number';
+
+        row.innerHTML = `
+            <td>
+                ${isEditing && !key ? `
+                    <input type="text" class="form-control custom-key" placeholder="Custom Key" required>
+                    <div class="invalid-feedback"></div>
+                ` : key}
+            </td>
+            <td class="tag-value-cell">
+                <span class="tag-value-content ${isEditing ? 'd-none' : ''}">${value}</span>
+                <input type="text" class="form-control tag-input ${isEditing ? '' : 'd-none'}" 
+                       value="${value}" ${isNumeric ? 'pattern="\\d*\\.?\\d*"' : ''}>
+                <select class="form-control tag-select d-none"></select>
+                <div class="invalid-feedback"></div>
+            </td>
+            <td>
+                <div class="btn-group">
+                    ${isEditing ? `
+                        <button class="btn btn-success btn-sm save-tag">Save</button>
+                        <button class="btn btn-secondary btn-sm cancel-tag">Cancel</button>
+                    ` : `
+                        <button class="btn btn-primary btn-sm edit-tag">Edit</button>
+                        <button class="btn btn-danger btn-sm delete-tag">Delete</button>
+                    `}
+                </div>
+            </td>
+        `;
+
+        if (isEditing) {
+            const keyInput = row.querySelector('.custom-key');
+            if (keyInput) {
+                keyInput.addEventListener('input', function() {
+                    validateCustomKey(this, getExistingTags());
+                });
+            }
+
+            const valueInput = row.querySelector('.tag-input');
+            if (valueInput && isNumeric) {
+                valueInput.addEventListener('input', function() {
+                    const validation = validateNumericValue(this.value, requirements.type);
+                    const feedback = this.nextElementSibling;
+                    this.classList.toggle('is-invalid', !validation.isValid);
+                    if (feedback) {
+                        feedback.textContent = validation.message || '';
+                        feedback.style.display = validation.isValid ? 'none' : 'block';
+                    }
+                });
+            }
+        }
+
+        return row;
+    }
+
+    function validateCustomKey(keyInput, existingTags) {
+        const validation = validateKey(keyInput.value, existingTags);
+        keyInput.classList.toggle('is-invalid', !validation.isValid);
+        const feedback = keyInput.nextElementSibling;
+        if (feedback) {
+            feedback.textContent = validation.message || '';
+            feedback.style.display = validation.isValid ? 'none' : 'block';
+        }
+        return validation.isValid;
+    }
+
+    // Add Optional Tag Button
+    addOptionalTagBtn.addEventListener('click', function() {
+        const existingTags = getExistingTags();
+        const availableOptionalTags = Object.entries(areaTypeRequirements[areaType] || {})
+            .filter(([key, req]) => !req.required && !existingTags.includes(key))
+            .map(([key]) => key);
+
+        if (availableOptionalTags.length === 0) {
+            showToast('Info', 'All optional tags have been added', 'info');
+            return;
+        }
+
+        const select = document.createElement('select');
+        select.className = 'form-control';
+        select.innerHTML = `
+            <option value="">Select optional tag</option>
+            ${availableOptionalTags.map(tag => `<option value="${tag}">${tag}</option>`).join('')}
+        `;
+
+        showToast('', '', 'info', {
+            content: select,
+            confirmButtonText: 'Add',
+            cancelButtonText: 'Cancel',
+            onConfirm: () => {
+                const selectedTag = select.value;
+                if (selectedTag) {
+                    const row = createTagRow(selectedTag, '', true);
+                    tagsTable.querySelector('tbody').appendChild(row);
+                }
+            }
+        });
+    });
+
+    // Add Custom Tag Button
+    addCustomTagBtn.addEventListener('click', function() {
+        const row = createTagRow('', '', true);
+        tagsTable.querySelector('tbody').appendChild(row);
+    });
 
     // GeoJSON editing event listeners
     editGeoJsonBtn.addEventListener('click', showGeoJsonEditor);
@@ -408,7 +567,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 feedback.textContent = validation.message;
                 feedback.style.display = 'block';
             }
-            showToast('Error', validation.message, 'error');
+            showToast('Error', `Invalid ${key}: ${validation.message}`, 'error');
             return;
         }
 
@@ -435,7 +594,7 @@ document.addEventListener('DOMContentLoaded', function() {
             if (data.error) {
                 throw new Error(data.error?.message || JSON.stringify(data.error));
             }
-            showToast('Success', 'Tag updated successfully', 'success');
+            showToast('Success', `${key} updated successfully`, 'success');
             content.textContent = validation.value.toString();
             input.value = validation.value.toString();
             cancelEditing(row);
@@ -447,7 +606,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 feedback.textContent = error.message || 'Failed to update tag';
                 feedback.style.display = 'block';
             }
-            showToast('Error', error.message || 'Failed to update tag', 'error');
+            showToast('Error', `Failed to update ${key}: ${error.message}`, 'error');
         });
     }
 
@@ -489,6 +648,82 @@ document.addEventListener('DOMContentLoaded', function() {
             updateTag(row);
         } else if (target.classList.contains('cancel-edit')) {
             cancelEditing(row);
+        } else if (target.classList.contains('delete-tag')) {
+            const key = row.dataset.key;
+            showToast('Confirm Delete', `Are you sure you want to delete the tag "${key}"?`, 'warning', {
+                confirmButtonText: 'Delete',
+                cancelButtonText: 'Cancel',
+                onConfirm: () => {
+                    fetch('/api/remove_area_tag', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            id: '{{ area.id }}',
+                            tag: key
+                        })
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.error) {
+                            throw new Error(data.error?.message || JSON.stringify(data.error));
+                        }
+                        row.remove();
+                        showToast('Success', `Tag "${key}" removed successfully`, 'success');
+                    })
+                    .catch(error => {
+                        console.error('Error removing tag:', error);
+                        showToast('Error', `Failed to remove tag: ${error.message}`, 'error');
+                    });
+                }
+            });
+        } else if (target.classList.contains('save-tag')) {
+            const keyInput = row.querySelector('.custom-key');
+            const valueInput = row.querySelector('.tag-input');
+            const key = keyInput ? keyInput.value.trim() : row.dataset.key;
+            const value = valueInput.value.trim();
+
+            if (keyInput && !validateCustomKey(keyInput, getExistingTags())) {
+                return;
+            }
+
+            const requirements = areaTypeRequirements[areaType]?.[key] || { type: 'text' };
+            const validation = validateNumericValue(value, requirements.type);
+
+            if (!validation.isValid) {
+                valueInput.classList.add('is-invalid');
+                const feedback = valueInput.nextElementSibling;
+                if (feedback) {
+                    feedback.textContent = validation.message;
+                    feedback.style.display = 'block';
+                }
+                showToast('Error', `Invalid value for ${key}: ${validation.message}`, 'error');
+                return;
+            }
+
+            fetch('/api/set_area_tag', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    id: '{{ area.id }}',
+                    name: key,
+                    value: validation.value
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.error) {
+                    throw new Error(data.error?.message || JSON.stringify(data.error));
+                }
+                const newRow = createTagRow(key, validation.value.toString(), false);
+                row.replaceWith(newRow);
+                showToast('Success', `Tag "${key}" added successfully`, 'success');
+            })
+            .catch(error => {
+                console.error('Error saving tag:', error);
+                showToast('Error', `Failed to save tag: ${error.message}`, 'error');
+            });
+        } else if (target.classList.contains('cancel-tag')) {
+            row.remove();
         }
     });
 });
