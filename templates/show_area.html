@@ -110,8 +110,8 @@ function cleanupMap() {
             map = null;
             mapInitialized = false;
         } catch (error) {
-            console.error('Error cleaning up map:', error);
-            showToast('Error', 'Failed to cleanup map: ' + error.message, 'error');
+            console.error('Error cleaning up map:', error.message || 'Unknown error');
+            showToast('Error', 'Failed to cleanup map: ' + (error.message || 'Unknown error'), 'error');
         }
     }
 }
@@ -149,15 +149,15 @@ function initializeMap() {
                 }
             }
         } catch (error) {
-            console.error('Error initializing GeoJSON:', error);
-            showToast('Error', 'Failed to initialize GeoJSON: ' + error.message, 'error');
+            console.error('Error initializing GeoJSON:', error.message || 'Unknown error');
+            showToast('Error', 'Failed to initialize GeoJSON: ' + (error.message || 'Unknown error'), 'error');
         }
         {% endif %}
 
         mapInitialized = true;
     } catch (error) {
-        console.error('Error initializing map:', error);
-        showToast('Error', 'Failed to initialize map: ' + error.message, 'error');
+        console.error('Error initializing map:', error.message || 'Unknown error');
+        showToast('Error', 'Failed to initialize map: ' + (error.message || 'Unknown error'), 'error');
     }
 }
 
@@ -233,7 +233,7 @@ function validateGeoJson(input) {
     } catch (error) {
         return { 
             isValid: false, 
-            error: `Validation error: ${error.message}` 
+            error: `Validation error: ${error.message || 'Unknown error'}` 
         };
     }
 }
@@ -243,7 +243,7 @@ function calculateAreaKm2(geoJson) {
         const area = turf.area(geoJson);
         return Math.round(area / 1000000 * 100) / 100;
     } catch (error) {
-        throw new Error('Failed to calculate area: ' + error.message);
+        throw new Error('Failed to calculate area: ' + (error.message || 'Unknown error'));
     }
 }
 
@@ -302,7 +302,8 @@ function updateMap(geoJson, isSaved = false) {
         
         return true;
     } catch (error) {
-        showToast('Error', 'Failed to update map: ' + error.message, 'error');
+        console.error('Error updating map:', error.message || 'Unknown error');
+        showToast('Error', 'Failed to update map: ' + (error.message || 'Unknown error'), 'error');
         return false;
     }
 }
@@ -322,8 +323,10 @@ async function handleGeoJsonUpdate() {
         const requestData = {
             'id': '{{ area.id }}',
             'name': 'geo_json',
-            'value': geoJsonString
+            'value': `'${geoJsonString}'`  // Wrapped in single quotes as requested
         };
+
+        console.log('Sending GeoJSON update request:', requestData);
 
         const geoJsonResponse = await fetch('/api/set_area_tag', {
             method: 'POST',
@@ -371,7 +374,7 @@ async function handleGeoJsonUpdate() {
         showToast('Success', 'GeoJSON and area updated successfully', 'success');
         hideGeoJsonEditor();
     } catch (error) {
-        console.error('Error in GeoJSON update process:', error);
+        console.error('Error in GeoJSON update process:', error.message || 'Unknown error');
         
         let errorMessage;
         if (error.name === 'TypeError' && error.message.includes('Failed to fetch')) {
@@ -418,18 +421,13 @@ function updateOptionalFieldSelect() {
             addOptionalTagBtn.disabled = optionalFields.length === 0;
         }
     } catch (error) {
-        console.error('Error updating optional field select:', error);
+        console.error('Error updating optional field select:', error.message || 'Unknown error');
         showToast('Error', error.message || 'Failed to update optional fields', 'error');
-        const addOptionalTagBtn = document.getElementById('add-optional-tag-btn');
-        if (addOptionalTagBtn) {
-            addOptionalTagBtn.disabled = true;
-        }
     }
 }
 
 document.addEventListener('DOMContentLoaded', function() {
     try {
-        const tagsTable = document.getElementById('tags-table');
         const editGeoJsonBtn = document.getElementById('edit-geojson-btn');
         const showBtn = document.getElementById('show-btn');
         const updateBtn = document.getElementById('update-btn');
@@ -449,7 +447,8 @@ document.addEventListener('DOMContentLoaded', function() {
                     throw new Error(validation.error);
                 }
             } catch (error) {
-                showToast('Error', error.message, 'error');
+                console.error('Error showing GeoJSON:', error.message || 'Unknown error');
+                showToast('Error', error.message || 'Failed to show GeoJSON', 'error');
             }
         });
 
@@ -461,16 +460,10 @@ document.addEventListener('DOMContentLoaded', function() {
             hideGeoJsonEditor();
         });
 
-        document.addEventListener('visibilitychange', function() {
-            if (document.hidden) {
-                cleanupMap();
-            } else if (!mapInitialized) {
-                initializeMap();
-            }
-        });
-
+        // Clean up map when leaving the page
         window.addEventListener('beforeunload', cleanupMap);
 
+        // Additional event handlers for tags
         document.getElementById('add-optional-tag-btn')?.addEventListener('click', function() {
             const newRow = document.createElement('tr');
             newRow.innerHTML = `
@@ -482,15 +475,15 @@ document.addEventListener('DOMContentLoaded', function() {
                 </td>
                 <td>
                     <input type="text" class="form-control" disabled>
-                    <div class="invalid-feedback"></div>
+                    <div class="invalid-feedback">Please enter a valid value</div>
                 </td>
                 <td>
                     <button type="button" class="btn btn-danger btn-sm remove-field">Remove</button>
                 </td>
             `;
 
-            const select = newRow.querySelector('.optional-field-select');
-            select.addEventListener('change', function() {
+            const optionalFieldSelect = newRow.querySelector('.optional-field-select');
+            optionalFieldSelect.addEventListener('change', function() {
                 const selectedField = this.value;
                 if (!selectedField) return;
 
@@ -503,23 +496,20 @@ document.addEventListener('DOMContentLoaded', function() {
                         throw new Error(`Requirements not found for field: ${selectedField}`);
                     }
 
-                    const valueCell = this.closest('tr').querySelector('td:nth-child(2)');
-                    valueCell.innerHTML = requirements.allowed_values ? 
-                        `<select class="form-control" name="${selectedField}">
-                            <option value="">Select ${selectedField}</option>
-                            ${requirements.allowed_values.map(val => 
-                                `<option value="${val}">${val}</option>`
-                            ).join('')}
-                        </select>` : 
-                        `<input type="${requirements.type === 'number' || requirements.type === 'integer' ? 'number' : 'text'}" 
-                               class="form-control" 
-                               name="${selectedField}"
-                               ${requirements.type === 'number' || requirements.type === 'integer' ? 'min="0" step="' + (requirements.type === 'integer' ? '1' : '0.01') + '"' : ''}>`;
-                    valueCell.innerHTML += '<div class="invalid-feedback"></div>';
+                    const row = createTagRow(
+                        selectedField,
+                        '',
+                        false,
+                        false,
+                        requirements.allowed_values
+                    );
+
+                    const tbody = document.querySelector('#tags-table tbody');
+                    tbody.replaceChild(row, newRow);
+                    updateOptionalFieldSelect();
                 } catch (error) {
-                    console.error('Error setting up field:', error);
-                    showToast('Error', error.message || 'Failed to setup field', 'error');
-                    this.value = '';
+                    console.error('Error setting up field:', error.message || 'Unknown error');
+                    showToast('Error', error.message || 'Failed to set up field', 'error');
                 }
             });
 
@@ -528,7 +518,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 updateOptionalFieldSelect();
             });
 
-            tagsTable.querySelector('tbody').appendChild(newRow);
+            const tbody = document.querySelector('#tags-table tbody');
+            tbody.appendChild(newRow);
             updateOptionalFieldSelect();
         });
 
@@ -541,7 +532,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 </td>
                 <td>
                     <input type="text" class="form-control" required>
-                    <div class="invalid-feedback">Please enter a value</div>
+                    <div class="invalid-feedback">Please enter a valid value</div>
                 </td>
                 <td>
                     <button type="button" class="btn btn-danger btn-sm remove-field">Remove</button>
@@ -558,25 +549,19 @@ document.addEventListener('DOMContentLoaded', function() {
             });
 
             keyInput.addEventListener('blur', function() {
-                const validation = validateKey(this.value, getExistingKeys());
-                const feedback = this.nextElementSibling;
-                
-                this.classList.toggle('is-invalid', !validation.isValid);
-                if (feedback) {
-                    feedback.textContent = validation.message;
-                    feedback.style.display = validation.isValid ? 'none' : 'block';
-                }
+                validateCustomKey(this);
             });
 
             newRow.querySelector('.remove-field')?.addEventListener('click', function() {
                 newRow.remove();
             });
 
-            tagsTable.querySelector('tbody').appendChild(newRow);
+            const tbody = document.querySelector('#tags-table tbody');
+            tbody.appendChild(newRow);
         });
     } catch (error) {
-        console.error('Error during page initialization:', error);
-        showToast('Error', 'Failed to initialize page: ' + error.message, 'error');
+        console.error('Error in DOMContentLoaded:', error.message || 'Unknown error');
+        showToast('Error', error.message || 'Failed to initialize page', 'error');
     }
 });
 </script>
