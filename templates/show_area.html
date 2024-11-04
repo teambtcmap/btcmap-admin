@@ -83,78 +83,56 @@
 <script>
 let map = null;
 let geoJsonLayer = null;
+let mapInitialized = false;
+
+function cleanupMap() {
+    if (map) {
+        try {
+            if (geoJsonLayer) {
+                geoJsonLayer.remove();
+                geoJsonLayer = null;
+            }
+            map.remove();
+            map = null;
+            mapInitialized = false;
+        } catch (error) {
+            console.error('Error cleaning up map:', error);
+        }
+    }
+}
 
 function initializeMap() {
-    if (map) {
-        map.remove();
-    }
-    map = null;
-
-    const mapElement = document.getElementById('map');
-    if (!mapElement) {
-        console.error('Map container not found');
+    if (mapInitialized || !document.getElementById('map')) {
         return;
     }
 
-    map = L.map('map').setView([0, 0], 2);
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: '© OpenStreetMap contributors'
-    }).addTo(map);
-
-    {% if geo_json %}
     try {
-        const geoJsonData = {{ geo_json | tojson | safe }};
-        geoJsonLayer = L.geoJSON(geoJsonData).addTo(map);
-        map.fitBounds(geoJsonLayer.getBounds());
-    } catch (error) {
-        console.error('Error adding GeoJSON to map:', error);
-        showToast('Error', 'Failed to display GeoJSON data', 'error');
-    }
-    {% endif %}
-}
+        cleanupMap();
 
-function validateNumericInput(value, type) {
-    // Handle null, undefined, and non-string inputs
-    if (!value) {
-        return { isValid: false, message: 'Value cannot be empty', value: null };
-    }
+        map = L.map('map').setView([0, 0], 2);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '© OpenStreetMap contributors'
+        }).addTo(map);
 
-    // Convert to string and trim
-    const trimmedValue = String(value).trim();
-    if (trimmedValue === '') {
-        return { isValid: false, message: 'Value cannot be empty', value: null };
-    }
-
-    try {
-        if (type === 'integer') {
-            // Check if it's a valid integer format
-            if (!/^-?\d+$/.test(trimmedValue)) {
-                return { isValid: false, message: 'Must be a whole number', value: null };
+        {% if geo_json %}
+        try {
+            const geoJsonData = {{ geo_json | tojson | safe }};
+            if (typeof geoJsonData === 'object' && geoJsonData !== null) {
+                geoJsonLayer = L.geoJSON(geoJsonData).addTo(map);
+                if (geoJsonLayer && geoJsonLayer.getBounds().isValid()) {
+                    map.fitBounds(geoJsonLayer.getBounds());
+                }
             }
-            const num = parseInt(trimmedValue, 10);
-            if (num < 0) {
-                return { isValid: false, message: 'Must be a non-negative integer', value: null };
-            }
-            return { isValid: true, value: num };
-        } else if (type === 'number') {
-            // Check if it's a valid number format (allows decimal points)
-            if (!/^-?\d*\.?\d+$/.test(trimmedValue)) {
-                return { isValid: false, message: 'Must be a valid number', value: null };
-            }
-            const num = parseFloat(trimmedValue);
-            if (isNaN(num)) {
-                return { isValid: false, message: 'Must be a valid number', value: null };
-            }
-            if (num < 0) {
-                return { isValid: false, message: 'Must be a non-negative number', value: null };
-            }
-            // Round to 2 decimal places for floating point numbers
-            return { isValid: true, value: Math.round(num * 100) / 100 };
+        } catch (error) {
+            console.error('Error adding GeoJSON to map:', error);
+            showToast('Error', 'Failed to display GeoJSON data', 'error');
         }
-        return { isValid: true, value: trimmedValue };
+        {% endif %}
+
+        mapInitialized = true;
     } catch (error) {
-        console.error('Value validation error:', error);
-        return { isValid: false, message: 'Invalid value format', value: null };
+        console.error('Error initializing map:', error);
+        showToast('Error', 'Failed to initialize map', 'error');
     }
 }
 
@@ -176,6 +154,13 @@ document.addEventListener('DOMContentLoaded', function() {
         const key = row.dataset.key;
         const fieldRequirements = areaTypeRequirements[areaType]?.[key] || { type: 'text' };
 
+        // Reset validation state
+        input.classList.remove('is-invalid');
+        const feedback = input.nextElementSibling;
+        if (feedback) {
+            feedback.style.display = 'none';
+        }
+
         content.classList.add('d-none');
         editBtn.classList.add('d-none');
         updateBtn.classList.remove('d-none');
@@ -193,10 +178,8 @@ document.addEventListener('DOMContentLoaded', function() {
             select.classList.add('d-none');
 
             if (fieldRequirements.type === 'integer' || fieldRequirements.type === 'number') {
-                input.setAttribute('type', 'text');
-                input.setAttribute('pattern', fieldRequirements.type === 'integer' ? '\\d+' : '\\d*\\.?\\d*');
-                input.setAttribute('placeholder', 
-                    fieldRequirements.type === 'integer' ? 'Enter a whole number' : 'Enter a number');
+                input.type = 'text';
+                input.pattern = fieldRequirements.type === 'integer' ? '\\d+' : '\\d*\\.?\\d*';
             }
         }
     }
@@ -206,24 +189,29 @@ document.addEventListener('DOMContentLoaded', function() {
         const content = valueCell.querySelector('.tag-value-content');
         const input = valueCell.querySelector('.tag-input');
         const select = valueCell.querySelector('.tag-select');
+        const feedback = valueCell.querySelector('.invalid-feedback');
         const key = row.dataset.key;
+
         const rawValue = select.classList.contains('d-none') ? input.value : select.value;
         const fieldRequirements = areaTypeRequirements[areaType]?.[key] || { type: 'text' };
 
-        // Validate and convert numeric values
+        // Reset validation state
+        input.classList.remove('is-invalid');
+        if (feedback) {
+            feedback.style.display = 'none';
+        }
+
         const validation = validateNumericInput(rawValue, fieldRequirements.type);
         if (!validation.isValid) {
-            showToast('Error', `Invalid ${fieldRequirements.type} value for ${key}: ${validation.message}`, 'error');
             input.classList.add('is-invalid');
-            const feedback = input.nextElementSibling;
             if (feedback) {
                 feedback.textContent = validation.message;
                 feedback.style.display = 'block';
             }
+            showToast('Error', validation.message, 'error');
             return;
         }
 
-        // Send the validated and converted value to the server
         fetch('/api/set_area_tag', {
             method: 'POST',
             headers: {
@@ -238,7 +226,7 @@ document.addEventListener('DOMContentLoaded', function() {
         .then(response => {
             if (!response.ok) {
                 return response.json().then(data => {
-                    throw new Error(data.error || `HTTP error! status: ${response.status}`);
+                    throw new Error(data.error?.message || `HTTP error! status: ${response.status}`);
                 });
             }
             return response.json();
@@ -248,23 +236,18 @@ document.addEventListener('DOMContentLoaded', function() {
                 throw new Error(typeof data.error === 'string' ? data.error : JSON.stringify(data.error));
             }
             showToast('Success', 'Tag updated successfully', 'success');
-            content.textContent = String(validation.value);
+            content.textContent = validation.value.toString();
+            input.value = validation.value.toString();
             cancelEditing(row);
-            
-            // Update input value to match the converted value
-            input.value = String(validation.value);
         })
         .catch(error => {
-            console.error('Error updating tag:', error);
-            showToast('Error', error.message || 'Failed to update tag', 'error');
-            
-            // Show validation error in the input
+            console.error('Error updating tag:', error.message);
             input.classList.add('is-invalid');
-            const feedback = input.nextElementSibling;
             if (feedback) {
-                feedback.textContent = error.message || 'Failed to update tag';
+                feedback.textContent = error.message;
                 feedback.style.display = 'block';
             }
+            showToast('Error', error.message, 'error');
         });
     }
 
@@ -276,6 +259,7 @@ document.addEventListener('DOMContentLoaded', function() {
         const editBtn = row.querySelector('.edit-tag');
         const updateBtn = row.querySelector('.update-tag');
         const cancelBtn = row.querySelector('.cancel-edit');
+        const feedback = valueCell.querySelector('.invalid-feedback');
 
         content.classList.remove('d-none');
         input.classList.add('d-none');
@@ -284,9 +268,8 @@ document.addEventListener('DOMContentLoaded', function() {
         updateBtn.classList.add('d-none');
         cancelBtn.classList.add('d-none');
 
-        // Clear any validation errors
+        // Reset validation state
         input.classList.remove('is-invalid');
-        const feedback = input.nextElementSibling;
         if (feedback) {
             feedback.style.display = 'none';
         }
@@ -307,6 +290,18 @@ document.addEventListener('DOMContentLoaded', function() {
             cancelEditing(row);
         }
     });
+
+    // Handle visibility change
+    document.addEventListener('visibilitychange', function() {
+        if (document.hidden) {
+            cleanupMap();
+        } else if (!mapInitialized) {
+            initializeMap();
+        }
+    });
+
+    // Cleanup on page unload
+    window.addEventListener('beforeunload', cleanupMap);
 });
 </script>
 {% endblock %}
