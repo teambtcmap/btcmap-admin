@@ -316,7 +316,7 @@ def set_area_tag():
         result = rpc_call('set_area_tag', {
             'id': area_id,
             'name': 'geo_json',
-            'value': f"'{geo_json}'"
+            'value': geo_json
         })
 
         if 'error' in result:
