@@ -44,18 +44,20 @@
             <tr data-key="{{ key }}">
                 <td>{{ key }}</td>
                 <td class="tag-value-cell">
-                    <div class="tag-value-content">{{ value }}</div>
-                    <input type="text" class="form-control tag-input" style="display: none;">
-                    <select class="form-control tag-select" style="display: none;"></select>
+                    <span class="tag-value-content">{{ value }}</span>
+                    <input type="text" class="form-control tag-input d-none">
+                    <select class="form-control tag-select d-none"></select>
                     <div class="invalid-feedback"></div>
                 </td>
                 <td>
-                    <button class="btn btn-primary btn-sm edit-tag">Edit</button>
-                    <button class="btn btn-success btn-sm update-tag" style="display: none;">Update</button>
-                    <button class="btn btn-secondary btn-sm cancel-edit" style="display: none;">Cancel</button>
-                    {% if key not in required_tags %}
-                    <button class="btn btn-danger btn-sm delete-tag">Delete</button>
-                    {% endif %}
+                    <div class="btn-group">
+                        <button class="btn btn-primary btn-sm edit-tag">Edit</button>
+                        <button class="btn btn-success btn-sm update-tag d-none">Update</button>
+                        <button class="btn btn-secondary btn-sm cancel-edit d-none">Cancel</button>
+                        {% if key not in required_tags %}
+                        <button class="btn btn-danger btn-sm delete-tag">Delete</button>
+                        {% endif %}
+                    </div>
                 </td>
             </tr>
             {% endif %}
@@ -83,10 +85,10 @@ let map = null;
 let geoJsonLayer = null;
 
 function initializeMap() {
-    if (map !== null) {
-        console.log('Map is already initialized');
-        return;
+    if (map) {
+        map.remove();
     }
+    map = null;
 
     const mapElement = document.getElementById('map');
     if (!mapElement) {
@@ -94,90 +96,74 @@ function initializeMap() {
         return;
     }
 
-    try {
-        map = L.map('map').setView([0, 0], 2);
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            attribution: '© OpenStreetMap contributors'
-        }).addTo(map);
+    map = L.map('map').setView([0, 0], 2);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '© OpenStreetMap contributors'
+    }).addTo(map);
 
-        {% if geo_json %}
-        geoJsonLayer = L.geoJSON({{ geo_json | tojson | safe }}).addTo(map);
+    {% if geo_json %}
+    try {
+        const geoJsonData = {{ geo_json | tojson | safe }};
+        geoJsonLayer = L.geoJSON(geoJsonData).addTo(map);
         map.fitBounds(geoJsonLayer.getBounds());
-        {% endif %}
     } catch (error) {
-        console.error('Error initializing map:', error);
-        showToast('Error', 'Failed to initialize map', 'error');
+        console.error('Error adding GeoJSON to map:', error);
+        showToast('Error', 'Failed to display GeoJSON data', 'error');
     }
+    {% endif %}
 }
 
-function convertAndValidateNumeric(value, type) {
-    if (!value || typeof value !== 'string') {
-        throw new Error('Invalid input value');
+function validateNumericInput(value, type) {
+    // Handle null, undefined, and non-string inputs
+    if (!value) {
+        return { isValid: false, message: 'Value cannot be empty', value: null };
     }
 
-    const trimmedValue = value.trim();
-    let numericValue;
+    // Convert to string and trim
+    const trimmedValue = String(value).trim();
+    if (trimmedValue === '') {
+        return { isValid: false, message: 'Value cannot be empty', value: null };
+    }
 
     try {
         if (type === 'integer') {
-            if (!/^\d+$/.test(trimmedValue)) {
-                throw new Error('Must be a whole number without decimals');
+            // Check if it's a valid integer format
+            if (!/^-?\d+$/.test(trimmedValue)) {
+                return { isValid: false, message: 'Must be a whole number', value: null };
             }
-            numericValue = parseInt(trimmedValue, 10);
-            if (!Number.isInteger(numericValue)) {
-                throw new Error('Must be a valid integer');
+            const num = parseInt(trimmedValue, 10);
+            if (num < 0) {
+                return { isValid: false, message: 'Must be a non-negative integer', value: null };
             }
+            return { isValid: true, value: num };
         } else if (type === 'number') {
-            if (!/^\d*\.?\d*$/.test(trimmedValue)) {
-                throw new Error('Must be a valid number');
+            // Check if it's a valid number format (allows decimal points)
+            if (!/^-?\d*\.?\d+$/.test(trimmedValue)) {
+                return { isValid: false, message: 'Must be a valid number', value: null };
             }
-            numericValue = parseFloat(trimmedValue);
-            if (isNaN(numericValue)) {
-                throw new Error('Must be a valid number');
+            const num = parseFloat(trimmedValue);
+            if (isNaN(num)) {
+                return { isValid: false, message: 'Must be a valid number', value: null };
             }
-        } else {
-            return trimmedValue;
+            if (num < 0) {
+                return { isValid: false, message: 'Must be a non-negative number', value: null };
+            }
+            // Round to 2 decimal places for floating point numbers
+            return { isValid: true, value: Math.round(num * 100) / 100 };
         }
-
-        console.log(`Converting ${trimmedValue} (${typeof trimmedValue}) to ${type}:`, numericValue, typeof numericValue);
-        
-        if (type === 'integer' || type === 'number') {
-            if (typeof numericValue !== 'number') {
-                throw new Error(`Failed to convert to ${type}`);
-            }
-        }
-
-        return numericValue;
+        return { isValid: true, value: trimmedValue };
     } catch (error) {
-        console.error('Conversion error:', error);
-        throw error;
+        console.error('Value validation error:', error);
+        return { isValid: false, message: 'Invalid value format', value: null };
     }
 }
 
 document.addEventListener('DOMContentLoaded', function() {
     const tagsTable = document.getElementById('tags-table');
-    const addOptionalTagButton = document.getElementById('add-optional-tag-btn');
-    const addCustomTagButton = document.getElementById('add-custom-tag-btn');
     const areaTypeRequirements = {{ area_type_requirements | tojson | safe }};
     const areaType = "{{ area.tags.get('type', '') }}";
 
-    // Initialize map once
     initializeMap();
-
-    function updateOptionalFieldSelect() {
-        const existingKeys = Array.from(tagsTable.querySelectorAll('tr'))
-            .map(row => row.dataset.key)
-            .filter(key => key);
-
-        const optionalFields = Object.entries(areaTypeRequirements[areaType] || {})
-            .filter(([key, req]) => !req.required && !existingKeys.includes(key))
-            .map(([key]) => key);
-
-        addOptionalTagButton.disabled = optionalFields.length === 0;
-        addOptionalTagButton.title = optionalFields.length === 0 
-            ? "All optional fields have been added" 
-            : "Add an optional field";
-    }
 
     function startEditing(row) {
         const valueCell = row.querySelector('.tag-value-cell');
@@ -188,90 +174,72 @@ document.addEventListener('DOMContentLoaded', function() {
         const updateBtn = row.querySelector('.update-tag');
         const cancelBtn = row.querySelector('.cancel-edit');
         const key = row.dataset.key;
-
         const fieldRequirements = areaTypeRequirements[areaType]?.[key] || { type: 'text' };
 
-        content.style.display = 'none';
-        editBtn.style.display = 'none';
-        updateBtn.style.display = 'inline-block';
-        cancelBtn.style.display = 'inline-block';
+        content.classList.add('d-none');
+        editBtn.classList.add('d-none');
+        updateBtn.classList.remove('d-none');
+        cancelBtn.classList.remove('d-none');
 
         if (fieldRequirements.allowed_values) {
             select.innerHTML = fieldRequirements.allowed_values
                 .map(value => `<option value="${value}" ${content.textContent.trim() === value ? 'selected' : ''}>${value}</option>`)
                 .join('');
-            select.style.display = 'block';
-            input.style.display = 'none';
+            select.classList.remove('d-none');
+            input.classList.add('d-none');
         } else {
-            if (fieldRequirements.type === 'integer' || fieldRequirements.type === 'number') {
-                input.type = 'text';
-                input.pattern = fieldRequirements.type === 'integer' ? '\\d*' : '\\d*\\.?\\d*';
-                input.placeholder = fieldRequirements.type === 'integer' ? 'Enter a whole number' : 'Enter a number';
-            }
             input.value = content.textContent.trim();
-            input.style.display = 'block';
-            select.style.display = 'none';
+            input.classList.remove('d-none');
+            select.classList.add('d-none');
 
-            input.addEventListener('input', function() {
-                const validation = validateValue(this.value, fieldRequirements);
-                const feedback = this.nextElementSibling;
-                
-                if (!validation.isValid) {
-                    this.classList.add('is-invalid');
-                    feedback.textContent = validation.message;
-                    feedback.style.display = 'block';
-                } else {
-                    this.classList.remove('is-invalid');
-                    feedback.style.display = 'none';
-                }
-            });
+            if (fieldRequirements.type === 'integer' || fieldRequirements.type === 'number') {
+                input.setAttribute('type', 'text');
+                input.setAttribute('pattern', fieldRequirements.type === 'integer' ? '\\d+' : '\\d*\\.?\\d*');
+                input.setAttribute('placeholder', 
+                    fieldRequirements.type === 'integer' ? 'Enter a whole number' : 'Enter a number');
+            }
         }
     }
 
     function updateTag(row) {
-        const key = row.dataset.key;
         const valueCell = row.querySelector('.tag-value-cell');
         const content = valueCell.querySelector('.tag-value-content');
         const input = valueCell.querySelector('.tag-input');
         const select = valueCell.querySelector('.tag-select');
-        const rawValue = select.style.display === 'block' ? select.value : input.value;
+        const key = row.dataset.key;
+        const rawValue = select.classList.contains('d-none') ? input.value : select.value;
         const fieldRequirements = areaTypeRequirements[areaType]?.[key] || { type: 'text' };
 
-        let processedValue;
-        try {
-            processedValue = convertAndValidateNumeric(rawValue, fieldRequirements.type);
-            console.log('Processed value before API call:', processedValue, typeof processedValue);
-
-            if (fieldRequirements.type === 'integer' || fieldRequirements.type === 'number') {
-                if (typeof processedValue !== 'number') {
-                    throw new Error(`Value must be a ${fieldRequirements.type}`);
-                }
+        // Validate and convert numeric values
+        const validation = validateNumericInput(rawValue, fieldRequirements.type);
+        if (!validation.isValid) {
+            showToast('Error', `Invalid ${fieldRequirements.type} value for ${key}: ${validation.message}`, 'error');
+            input.classList.add('is-invalid');
+            const feedback = input.nextElementSibling;
+            if (feedback) {
+                feedback.textContent = validation.message;
+                feedback.style.display = 'block';
             }
-        } catch (error) {
-            console.error('Validation error:', error);
-            showToast('Error', `Invalid ${fieldRequirements.type} value for ${key}: ${error.message}`, 'error');
             return;
         }
 
-        const requestBody = {
-            id: '{{ area.id }}',
-            name: key,
-            value: processedValue
-        };
-
-        console.log('Sending request body:', requestBody);
-        console.log('Value type in request:', typeof requestBody.value);
-
+        // Send the validated and converted value to the server
         fetch('/api/set_area_tag', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
             },
-            body: JSON.stringify(requestBody)
+            body: JSON.stringify({
+                id: '{{ area.id }}',
+                name: key,
+                value: validation.value
+            })
         })
         .then(response => {
             if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
+                return response.json().then(data => {
+                    throw new Error(data.error || `HTTP error! status: ${response.status}`);
+                });
             }
             return response.json();
         })
@@ -280,13 +248,23 @@ document.addEventListener('DOMContentLoaded', function() {
                 throw new Error(typeof data.error === 'string' ? data.error : JSON.stringify(data.error));
             }
             showToast('Success', 'Tag updated successfully', 'success');
-            content.textContent = processedValue.toString();
+            content.textContent = String(validation.value);
             cancelEditing(row);
+            
+            // Update input value to match the converted value
+            input.value = String(validation.value);
         })
         .catch(error => {
             console.error('Error updating tag:', error);
-            const errorMessage = error?.message || 'An unexpected error occurred while updating the tag';
-            showToast('Error', errorMessage, 'error');
+            showToast('Error', error.message || 'Failed to update tag', 'error');
+            
+            // Show validation error in the input
+            input.classList.add('is-invalid');
+            const feedback = input.nextElementSibling;
+            if (feedback) {
+                feedback.textContent = error.message || 'Failed to update tag';
+                feedback.style.display = 'block';
+            }
         });
     }
 
@@ -299,13 +277,14 @@ document.addEventListener('DOMContentLoaded', function() {
         const updateBtn = row.querySelector('.update-tag');
         const cancelBtn = row.querySelector('.cancel-edit');
 
-        content.style.display = 'block';
-        input.style.display = 'none';
-        select.style.display = 'none';
-        editBtn.style.display = 'inline-block';
-        updateBtn.style.display = 'none';
-        cancelBtn.style.display = 'none';
+        content.classList.remove('d-none');
+        input.classList.add('d-none');
+        select.classList.add('d-none');
+        editBtn.classList.remove('d-none');
+        updateBtn.classList.add('d-none');
+        cancelBtn.classList.add('d-none');
 
+        // Clear any validation errors
         input.classList.remove('is-invalid');
         const feedback = input.nextElementSibling;
         if (feedback) {
@@ -313,44 +292,11 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
-    function deleteTag(row) {
-        const key = row.dataset.key;
-        showToast('Confirm', `Are you sure you want to delete the tag "${key}"?`, 'warning', {
-            confirmButtonText: 'Yes, delete it',
-            cancelButtonText: 'Cancel',
-            onConfirm: () => {
-                fetch('/api/remove_area_tag', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
-                        id: '{{ area.id }}',
-                        tag: key
-                    }),
-                })
-                .then(response => response.json())
-                .then(data => {
-                    if (data.error) {
-                        throw new Error(typeof data.error === 'string' ? data.error : JSON.stringify(data.error));
-                    }
-                    row.remove();
-                    showToast('Success', 'Tag deleted successfully', 'success');
-                    updateOptionalFieldSelect();
-                })
-                .catch(error => {
-                    console.error('Error deleting tag:', error);
-                    const errorMessage = error?.message || 'An unexpected error occurred while deleting the tag';
-                    showToast('Error', errorMessage, 'error');
-                });
-            }
-        });
-    }
-
     tagsTable.addEventListener('click', function(e) {
         const target = e.target;
+        if (!target.matches('button')) return;
+        
         const row = target.closest('tr');
-
         if (!row) return;
 
         if (target.classList.contains('edit-tag')) {
@@ -359,44 +305,8 @@ document.addEventListener('DOMContentLoaded', function() {
             updateTag(row);
         } else if (target.classList.contains('cancel-edit')) {
             cancelEditing(row);
-        } else if (target.classList.contains('delete-tag')) {
-            deleteTag(row);
         }
     });
-
-    const removeAreaBtn = document.getElementById('remove-area-btn');
-    removeAreaBtn.addEventListener('click', function() {
-        showToast('Confirm', 'Are you sure you want to remove this area?', 'warning', {
-            confirmButtonText: 'Yes, remove it',
-            cancelButtonText: 'Cancel',
-            onConfirm: () => {
-                fetch('/api/remove_area', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({ id: '{{ area.id }}' }),
-                })
-                .then(response => response.json())
-                .then(data => {
-                    if (data.error) {
-                        throw new Error(typeof data.error === 'string' ? data.error : JSON.stringify(data.error));
-                    }
-                    showToast('Success', 'Area removed successfully', 'success');
-                    setTimeout(() => {
-                        window.location.href = '/select_area';
-                    }, 2000);
-                })
-                .catch(error => {
-                    console.error('Error removing area:', error);
-                    const errorMessage = error?.message || 'An unexpected error occurred while removing the area';
-                    showToast('Error', errorMessage, 'error');
-                });
-            }
-        });
-    });
-
-    updateOptionalFieldSelect();
 });
 </script>
 {% endblock %}
