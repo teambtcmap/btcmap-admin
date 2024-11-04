@@ -315,24 +315,33 @@ function hideGeoJsonEditor() {
     console.log('GeoJSON editor hidden');
 }
 
+function getExistingKeys() {
+    console.log('Getting existing keys');
+    const existingKeys = Array.from(document.querySelectorAll('#tags-table tr'))
+        .map(row => {
+            const keyElement = row.querySelector('td:first-child');
+            return keyElement ? keyElement.textContent.trim() : null;
+        })
+        .filter(key => key);
+    console.log('Existing keys:', existingKeys);
+    return existingKeys;
+}
+
 function updateOptionalFieldSelect() {
     console.log('Updating optional field select');
     const areaTypeRequirements = {{ area_type_requirements | tojson | safe }};
     const areaType = "{{ area.tags.get('type', '') }}";
     
     try {
-        if (!areaType || !areaTypeRequirements[areaType]) {
-            console.warn('Area type not found or no requirements defined');
-            return;
+        if (!areaType) {
+            throw new Error('Area type is not defined');
         }
 
-        const existingKeys = Array.from(document.querySelectorAll('#tags-table tr'))
-            .map(row => {
-                const keyElement = row.querySelector('td:first-child');
-                return keyElement ? keyElement.textContent.trim() : null;
-            })
-            .filter(key => key);
+        if (!areaTypeRequirements || !areaTypeRequirements[areaType]) {
+            throw new Error(`Requirements not found for area type: ${areaType}`);
+        }
 
+        const existingKeys = getExistingKeys();
         console.log('Existing keys:', existingKeys);
 
         const optionalFields = Object.entries(areaTypeRequirements[areaType])
@@ -351,13 +360,21 @@ function updateOptionalFieldSelect() {
                 ).join('')}
             `;
         });
+
+        if (optionalFields.length === 0) {
+            console.log('No more optional fields available');
+            document.getElementById('add-optional-tag-btn').disabled = true;
+        } else {
+            document.getElementById('add-optional-tag-btn').disabled = false;
+        }
     } catch (error) {
         console.error('Error updating optional field select:', error);
         showToast('Error', 'Failed to update optional fields: ' + (error.message || 'Unknown error'), 'error');
+        document.getElementById('add-optional-tag-btn').disabled = true;
     }
 }
 
-function handleGeoJsonUpdate() {
+async function handleGeoJsonUpdate() {
     console.log('Handling GeoJSON update');
     const textarea = document.getElementById('geojson-input');
     const validation = validateGeoJson(textarea.value);
@@ -369,47 +386,48 @@ function handleGeoJsonUpdate() {
     }
 
     try {
+        // First submit the GeoJSON update
+        console.log('Submitting GeoJSON update');
+        const geoJsonResponse = await fetch('/api/set_area_tag', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                id: '{{ area.id }}',
+                name: 'geo_json',
+                value: validation.data
+            })
+        });
+
+        const geoJsonResult = await geoJsonResponse.json();
+        if (geoJsonResult.error) {
+            throw new Error(geoJsonResult.error?.message || JSON.stringify(geoJsonResult.error));
+        }
+
+        // Calculate area after successful GeoJSON update
+        console.log('Calculating area');
         const areaKm2 = calculateAreaKm2(validation.data);
 
-        Promise.all([
-            fetch('/api/set_area_tag', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    id: '{{ area.id }}',
-                    name: 'geo_json',
-                    value: validation.data
-                })
-            }),
-            fetch('/api/set_area_tag', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    id: '{{ area.id }}',
-                    name: 'area_km2',
-                    value: areaKm2
-                })
+        // Submit area_km2 update
+        console.log('Submitting area_km2 update');
+        const areaResponse = await fetch('/api/set_area_tag', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                id: '{{ area.id }}',
+                name: 'area_km2',
+                value: areaKm2
             })
-        ])
-        .then(responses => Promise.all(responses.map(r => r.json())))
-        .then(([geoJsonResult, areaResult]) => {
-            if (geoJsonResult.error || areaResult.error) {
-                throw new Error(
-                    (geoJsonResult.error && (geoJsonResult.error.message || geoJsonResult.error)) || 
-                    (areaResult.error && (areaResult.error.message || areaResult.error)) || 
-                    'Failed to update'
-                );
-            }
-            
-            console.log('GeoJSON update successful');
-            updateMap(validation.data, true);
-            showToast('Success', 'GeoJSON and area updated successfully', 'success');
-            hideGeoJsonEditor();
-        })
-        .catch(error => {
-            console.error('Error saving GeoJSON:', error);
-            showToast('Error', error.message || 'Failed to save changes', 'error');
         });
+
+        const areaResult = await areaResponse.json();
+        if (areaResult.error) {
+            throw new Error(areaResult.error?.message || JSON.stringify(areaResult.error));
+        }
+        
+        console.log('GeoJSON update successful');
+        updateMap(validation.data, true);
+        showToast('Success', 'GeoJSON and area updated successfully', 'success');
+        hideGeoJsonEditor();
     } catch (error) {
         console.error('Error in update process:', error);
         showToast('Error', error.message || 'Failed to process update', 'error');
@@ -418,12 +436,11 @@ function handleGeoJsonUpdate() {
 
 document.addEventListener('DOMContentLoaded', function() {
     const tagsTable = document.getElementById('tags-table');
-    const areaTypeRequirements = {{ area_type_requirements | tojson | safe }};
-    const areaType = "{{ area.tags.get('type', '') }}";
     const editGeoJsonBtn = document.getElementById('edit-geojson-btn');
     const showBtn = document.getElementById('show-btn');
     const updateBtn = document.getElementById('update-btn');
     const cancelGeoJsonBtn = document.getElementById('cancel-geojson-btn');
+    const areaType = "{{ area.tags.get('type', '') }}";
 
     console.log('Initializing page with area type:', areaType);
 
@@ -470,7 +487,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // Cleanup on page unload
     window.addEventListener('beforeunload', cleanupMap);
 
-    // Add tag button handlers
+    // Add optional tag button handler
     document.getElementById('add-optional-tag-btn').addEventListener('click', function() {
         const newRow = document.createElement('tr');
         newRow.innerHTML = `
@@ -492,8 +509,16 @@ document.addEventListener('DOMContentLoaded', function() {
         const select = newRow.querySelector('.optional-field-select');
         select.addEventListener('change', function() {
             const selectedField = this.value;
-            if (selectedField) {
+            if (!selectedField) return;
+
+            try {
+                const areaTypeRequirements = {{ area_type_requirements | tojson | safe }};
                 const requirements = areaTypeRequirements[areaType][selectedField];
+                
+                if (!requirements) {
+                    throw new Error(`Requirements not found for field: ${selectedField}`);
+                }
+
                 const valueCell = this.closest('tr').querySelector('td:nth-child(2)');
                 valueCell.innerHTML = `
                     ${requirements.allowed_values ? `
@@ -511,6 +536,10 @@ document.addEventListener('DOMContentLoaded', function() {
                     `}
                     <div class="invalid-feedback"></div>
                 `;
+            } catch (error) {
+                console.error('Error setting up field:', error);
+                showToast('Error', error.message || 'Failed to setup field', 'error');
+                this.value = '';
             }
         });
 
@@ -523,6 +552,7 @@ document.addEventListener('DOMContentLoaded', function() {
         updateOptionalFieldSelect();
     });
 
+    // Add custom tag button handler
     document.getElementById('add-custom-tag-btn').addEventListener('click', function() {
         const newRow = document.createElement('tr');
         newRow.innerHTML = `
