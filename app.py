@@ -1,5 +1,5 @@
 import os
-from flask import Flask, render_template, request, jsonify, session, redirect, url_for
+from flask import Flask, render_template, request, jsonify, session, redirect, url_for, flash
 from flask_session import Session
 import requests
 import json
@@ -11,12 +11,16 @@ import re
 from shapely.geometry import shape, mapping
 from shapely.ops import transform
 import pyproj
+import secrets
 
 app = Flask(__name__)
-app.config['SECRET_KEY'] = os.urandom(24)
+# Use a strong secret key
+app.config['SECRET_KEY'] = os.environ.get('FLASK_SECRET_KEY', secrets.token_hex(32))
+# Configure server-side session
 app.config['SESSION_TYPE'] = 'filesystem'
+app.config['SESSION_FILE_DIR'] = 'flask_session'
 app.config['SESSION_PERMANENT'] = True
-app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(minutes=30)
+app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(hours=24)
 Session(app)
 
 API_BASE_URL = "https://api.btcmap.org"
@@ -161,14 +165,48 @@ def home():
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
+    # If user is already logged in, redirect to select_area
     if 'password' in session:
         return redirect(url_for('select_area'))
+    
     if request.method == 'POST':
         password = request.form.get('password')
-        session['password'] = password
-        session.permanent = True
-        next_page = request.args.get('next')
-        return redirect(next_page or url_for('select_area'))
+        if not password:
+            flash('Password is required', 'error')
+            return render_template('login.html'), 400
+        
+        # Verify password by making a test RPC call
+        try:
+            test_response = requests.post(
+                f"{API_BASE_URL}/rpc",
+                json={
+                    "jsonrpc": "2.0",
+                    "method": "search",
+                    "params": {"password": password, "query": ""},
+                    "id": 1
+                },
+                timeout=10
+            )
+            
+            if test_response.status_code == 200 and 'error' not in test_response.json():
+                # Set session
+                session.clear()
+                session['password'] = password
+                session.permanent = True
+                
+                # Get the next URL or default to select_area
+                next_page = request.args.get('next')
+                # Ensure the next_page is a relative URL to prevent open redirect
+                if next_page and urlparse(next_page).netloc == '':
+                    return redirect(next_page)
+                return redirect(url_for('select_area'))
+            else:
+                flash('Invalid password', 'error')
+                return render_template('login.html'), 401
+        except requests.exceptions.RequestException:
+            flash('Error connecting to the server', 'error')
+            return render_template('login.html'), 500
+    
     return render_template('login.html')
 
 @app.route('/logout')
