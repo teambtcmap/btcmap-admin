@@ -32,9 +32,11 @@
 
     <div id="geojson-editor" class="mb-3">
         <textarea id="geojson-input" class="form-control mb-2" rows="5" style="display: none;"></textarea>
-        <button id="show-btn" class="btn btn-primary" style="display: none;">Show</button>
-        <button id="save-locally-btn" class="btn btn-success" style="display: none;">Save Locally</button>
-        <button id="cancel-geojson-btn" class="btn btn-secondary" style="display: none;">Cancel</button>
+        <div class="btn-group">
+            <button id="show-btn" class="btn btn-primary" style="display: none;">Show</button>
+            <button id="save-locally-btn" class="btn btn-success" style="display: none;">Update</button>
+            <button id="cancel-geojson-btn" class="btn btn-secondary" style="display: none;">Cancel</button>
+        </div>
     </div>
 
     <h3>Tags</h3>
@@ -89,181 +91,219 @@
 {% block scripts %}
 <script src="{{ url_for('static', filename='js/validation.js') }}"></script>
 <script>
-let map = null;
-let geoJsonLayer = null;
-let mapInitialized = false;
-let currentGeoJson = null;
+document.addEventListener('DOMContentLoaded', function() {
+    let map = null;
+    let geoJsonLayer = null;
+    let mapInitialized = false;
+    let currentGeoJson = null;
 
-function cleanupMap() {
-    if (map) {
+    function cleanupMap() {
+        if (map) {
+            try {
+                if (geoJsonLayer) {
+                    map.removeLayer(geoJsonLayer);
+                    geoJsonLayer = null;
+                }
+                map.remove();
+                map = null;
+                mapInitialized = false;
+            } catch (error) {
+                console.error('Error cleaning up map:', error);
+            }
+        }
+    }
+
+    function updateMap(geoJson) {
         try {
+            if (!map || !document.getElementById('map')) {
+                console.error('Map not initialized or container not found');
+                return false;
+            }
+
             if (geoJsonLayer) {
-                geoJsonLayer.remove();
+                map.removeLayer(geoJsonLayer);
                 geoJsonLayer = null;
             }
-            map.remove();
-            map = null;
-            mapInitialized = false;
-        } catch (error) {
-            console.error('Error cleaning up map:', error);
-        }
-    }
-}
 
-function updateMap(geoJson) {
-    try {
-        if (geoJsonLayer) {
-            map.removeLayer(geoJsonLayer);
-            geoJsonLayer = null;
-        }
-
-        if (typeof geoJson === 'string') {
-            geoJson = JSON.parse(geoJson);
-        }
-
-        geoJsonLayer = L.geoJSON(geoJson).addTo(map);
-        if (geoJsonLayer && geoJsonLayer.getBounds().isValid()) {
-            map.fitBounds(geoJsonLayer.getBounds());
-        }
-        currentGeoJson = geoJson;
-        return true;
-    } catch (error) {
-        console.error('Error updating map:', error);
-        showToast('Error', 'Failed to update map: ' + error.message, 'error');
-        return false;
-    }
-}
-
-function initializeMap() {
-    if (mapInitialized || !document.getElementById('map')) {
-        return;
-    }
-
-    try {
-        cleanupMap();
-
-        map = L.map('map').setView([0, 0], 2);
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            attribution: '© OpenStreetMap contributors'
-        }).addTo(map);
-
-        {% if geo_json %}
-        try {
-            const geoJsonData = {{ geo_json | tojson | safe }};
-            if (typeof geoJsonData === 'object' && geoJsonData !== null) {
-                updateMap(geoJsonData);
+            if (typeof geoJson === 'string') {
+                geoJson = JSON.parse(geoJson);
             }
+
+            if (!geoJson || typeof geoJson !== 'object') {
+                throw new Error('Invalid GeoJSON format');
+            }
+
+            geoJsonLayer = L.geoJSON(geoJson).addTo(map);
+            if (geoJsonLayer && geoJsonLayer.getBounds().isValid()) {
+                map.fitBounds(geoJsonLayer.getBounds());
+            } else {
+                console.warn('Invalid GeoJSON bounds');
+            }
+            currentGeoJson = geoJson;
+            return true;
         } catch (error) {
-            console.error('Error adding GeoJSON to map:', error);
-            showToast('Error', 'Failed to display GeoJSON data: ' + error.message, 'error');
+            console.error('Error updating map:', error);
+            showToast('Error', 'Failed to update map: ' + error.message, 'error');
+            return false;
         }
-        {% endif %}
-
-        mapInitialized = true;
-    } catch (error) {
-        console.error('Error initializing map:', error);
-        showToast('Error', 'Failed to initialize map: ' + error.message, 'error');
     }
-}
 
-document.addEventListener('DOMContentLoaded', function() {
-    const tagsTable = document.getElementById('tags-table');
-    const editGeoJsonBtn = document.getElementById('edit-geojson-btn');
-    const geoJsonInput = document.getElementById('geojson-input');
-    const showBtn = document.getElementById('show-btn');
-    const saveLocallyBtn = document.getElementById('save-locally-btn');
-    const cancelGeoJsonBtn = document.getElementById('cancel-geojson-btn');
+    function initializeMap() {
+        if (mapInitialized) {
+            console.warn('Map already initialized');
+            return;
+        }
+
+        const mapElement = document.getElementById('map');
+        if (!mapElement) {
+            console.error('Map container not found');
+            return;
+        }
+
+        try {
+            cleanupMap();
+
+            map = L.map('map').setView([0, 0], 2);
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '© OpenStreetMap contributors'
+            }).addTo(map);
+
+            {% if geo_json %}
+            try {
+                const geoJsonData = {{ geo_json | tojson | safe }};
+                if (typeof geoJsonData === 'object' && geoJsonData !== null) {
+                    updateMap(geoJsonData);
+                }
+            } catch (error) {
+                console.error('Error adding GeoJSON to map:', error);
+                showToast('Error', 'Failed to display GeoJSON data: ' + error.message, 'error');
+            }
+            {% endif %}
+
+            mapInitialized = true;
+        } catch (error) {
+            console.error('Error initializing map:', error);
+            showToast('Error', 'Failed to initialize map: ' + error.message, 'error');
+        }
+    }
+
+    // Initialize UI elements
+    const elements = {
+        tagsTable: document.getElementById('tags-table'),
+        editGeoJsonBtn: document.getElementById('edit-geojson-btn'),
+        geoJsonInput: document.getElementById('geojson-input'),
+        showBtn: document.getElementById('show-btn'),
+        saveLocallyBtn: document.getElementById('save-locally-btn'),
+        cancelGeoJsonBtn: document.getElementById('cancel-geojson-btn')
+    };
+
+    // Verify all elements exist
+    Object.entries(elements).forEach(([key, element]) => {
+        if (!element) {
+            console.error(`Required element not found: ${key}`);
+        }
+    });
+
     const areaTypeRequirements = {{ area_type_requirements | tojson | safe }};
     const areaType = "{{ area.tags.get('type', '') }}";
     let previousGeoJson = null;
 
+    // Initialize map
     initializeMap();
 
-    // GeoJSON editing functionality
-    editGeoJsonBtn.addEventListener('click', function() {
-        try {
-            previousGeoJson = currentGeoJson;
-            const formattedJson = JSON.stringify(currentGeoJson, null, 2);
-            geoJsonInput.value = formattedJson;
-            geoJsonInput.style.display = 'block';
-            showBtn.style.display = 'inline-block';
-            saveLocallyBtn.style.display = 'inline-block';
-            cancelGeoJsonBtn.style.display = 'inline-block';
-            editGeoJsonBtn.style.display = 'none';
-        } catch (error) {
-            console.error('Error starting GeoJSON edit:', error);
-            showToast('Error', 'Failed to start GeoJSON editing: ' + error.message, 'error');
-        }
-    });
-
-    showBtn.addEventListener('click', function() {
-        try {
-            const geoJson = JSON.parse(geoJsonInput.value);
-            if (updateMap(geoJson)) {
-                showToast('Success', 'GeoJSON preview updated', 'success');
+    // Set up event listeners
+    if (elements.editGeoJsonBtn) {
+        elements.editGeoJsonBtn.addEventListener('click', function() {
+            try {
+                previousGeoJson = currentGeoJson;
+                const formattedJson = JSON.stringify(currentGeoJson, null, 2);
+                elements.geoJsonInput.value = formattedJson;
+                elements.geoJsonInput.style.display = 'block';
+                elements.showBtn.style.display = 'inline-block';
+                elements.saveLocallyBtn.style.display = 'inline-block';
+                elements.cancelGeoJsonBtn.style.display = 'inline-block';
+                elements.editGeoJsonBtn.style.display = 'none';
+            } catch (error) {
+                console.error('Error starting GeoJSON edit:', error);
+                showToast('Error', 'Failed to start GeoJSON editing: ' + error.message, 'error');
             }
-        } catch (error) {
-            console.error('Error showing GeoJSON:', error);
-            showToast('Error', 'Invalid GeoJSON format: ' + error.message, 'error');
-        }
-    });
+        });
+    }
 
-    saveLocallyBtn.addEventListener('click', function() {
-        try {
-            const geoJson = JSON.parse(geoJsonInput.value);
-            
-            fetch('/api/set_area_tag', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    id: '{{ area.id }}',
-                    name: 'geo_json',
-                    value: geoJson
+    if (elements.showBtn) {
+        elements.showBtn.addEventListener('click', function() {
+            try {
+                const geoJson = JSON.parse(elements.geoJsonInput.value);
+                if (updateMap(geoJson)) {
+                    showToast('Success', 'GeoJSON preview updated', 'success');
+                }
+            } catch (error) {
+                console.error('Error showing GeoJSON:', error);
+                showToast('Error', 'Invalid GeoJSON format: ' + error.message, 'error');
+            }
+        });
+    }
+
+    if (elements.saveLocallyBtn) {
+        elements.saveLocallyBtn.addEventListener('click', function() {
+            try {
+                const geoJson = JSON.parse(elements.geoJsonInput.value);
+                
+                fetch('/api/set_area_tag', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        id: '{{ area.id }}',
+                        name: 'geo_json',
+                        value: geoJson
+                    })
                 })
-            })
-            .then(response => {
-                if (!response.ok) {
-                    return response.json().then(data => {
-                        throw new Error(data.error?.message || `HTTP error! status: ${response.status}`);
-                    });
-                }
-                return response.json();
-            })
-            .then(data => {
-                if (data.error) {
-                    throw new Error(typeof data.error === 'string' ? data.error : JSON.stringify(data.error));
-                }
-                showToast('Success', 'GeoJSON saved successfully', 'success');
-                previousGeoJson = null;
-                geoJsonInput.style.display = 'none';
-                showBtn.style.display = 'none';
-                saveLocallyBtn.style.display = 'none';
-                cancelGeoJsonBtn.style.display = 'none';
-                editGeoJsonBtn.style.display = 'block';
-            })
-            .catch(error => {
-                console.error('Error saving GeoJSON:', error);
-                showToast('Error', 'Failed to save GeoJSON: ' + error.message, 'error');
-            });
-        } catch (error) {
-            console.error('Error parsing GeoJSON:', error);
-            showToast('Error', 'Invalid GeoJSON format: ' + error.message, 'error');
-        }
-    });
+                .then(response => {
+                    if (!response.ok) {
+                        return response.json().then(data => {
+                            throw new Error(data.error?.message || `HTTP error! status: ${response.status}`);
+                        });
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    if (data.error) {
+                        throw new Error(typeof data.error === 'string' ? data.error : JSON.stringify(data.error));
+                    }
+                    showToast('Success', 'GeoJSON saved successfully', 'success');
+                    previousGeoJson = null;
+                    elements.geoJsonInput.style.display = 'none';
+                    elements.showBtn.style.display = 'none';
+                    elements.saveLocallyBtn.style.display = 'none';
+                    elements.cancelGeoJsonBtn.style.display = 'none';
+                    elements.editGeoJsonBtn.style.display = 'block';
+                })
+                .catch(error => {
+                    console.error('Error saving GeoJSON:', error);
+                    showToast('Error', 'Failed to save GeoJSON: ' + error.message, 'error');
+                });
+            } catch (error) {
+                console.error('Error parsing GeoJSON:', error);
+                showToast('Error', 'Invalid GeoJSON format: ' + error.message, 'error');
+            }
+        });
+    }
 
-    cancelGeoJsonBtn.addEventListener('click', function() {
-        if (previousGeoJson) {
-            updateMap(previousGeoJson);
-        }
-        previousGeoJson = null;
-        geoJsonInput.style.display = 'none';
-        showBtn.style.display = 'none';
-        saveLocallyBtn.style.display = 'none';
-        cancelGeoJsonBtn.style.display = 'none';
-        editGeoJsonBtn.style.display = 'block';
-    });
+    if (elements.cancelGeoJsonBtn) {
+        elements.cancelGeoJsonBtn.addEventListener('click', function() {
+            if (previousGeoJson) {
+                updateMap(previousGeoJson);
+            }
+            previousGeoJson = null;
+            elements.geoJsonInput.style.display = 'none';
+            elements.showBtn.style.display = 'none';
+            elements.saveLocallyBtn.style.display = 'none';
+            elements.cancelGeoJsonBtn.style.display = 'none';
+            elements.editGeoJsonBtn.style.display = 'block';
+        });
+    }
 
     function startEditing(row) {
         const valueCell = row.querySelector('.tag-value-cell');
@@ -397,7 +437,7 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
-    tagsTable.addEventListener('click', function(e) {
+    elements.tagsTable.addEventListener('click', function(e) {
         const target = e.target;
         if (!target.matches('button')) return;
         

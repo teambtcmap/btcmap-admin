@@ -54,60 +54,69 @@
         </div>
     </div>
 
+    <!-- Scripts moved to end of body -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
     <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
-    <script src="{{ url_for('static', filename='js/script.js') }}"></script>
     <script>
-    function showToast(title, message, type = 'success', options = {}) {
-        const toastElement = document.getElementById('liveToast');
-        const toastTitle = document.getElementById('toastTitle');
-        const toastMessage = document.getElementById('toastMessage');
-        const toast = new bootstrap.Toast(toastElement, {
-            position: 'top-center',
-            autohide: true,
-            delay: 5000
-        });
+    document.addEventListener('DOMContentLoaded', function() {
+        window.showToast = function(title, message, type = 'success', options = {}) {
+            const toastElement = document.getElementById('liveToast');
+            const toastTitle = document.getElementById('toastTitle');
+            const toastMessage = document.getElementById('toastMessage');
 
-        toastTitle.textContent = title;
-        toastMessage.innerHTML = message;
-        
-        toastElement.classList.remove('bg-success', 'bg-danger', 'bg-warning', 'text-dark', 'text-white');
-        
-        switch (type) {
-            case 'error':
-                toastElement.classList.add('bg-danger', 'text-white');
-                break;
-            case 'warning':
-                toastElement.classList.add('bg-warning', 'text-dark');
-                break;
-            default:
-                toastElement.classList.add('bg-success', 'text-white');
-        }
+            if (!toastElement || !toastTitle || !toastMessage) {
+                console.error('Toast elements not found');
+                return;
+            }
 
-        if (options.confirmButtonText && options.cancelButtonText) {
-            const confirmBtn = document.createElement('button');
-            confirmBtn.className = 'btn btn-sm btn-light me-2';
-            confirmBtn.textContent = options.confirmButtonText;
-            confirmBtn.onclick = () => {
-                options.onConfirm();
-                toast.hide();
-            };
+            const toast = new bootstrap.Toast(toastElement, {
+                position: 'top-center',
+                autohide: true,
+                delay: 5000
+            });
 
-            const cancelBtn = document.createElement('button');
-            cancelBtn.className = 'btn btn-sm btn-secondary';
-            cancelBtn.textContent = options.cancelButtonText;
-            cancelBtn.onclick = () => {
-                toast.hide();
-            };
+            toastTitle.textContent = title;
+            toastMessage.innerHTML = message;
+            
+            toastElement.classList.remove('bg-success', 'bg-danger', 'bg-warning', 'text-dark', 'text-white');
+            
+            switch (type) {
+                case 'error':
+                    toastElement.classList.add('bg-danger', 'text-white');
+                    break;
+                case 'warning':
+                    toastElement.classList.add('bg-warning', 'text-dark');
+                    break;
+                default:
+                    toastElement.classList.add('bg-success', 'text-white');
+            }
 
-            toastMessage.appendChild(document.createElement('br'));
-            toastMessage.appendChild(confirmBtn);
-            toastMessage.appendChild(cancelBtn);
-        }
+            if (options.confirmButtonText && options.cancelButtonText) {
+                const confirmBtn = document.createElement('button');
+                confirmBtn.className = 'btn btn-sm btn-light me-2';
+                confirmBtn.textContent = options.confirmButtonText;
+                confirmBtn.onclick = () => {
+                    options.onConfirm();
+                    toast.hide();
+                };
 
-        toast.show();
-    }
+                const cancelBtn = document.createElement('button');
+                cancelBtn.className = 'btn btn-sm btn-secondary';
+                cancelBtn.textContent = options.cancelButtonText;
+                cancelBtn.onclick = () => {
+                    toast.hide();
+                };
+
+                toastMessage.appendChild(document.createElement('br'));
+                toastMessage.appendChild(confirmBtn);
+                toastMessage.appendChild(cancelBtn);
+            }
+
+            toast.show();
+        };
+    });
     </script>
+    <script src="{{ url_for('static', filename='js/script.js') }}"></script>
     {% block scripts %}{% endblock %}
 </body>
 </html>
