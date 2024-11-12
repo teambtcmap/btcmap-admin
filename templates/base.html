@@ -54,91 +54,60 @@
         </div>
     </div>
 
-    <!-- Load core dependencies first -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
     <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
-
-    <!-- Initialize core functionality -->
-    <script>
-    document.addEventListener('DOMContentLoaded', function() {
-        window.showToast = function(title, message, type = 'success', options = {}) {
-            try {
-                const toastElement = document.getElementById('liveToast');
-                if (!toastElement) {
-                    console.error('Toast element not found');
-                    return;
-                }
-
-                const toastTitle = document.getElementById('toastTitle');
-                const toastMessage = document.getElementById('toastMessage');
-                
-                if (!toastTitle || !toastMessage) {
-                    console.error('Toast title or message element not found');
-                    return;
-                }
-
-                const toast = new bootstrap.Toast(toastElement, {
-                    position: 'top-center',
-                    autohide: true,
-                    delay: 5000,
-                    ...options
-                });
-
-                toastTitle.textContent = title;
-                toastMessage.innerHTML = message;
-                
-                toastElement.classList.remove('bg-success', 'bg-danger', 'bg-warning', 'text-dark', 'text-white');
-                
-                switch (type) {
-                    case 'error':
-                        toastElement.classList.add('bg-danger', 'text-white');
-                        break;
-                    case 'warning':
-                        toastElement.classList.add('bg-warning', 'text-dark');
-                        break;
-                    default:
-                        toastElement.classList.add('bg-success', 'text-white');
-                }
-
-                if (options.confirmButtonText && options.cancelButtonText) {
-                    const confirmBtn = document.createElement('button');
-                    confirmBtn.className = 'btn btn-sm btn-light me-2';
-                    confirmBtn.textContent = options.confirmButtonText;
-                    confirmBtn.onclick = () => {
-                        if (typeof options.onConfirm === 'function') {
-                            options.onConfirm();
-                        }
-                        toast.hide();
-                    };
-
-                    const cancelBtn = document.createElement('button');
-                    cancelBtn.className = 'btn btn-sm btn-secondary';
-                    cancelBtn.textContent = options.cancelButtonText;
-                    cancelBtn.onclick = () => {
-                        toast.hide();
-                    };
-
-                    toastMessage.appendChild(document.createElement('br'));
-                    toastMessage.appendChild(confirmBtn);
-                    toastMessage.appendChild(cancelBtn);
-                }
-
-                toast.show();
-            } catch (error) {
-                console.error('Error showing toast:', error);
-            }
-        };
-
-        // Handle unhandled promise rejections
-        window.addEventListener('unhandledrejection', function(event) {
-            console.error('Unhandled promise rejection:', event.reason);
-            showToast('Error', 'An unexpected error occurred. Please try again.', 'error');
-        });
-    });
-    </script>
-
-    <!-- Load application-specific scripts -->
     <script src="{{ url_for('static', filename='js/script.js') }}"></script>
+    <script>
+    function showToast(title, message, type = 'success', options = {}) {
+        const toastElement = document.getElementById('liveToast');
+        const toastTitle = document.getElementById('toastTitle');
+        const toastMessage = document.getElementById('toastMessage');
+        const toast = new bootstrap.Toast(toastElement, {
+            position: 'top-center',
+            autohide: true,
+            delay: 5000
+        });
+
+        toastTitle.textContent = title;
+        toastMessage.innerHTML = message;
+        
+        toastElement.classList.remove('bg-success', 'bg-danger', 'bg-warning', 'text-dark', 'text-white');
+        
+        switch (type) {
+            case 'error':
+                toastElement.classList.add('bg-danger', 'text-white');
+                break;
+            case 'warning':
+                toastElement.classList.add('bg-warning', 'text-dark');
+                break;
+            default:
+                toastElement.classList.add('bg-success', 'text-white');
+        }
+
+        if (options.confirmButtonText && options.cancelButtonText) {
+            const confirmBtn = document.createElement('button');
+            confirmBtn.className = 'btn btn-sm btn-light me-2';
+            confirmBtn.textContent = options.confirmButtonText;
+            confirmBtn.onclick = () => {
+                options.onConfirm();
+                toast.hide();
+            };
+
+            const cancelBtn = document.createElement('button');
+            cancelBtn.className = 'btn btn-sm btn-secondary';
+            cancelBtn.textContent = options.cancelButtonText;
+            cancelBtn.onclick = () => {
+                toast.hide();
+            };
+
+            toastMessage.appendChild(document.createElement('br'));
+            toastMessage.appendChild(confirmBtn);
+            toastMessage.appendChild(cancelBtn);
+        }
+
+        toast.show();
+    }
+    </script>
     {% block scripts %}{% endblock %}
 </body>
 </html>

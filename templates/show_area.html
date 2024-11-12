@@ -81,85 +81,70 @@
 {% block scripts %}
 <script src="{{ url_for('static', filename='js/validation.js') }}"></script>
 <script>
-document.addEventListener('DOMContentLoaded', function() {
-    let map = null;
-    let geoJsonLayer = null;
-    let mapInitialized = false;
+let map = null;
+let geoJsonLayer = null;
+let mapInitialized = false;
 
-    const mapContainer = document.getElementById('map');
-    if (!mapContainer) {
-        console.error('Map container not found');
-        return;
-    }
-
-    function cleanupMap() {
-        if (map) {
-            try {
-                if (geoJsonLayer) {
-                    geoJsonLayer.remove();
-                    geoJsonLayer = null;
-                }
-                map.remove();
-                map = null;
-                mapInitialized = false;
-            } catch (error) {
-                console.error('Error cleaning up map:', error);
-            }
-        }
-    }
-
-    function initializeMap() {
-        if (mapInitialized || !mapContainer) {
-            return;
-        }
-
+function cleanupMap() {
+    if (map) {
         try {
-            cleanupMap();
-
-            map = L.map('map').setView([0, 0], 2);
-            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                attribution: '© OpenStreetMap contributors'
-            }).addTo(map);
-
-            {% if geo_json %}
-            try {
-                const geoJsonData = {{ geo_json | tojson | safe }};
-                if (typeof geoJsonData === 'object' && geoJsonData !== null) {
-                    geoJsonLayer = L.geoJSON(geoJsonData).addTo(map);
-                    if (geoJsonLayer && geoJsonLayer.getBounds().isValid()) {
-                        map.fitBounds(geoJsonLayer.getBounds());
-                    }
-                }
-            } catch (error) {
-                console.error('Error adding GeoJSON to map:', error);
-                showToast('Error', 'Failed to display GeoJSON data', 'error');
+            if (geoJsonLayer) {
+                geoJsonLayer.remove();
+                geoJsonLayer = null;
             }
-            {% endif %}
-
-            mapInitialized = true;
+            map.remove();
+            map = null;
+            mapInitialized = false;
         } catch (error) {
-            console.error('Error initializing map:', error);
-            showToast('Error', 'Failed to initialize map', 'error');
+            console.error('Error cleaning up map:', error);
         }
     }
+}
 
-    const tagsTable = document.getElementById('tags-table');
-    if (!tagsTable) {
-        console.error('Tags table not found');
+function initializeMap() {
+    if (mapInitialized || !document.getElementById('map')) {
         return;
     }
 
+    try {
+        cleanupMap();
+
+        map = L.map('map').setView([0, 0], 2);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '© OpenStreetMap contributors'
+        }).addTo(map);
+
+        {% if geo_json %}
+        try {
+            const geoJsonData = {{ geo_json | tojson | safe }};
+            if (typeof geoJsonData === 'object' && geoJsonData !== null) {
+                geoJsonLayer = L.geoJSON(geoJsonData).addTo(map);
+                if (geoJsonLayer && geoJsonLayer.getBounds().isValid()) {
+                    map.fitBounds(geoJsonLayer.getBounds());
+                }
+            }
+        } catch (error) {
+            console.error('Error adding GeoJSON to map:', error);
+            showToast('Error', 'Failed to display GeoJSON data', 'error');
+        }
+        {% endif %}
+
+        mapInitialized = true;
+    } catch (error) {
+        console.error('Error initializing map:', error);
+        showToast('Error', 'Failed to initialize map', 'error');
+    }
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    const tagsTable = document.getElementById('tags-table');
     const areaTypeRequirements = {{ area_type_requirements | tojson | safe }};
     const areaType = "{{ area.tags.get('type', '') }}";
 
     initializeMap();
 
     function startEditing(row) {
-        if (!row) return;
-
         const valueCell = row.querySelector('.tag-value-cell');
-        if (!valueCell) return;
-
         const content = valueCell.querySelector('.tag-value-content');
         const input = valueCell.querySelector('.tag-input');
         const select = valueCell.querySelector('.tag-select');
@@ -168,11 +153,6 @@ document.addEventListener('DOMContentLoaded', function() {
         const cancelBtn = row.querySelector('.cancel-edit');
         const key = row.dataset.key;
         const fieldRequirements = areaTypeRequirements[areaType]?.[key] || { type: 'text' };
-
-        if (!content || !input || !select || !editBtn || !updateBtn || !cancelBtn) {
-            console.error('Required elements not found in row');
-            return;
-        }
 
         // Reset validation state
         input.classList.remove('is-invalid');
@@ -205,34 +185,29 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     function updateTag(row) {
-        if (!row) return;
-
         const valueCell = row.querySelector('.tag-value-cell');
-        if (!valueCell) return;
-
         const content = valueCell.querySelector('.tag-value-content');
         const input = valueCell.querySelector('.tag-input');
         const select = valueCell.querySelector('.tag-select');
         const feedback = valueCell.querySelector('.invalid-feedback');
         const key = row.dataset.key;
 
-        if (!content || !input || !select || !feedback) {
-            console.error('Required elements not found in row');
-            return;
-        }
-
         const rawValue = select.classList.contains('d-none') ? input.value : select.value;
         const fieldRequirements = areaTypeRequirements[areaType]?.[key] || { type: 'text' };
 
         // Reset validation state
         input.classList.remove('is-invalid');
-        feedback.style.display = 'none';
+        if (feedback) {
+            feedback.style.display = 'none';
+        }
 
         const validation = validateNumericInput(rawValue, fieldRequirements.type);
         if (!validation.isValid) {
             input.classList.add('is-invalid');
-            feedback.textContent = validation.message;
-            feedback.style.display = 'block';
+            if (feedback) {
+                feedback.textContent = validation.message;
+                feedback.style.display = 'block';
+            }
             showToast('Error', validation.message, 'error');
             return;
         }
@@ -268,18 +243,16 @@ document.addEventListener('DOMContentLoaded', function() {
         .catch(error => {
             console.error('Error updating tag:', error.message);
             input.classList.add('is-invalid');
-            feedback.textContent = error.message;
-            feedback.style.display = 'block';
+            if (feedback) {
+                feedback.textContent = error.message;
+                feedback.style.display = 'block';
+            }
             showToast('Error', error.message, 'error');
         });
     }
 
     function cancelEditing(row) {
-        if (!row) return;
-
         const valueCell = row.querySelector('.tag-value-cell');
-        if (!valueCell) return;
-
         const content = valueCell.querySelector('.tag-value-content');
         const input = valueCell.querySelector('.tag-input');
         const select = valueCell.querySelector('.tag-select');
@@ -287,11 +260,6 @@ document.addEventListener('DOMContentLoaded', function() {
         const updateBtn = row.querySelector('.update-tag');
         const cancelBtn = row.querySelector('.cancel-edit');
         const feedback = valueCell.querySelector('.invalid-feedback');
-
-        if (!content || !input || !select || !editBtn || !updateBtn || !cancelBtn) {
-            console.error('Required elements not found in row');
-            return;
-        }
 
         content.classList.remove('d-none');
         input.classList.add('d-none');
@@ -307,7 +275,6 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
-    // Event delegation for tag actions
     tagsTable.addEventListener('click', function(e) {
         const target = e.target;
         if (!target.matches('button')) return;
@@ -328,12 +295,12 @@ document.addEventListener('DOMContentLoaded', function() {
     document.addEventListener('visibilitychange', function() {
         if (document.hidden) {
             cleanupMap();
-        } else if (!mapInitialized && mapContainer) {
+        } else if (!mapInitialized) {
             initializeMap();
         }
     });
 
-    // Clean up map on page unload
+    // Cleanup on page unload
     window.addEventListener('beforeunload', cleanupMap);
 });
 </script>
