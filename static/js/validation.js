@@ -15,39 +15,32 @@ function validateKey(key, existingKeys) {
 
 function validateNumericValue(value, type) {
     if (!value || value.trim() === '') {
-        return { isValid: false, message: `${type === 'integer' ? 'Integer' : 'Number'} value cannot be empty` };
+        return { isValid: false, message: 'Value cannot be empty' };
     }
 
     value = value.toString().trim();
     
     if (type === 'integer') {
         if (!/^\d+$/.test(value)) {
-            return { isValid: false, message: 'Value must be a whole number (no decimal points or special characters)' };
+            return { isValid: false, message: 'Value must be a valid integer (no decimal points)' };
         }
         const num = parseInt(value, 10);
         if (num < 0) {
-            return { isValid: false, message: 'Value must be a positive number (0 or greater)' };
-        }
-        if (num > 1000000000) {
-            return { isValid: false, message: 'Value is too large (maximum: 1,000,000,000)' };
+            return { isValid: false, message: 'Value must be non-negative' };
         }
         return { isValid: true, value: num };
     } else if (type === 'number') {
         if (!/^\d*\.?\d*$/.test(value)) {
-            return { isValid: false, message: 'Value must be a valid number (only digits and at most one decimal point)' };
+            return { isValid: false, message: 'Value must contain only digits and at most one decimal point' };
         }
         const num = parseFloat(value);
         if (isNaN(num)) {
             return { isValid: false, message: 'Value must be a valid number' };
         }
         if (num < 0) {
-            return { isValid: false, message: 'Value must be a positive number (0 or greater)' };
+            return { isValid: false, message: 'Value must be non-negative' };
         }
-        if (num > 1000000000) {
-            return { isValid: false, message: 'Value is too large (maximum: 1,000,000,000)' };
-        }
-        // Round to 2 decimal places for floating-point numbers
-        return { isValid: true, value: Math.round(num * 100) / 100 };
+        return { isValid: true, value: num };
     }
 
     return { isValid: true, value: value.trim() };
@@ -55,8 +48,7 @@ function validateNumericValue(value, type) {
 
 function validateValue(value, requirements) {
     if (!value || value.trim() === '') {
-        const fieldType = requirements?.type || 'text';
-        return { isValid: false, message: `${fieldType.charAt(0).toUpperCase() + fieldType.slice(1)} value cannot be empty` };
+        return { isValid: false, message: 'Value cannot be empty' };
     }
 
     if (requirements && requirements.type) {
@@ -64,10 +56,7 @@ function validateValue(value, requirements) {
             return validateNumericValue(value, requirements.type);
         } else if (requirements.allowed_values) {
             if (!requirements.allowed_values.includes(value)) {
-                return { 
-                    isValid: false, 
-                    message: `Value must be one of the following: ${requirements.allowed_values.join(', ')}`
-                };
+                return { isValid: false, message: `Value must be one of: ${requirements.allowed_values.join(', ')}` };
             }
         }
     }

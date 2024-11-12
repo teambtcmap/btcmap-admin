@@ -1,3 +1,495 @@
-[Previous content until line 394]
-                const validation = validateNumericValue(rawValue, fieldRequirements.type);
-[Previous content from line 396 onwards]
+{% extends "base.html" %}
+
+{% block title %}Add Area{% endblock %}
+
+{% block content %}
+<div class="container">
+    <h1 class="mt-5">Add New Area</h1>
+    
+    <!-- Map container with Edit GeoJSON button -->
+    <div id="map" class="position-relative mb-3" style="height: 400px; width: 100%;">
+        <button id="edit-geojson-btn" class="btn btn-primary btn-sm position-absolute" style="top: 10px; right: 10px; z-index: 1000;">Edit GeoJSON</button>
+    </div>
+    
+    <!-- GeoJSON editing section -->
+    <div id="geojson-editor" class="mb-3">
+        <textarea id="geojson-input" class="form-control mb-2" rows="5" style="display: none;"></textarea>
+        <button id="show-btn" class="btn btn-primary" style="display: none;">Show</button>
+        <button id="save-locally-btn" class="btn btn-success" style="display: none;">Save Locally</button>
+        <button id="cancel-geojson-btn" class="btn btn-secondary" style="display: none;">Cancel</button>
+    </div>
+    
+    <div class="card mt-3">
+        <div class="card-body">
+            <form id="add-area-form" method="POST" novalidate>
+                <div class="form-group">
+                    <label for="type">Area Type</label>
+                    <select class="form-control" id="type" name="type" required>
+                        <option value="">Select Area Type</option>
+                        {% for area_type in area_type_requirements.keys() %}
+                        <option value="{{ area_type }}">{{ area_type|capitalize }}</option>
+                        {% endfor %}
+                    </select>
+                    <div class="invalid-feedback">Please select an area type</div>
+                </div>
+                <table class="table table-striped mt-3" id="tags-table">
+                    <thead>
+                        <tr>
+                            <th>Key</th>
+                            <th>Value</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <!-- Tags will be dynamically added here -->
+                    </tbody>
+                </table>
+                <div class="mt-3 text-center">
+                    <button type="button" id="add-optional-field-btn" class="btn btn-secondary">Add Optional Field</button>
+                    <button type="button" id="add-custom-field-btn" class="btn btn-secondary">Add Custom Field</button>
+                </div>
+            </form>
+        </div>
+    </div>
+    
+    <!-- Separate section for Add Area button -->
+    <div class="mt-4 text-center">
+        <button id="submit-area-btn" class="btn btn-primary btn-lg">Add Area</button>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Turf.js/6.5.0/turf.min.js"></script>
+<script src="{{ url_for('static', filename='js/validation.js') }}"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const areaTypeRequirements = {{ area_type_requirements | tojson | safe }};
+    const typeSelect = document.getElementById('type');
+    const tagsTable = document.getElementById('tags-table').querySelector('tbody');
+    const addOptionalFieldBtn = document.getElementById('add-optional-field-btn');
+    const addCustomFieldBtn = document.getElementById('add-custom-field-btn');
+    const form = document.getElementById('add-area-form');
+    const submitAreaBtn = document.getElementById('submit-area-btn');
+
+    // Initialize map
+    var map = L.map('map').setView([0, 0], 2);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '© OpenStreetMap contributors'
+    }).addTo(map);
+
+    var geoJsonLayer;
+    var currentGeoJson;
+    var previouslySavedGeoJson;
+
+    function updateMap(geoJson) {
+        if (geoJsonLayer) {
+            map.removeLayer(geoJsonLayer);
+        }
+
+        try {
+            geoJsonLayer = L.geoJSON(geoJson).addTo(map);
+            map.fitBounds(geoJsonLayer.getBounds());
+            currentGeoJson = geoJson;
+            showToast('Success', 'GeoJSON updated successfully', 'success');
+        } catch (error) {
+            console.error("Error adding GeoJSON to map:", error);
+            showToast('Error', `Invalid GeoJSON: ${error.message}`, 'error');
+        }
+    }
+
+    function getExistingKeys() {
+        const keys = [];
+        tagsTable.querySelectorAll('tr').forEach(row => {
+            const keyElement = row.querySelector('td:first-child');
+            const keyInput = keyElement.querySelector('input');
+            const key = keyInput ? keyInput.value.trim() : keyElement.textContent.trim();
+            if (key) {
+                keys.push(key);
+            }
+        });
+        return keys;
+    }
+
+    function validateCustomKey(keyInput) {
+        const key = keyInput.value.trim();
+        const validation = validateKey(key, getExistingKeys());
+        const feedback = keyInput.nextElementSibling;
+
+        keyInput.classList.toggle('is-invalid', !validation.isValid);
+        if (feedback && feedback.classList.contains('invalid-feedback')) {
+            feedback.textContent = validation.message;
+            feedback.style.display = validation.isValid ? 'none' : 'block';
+        }
+
+        if (!validation.isValid) {
+            showToast('Error', validation.message, 'error');
+        }
+
+        return validation.isValid;
+    }
+
+    function createTagRow(key, value = '', isRequired = false, isCustom = false, allowedValues = null) {
+        const row = document.createElement('tr');
+        const isNumericField = key === 'population' || key === 'area_km2';
+        
+        row.innerHTML = `
+            <td>
+                ${isCustom ? 
+                    `<input type="text" class="form-control custom-key" placeholder="Custom Key" required>
+                     <div class="invalid-feedback">Please enter a valid key</div>` 
+                    : key}
+            </td>
+            <td>
+                ${allowedValues ? `
+                    <select class="form-control" name="${key}" ${isRequired ? 'required' : ''}>
+                        <option value="">Select ${key}</option>
+                        ${allowedValues.map(val => `<option value="${val}">${val}</option>`).join('')}
+                    </select>
+                    <div class="invalid-feedback">Please select a value</div>
+                ` : `
+                    <input type="${isNumericField ? 'number' : 'text'}" 
+                           class="form-control${isNumericField ? ' numeric-field' : ''}" 
+                           name="${key}" 
+                           value="${value}" 
+                           ${isRequired ? 'required' : ''} 
+                           ${isNumericField ? `min="0" step="${key === 'population' ? '1' : '0.01'}"` : ''}>
+                    <div class="invalid-feedback">Please enter a valid value</div>
+                `}
+            </td>
+            <td>
+                ${!isRequired ? '<button type="button" class="btn btn-danger btn-sm remove-field">Remove</button>' : ''}
+            </td>
+        `;
+
+        if (!isRequired) {
+            row.querySelector('.remove-field').addEventListener('click', function() {
+                row.remove();
+                updateOptionalFieldSelect();
+            });
+        }
+
+        if (isCustom) {
+            const keyInput = row.querySelector('.custom-key');
+            
+            keyInput.addEventListener('input', function() {
+                this.classList.remove('is-invalid');
+                const feedback = this.nextElementSibling;
+                if (feedback && feedback.classList.contains('invalid-feedback')) {
+                    feedback.style.display = 'none';
+                }
+            });
+
+            keyInput.addEventListener('blur', function() {
+                validateCustomKey(this);
+            });
+
+            // Add validation on focus out
+            keyInput.addEventListener('focusout', function() {
+                validateCustomKey(this);
+            });
+        }
+
+        if (isNumericField) {
+            const input = row.querySelector('input.numeric-field');
+            input.addEventListener('input', function() {
+                const validation = validateNumericValue(this.value, key === 'population' ? 'integer' : 'number');
+                const feedback = this.nextElementSibling;
+                
+                if (!validation.isValid) {
+                    this.classList.add('is-invalid');
+                    if (feedback) {
+                        feedback.textContent = validation.message;
+                        feedback.style.display = 'block';
+                    }
+                    this.setCustomValidity(validation.message);
+                } else {
+                    this.classList.remove('is-invalid');
+                    if (feedback) {
+                        feedback.style.display = 'none';
+                    }
+                    this.setCustomValidity('');
+                }
+            });
+        }
+
+        return row;
+    }
+
+    function updateFields() {
+        const selectedType = typeSelect.value;
+        tagsTable.innerHTML = '';
+
+        if (selectedType && areaTypeRequirements[selectedType]) {
+            Object.entries(areaTypeRequirements[selectedType])
+                .filter(([_, requirements]) => requirements.required)
+                .forEach(([key, requirements]) => {
+                    tagsTable.appendChild(createTagRow(
+                        key, 
+                        '', 
+                        true, 
+                        false, 
+                        requirements.allowed_values
+                    ));
+                });
+        }
+        updateOptionalFieldSelect();
+    }
+
+    function addOptionalField() {
+        const selectedType = typeSelect.value;
+        
+        if (!selectedType) {
+            showToast('Error', 'Please select an area type first', 'error');
+            return;
+        }
+
+        const existingKeys = getExistingKeys();
+        const optionalFields = Object.entries(areaTypeRequirements[selectedType] || {})
+            .filter(([key, req]) => !req.required && !existingKeys.includes(key))
+            .map(([key]) => key);
+
+        if (optionalFields.length === 0) {
+            showToast('Info', 'All optional fields have been added', 'info');
+            return;
+        }
+
+        const newRow = document.createElement('tr');
+        newRow.innerHTML = `
+            <td>
+                <select class="form-control optional-field-select" required>
+                    <option value="">Select Optional Field</option>
+                    ${optionalFields.map(field => `<option value="${field}">${field}</option>`).join('')}
+                </select>
+                <div class="invalid-feedback">Please select a field</div>
+            </td>
+            <td>
+                <input type="text" class="form-control" disabled>
+                <div class="invalid-feedback">Please enter a valid value</div>
+            </td>
+            <td>
+                <button type="button" class="btn btn-danger btn-sm remove-field">Remove</button>
+            </td>
+        `;
+
+        const optionalFieldSelect = newRow.querySelector('.optional-field-select');
+        optionalFieldSelect.addEventListener('change', function() {
+            const selectedField = this.value;
+            if (!selectedField) return;
+
+            const requirements = areaTypeRequirements[selectedType][selectedField];
+            const row = createTagRow(
+                selectedField,
+                '',
+                false,
+                false,
+                requirements.allowed_values
+            );
+            tagsTable.replaceChild(row, newRow);
+            updateOptionalFieldSelect();
+        });
+
+        newRow.querySelector('.remove-field').addEventListener('click', function() {
+            newRow.remove();
+            updateOptionalFieldSelect();
+        });
+
+        tagsTable.appendChild(newRow);
+    }
+
+    function addCustomField() {
+        const newRow = createTagRow('', '', false, true);
+        tagsTable.appendChild(newRow);
+    }
+
+    function validateForm() {
+        let isValid = true;
+        let errorMessages = [];
+
+        // Reset all validation states
+        form.querySelectorAll('.is-invalid').forEach(element => {
+            element.classList.remove('is-invalid');
+        });
+
+        // Validate area type
+        if (!typeSelect.value) {
+            isValid = false;
+            errorMessages.push('Please select an area type');
+            typeSelect.classList.add('is-invalid');
+        }
+
+        // Validate all fields
+        tagsTable.querySelectorAll('tr').forEach(row => {
+            const keyElement = row.querySelector('td:first-child');
+            const keyInput = keyElement.querySelector('input');
+            const key = keyInput ? keyInput.value.trim() : keyElement.textContent.trim();
+            
+            // Validate key if it's a custom field
+            if (keyInput) {
+                if (!validateCustomKey(keyInput)) {
+                    isValid = false;
+                }
+            }
+
+            const valueInput = row.querySelector('td:nth-child(2) input, td:nth-child(2) select');
+            if (!valueInput) {
+                isValid = false;
+                errorMessages.push(`No input field found for ${key}`);
+                return;
+            }
+
+            const value = valueInput.value.trim();
+            const requirements = areaTypeRequirements[typeSelect.value]?.[key] || { type: 'text', required: false };
+
+            // Check if the field is required
+            if (requirements.required && !value) {
+                isValid = false;
+                errorMessages.push(`${key} is required`);
+                valueInput.classList.add('is-invalid');
+                return;
+            }
+
+            // Validate value if present
+            if (value) {
+                const validation = validateValue(value, { ...requirements, key });
+                if (!validation.isValid) {
+                    isValid = false;
+                    errorMessages.push(`${key}: ${validation.message}`);
+                    valueInput.classList.add('is-invalid');
+                }
+            }
+        });
+
+        if (!isValid && errorMessages.length > 0) {
+            showToast('Error', errorMessages.join('\n'), 'error');
+        }
+
+        return isValid;
+    }
+
+    submitAreaBtn.addEventListener('click', function(e) {
+        e.preventDefault();
+        
+        if (!validateForm()) {
+            return;
+        }
+
+        const tags = {};
+        
+        // Collect all valid tags
+        tagsTable.querySelectorAll('tr').forEach(row => {
+            const keyElement = row.querySelector('td:first-child');
+            const keyInput = keyElement.querySelector('input');
+            const key = keyInput ? keyInput.value.trim() : keyElement.textContent.trim();
+            
+            const valueInput = row.querySelector('td:nth-child(2) input, td:nth-child(2) select');
+            if (valueInput && valueInput.value.trim()) {
+                const value = valueInput.value.trim();
+                const requirements = areaTypeRequirements[typeSelect.value]?.[key] || { type: 'text' };
+                
+                const validation = validateValue(value, { ...requirements, key });
+                if (validation.isValid) {
+                    tags[key] = validation.value;
+                }
+            }
+        });
+
+        // Add type and GeoJSON
+        tags['type'] = typeSelect.value;
+        if (currentGeoJson) {
+            tags['geo_json'] = JSON.stringify(currentGeoJson);
+        }
+
+        // Submit the form
+        fetch('/add_area', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(tags)
+        })
+        .then(response => {
+            if (!response.ok) {
+                return response.json().then(data => {
+                    throw new Error(data.error?.message || `HTTP error! status: ${response.status}`);
+                });
+            }
+            return response.json();
+        })
+        .then(data => {
+            if (data.error) {
+                throw new Error(data.error.message || 'Failed to add area');
+            }
+            showToast('Success', 'Area added successfully', 'success');
+            setTimeout(() => {
+                window.location.href = '/select_area';
+            }, 2000);
+        })
+        .catch(error => {
+            console.error('Error adding area:', error);
+            showToast('Error', error.message || 'An unexpected error occurred', 'error');
+        });
+    });
+
+    // Map editing functionality
+    const editGeoJsonBtn = document.getElementById('edit-geojson-btn');
+    const geojsonInput = document.getElementById('geojson-input');
+    const showBtn = document.getElementById('show-btn');
+    const saveLocallyBtn = document.getElementById('save-locally-btn');
+    const cancelGeoJsonBtn = document.getElementById('cancel-geojson-btn');
+
+    editGeoJsonBtn.addEventListener('click', function() {
+        const editorControls = document.querySelectorAll('#geojson-editor button, #geojson-input');
+        editorControls.forEach(control => control.style.display = 'inline-block');
+        
+        if (currentGeoJson) {
+            geojsonInput.value = JSON.stringify(currentGeoJson, null, 2);
+            previouslySavedGeoJson = JSON.parse(JSON.stringify(currentGeoJson));
+        }
+    });
+
+    showBtn.addEventListener('click', function() {
+        try {
+            const geoJson = JSON.parse(geojsonInput.value);
+            updateMap(geoJson);
+            saveLocallyBtn.style.display = 'inline-block';
+        } catch (error) {
+            console.error("Error parsing GeoJSON:", error);
+            showToast('Error', 'Invalid GeoJSON format', 'error');
+        }
+    });
+
+    saveLocallyBtn.addEventListener('click', function() {
+        try {
+            const geoJson = JSON.parse(geojsonInput.value);
+            updateMap(geoJson);
+            const editorControls = document.querySelectorAll('#geojson-editor button, #geojson-input');
+            editorControls.forEach(control => control.style.display = 'none');
+            previouslySavedGeoJson = geoJson;
+        } catch (error) {
+            console.error("Error saving GeoJSON:", error);
+            showToast('Error', 'Invalid GeoJSON format', 'error');
+        }
+    });
+
+    cancelGeoJsonBtn.addEventListener('click', function() {
+        const editorControls = document.querySelectorAll('#geojson-editor button, #geojson-input');
+        editorControls.forEach(control => control.style.display = 'none');
+        if (previouslySavedGeoJson) {
+            updateMap(previouslySavedGeoJson);
+        }
+    });
+
+    window.addEventListener('unhandledrejection', function(event) {
+        console.error('Unhandled rejection:', event.reason);
+        showToast('Error', event.reason?.message || 'An unexpected error occurred', 'error');
+    });
+
+    // Initialize the form
+    typeSelect.addEventListener('change', updateFields);
+    addOptionalFieldBtn.addEventListener('click', addOptionalField);
+    addCustomFieldBtn.addEventListener('click', addCustomField);
+    updateFields();
+});
+</script>
+{% endblock %}

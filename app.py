@@ -1,5 +1,5 @@
 import os
-from flask import Flask, render_template, request, jsonify, session, redirect, url_for, flash
+from flask import Flask, render_template, request, jsonify, session, redirect, url_for
 from flask_session import Session
 import requests
 import json
@@ -11,16 +11,12 @@ import re
 from shapely.geometry import shape, mapping
 from shapely.ops import transform
 import pyproj
-import secrets
 
 app = Flask(__name__)
-# Use a strong secret key
-app.config['SECRET_KEY'] = os.environ.get('FLASK_SECRET_KEY', secrets.token_hex(32))
-# Configure server-side session
+app.config['SECRET_KEY'] = os.urandom(24)
 app.config['SESSION_TYPE'] = 'filesystem'
-app.config['SESSION_FILE_DIR'] = 'flask_session'
 app.config['SESSION_PERMANENT'] = True
-app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(hours=24)
+app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(minutes=30)
 Session(app)
 
 API_BASE_URL = "https://api.btcmap.org"
@@ -165,48 +161,14 @@ def home():
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
-    # If user is already logged in, redirect to select_area
     if 'password' in session:
         return redirect(url_for('select_area'))
-    
     if request.method == 'POST':
         password = request.form.get('password')
-        if not password:
-            flash('Password is required', 'error')
-            return render_template('login.html'), 400
-        
-        # Verify password by making a test RPC call
-        try:
-            test_response = requests.post(
-                f"{API_BASE_URL}/rpc",
-                json={
-                    "jsonrpc": "2.0",
-                    "method": "search",
-                    "params": {"password": password, "query": ""},
-                    "id": 1
-                },
-                timeout=10
-            )
-            
-            if test_response.status_code == 200 and 'error' not in test_response.json():
-                # Set session
-                session.clear()
-                session['password'] = password
-                session.permanent = True
-                
-                # Get the next URL or default to select_area
-                next_page = request.args.get('next')
-                # Ensure the next_page is a relative URL to prevent open redirect
-                if next_page and urlparse(next_page).netloc == '':
-                    return redirect(next_page)
-                return redirect(url_for('select_area'))
-            else:
-                flash('Invalid password', 'error')
-                return render_template('login.html'), 401
-        except requests.exceptions.RequestException:
-            flash('Error connecting to the server', 'error')
-            return render_template('login.html'), 500
-    
+        session['password'] = password
+        session.permanent = True
+        next_page = request.args.get('next')
+        return redirect(next_page or url_for('select_area'))
     return render_template('login.html')
 
 @app.route('/logout')
@@ -229,44 +191,19 @@ def show_area(area_id):
         area_type = area['tags'].get('type', '')
         type_requirements = AREA_TYPE_REQUIREMENTS.get(area_type, {})
 
-        # Get raw GeoJSON data
-        raw_geo_json = area['tags'].get('geo_json')
-        app.logger.info(f"Raw GeoJSON data for area {area_id}: {raw_geo_json}")
-
-        geo_json = None
-        if raw_geo_json:
-            try:
-                # Handle string GeoJSON
-                if isinstance(raw_geo_json, str):
-                    try:
-                        geo_json = json.loads(raw_geo_json)
-                        app.logger.info(f"Parsed GeoJSON from string: {geo_json}")
-                    except json.JSONDecodeError as e:
-                        app.logger.error(f"Invalid JSON format in string GeoJSON: {e}")
-                        raise ValueError("Invalid JSON format")
-                else:
-                    geo_json = raw_geo_json
-                    app.logger.info(f"Using raw GeoJSON object: {geo_json}")
-
-                # Validate GeoJSON structure
-                is_valid, result = validate_geo_json(geo_json)
-                if is_valid:
-                    geo_json = result['geo_json']
-                    app.logger.info(f"Validated and processed GeoJSON: {geo_json}")
-                else:
-                    app.logger.error(f"Invalid GeoJSON structure: {result}")
-                    geo_json = None
-
-            except Exception as e:
-                app.logger.error(f"Error processing GeoJSON for area {area_id}: {str(e)}")
+        geo_json = area['tags'].get('geo_json')
+        if geo_json:
+            is_valid, result = validate_geo_json(geo_json)
+            if is_valid:
+                geo_json = result['geo_json']
+            else:
+                app.logger.error(f"Invalid GeoJSON for area {area_id}: {result}")
                 geo_json = None
-        else:
-            app.logger.info(f"No GeoJSON data found for area {area_id}")
 
         return render_template('show_area.html',
-                            area=area,
-                            area_type_requirements=type_requirements,
-                            geo_json=geo_json)
+                               area=area,
+                               area_type_requirements=type_requirements,
+                               geo_json=geo_json)
     return render_template('error.html', error="Area not found"), 404
 
 @app.route('/add_area', methods=['GET', 'POST'])
@@ -379,7 +316,7 @@ def set_area_tag():
         result = rpc_call('set_area_tag', {
             'id': area_id,
             'name': 'geo_json',
-            "value": f"'{geo_json}'"
+            'value': geo_json
         })
 
         if 'error' in result:
@@ -557,66 +494,69 @@ def validate_allowed_values(value, allowed_values):
 
 def validate_geo_json(value):
     try:
-        app.logger.info(f"Validating GeoJSON input: {value}")
-        
         if isinstance(value, str):
-            try:
-                geo_json = json.loads(value)
-                app.logger.info("Successfully parsed GeoJSON string")
-            except json.JSONDecodeError as e:
-                app.logger.error(f"Failed to parse GeoJSON string: {e}")
-                return False, "Invalid GeoJSON: must be a valid JSON string"
+            geo_json = json.loads(value)
         elif isinstance(value, dict):
             geo_json = value
-            app.logger.info("Using GeoJSON object directly")
         else:
-            app.logger.error(f"Invalid GeoJSON type: {type(value)}")
             return False, "Invalid GeoJSON: must be a JSON object or a valid JSON string"
 
         if not isinstance(geo_json, dict):
-            app.logger.error("GeoJSON is not a dictionary")
             return False, "Invalid GeoJSON: must be a JSON object"
 
         try:
-            # Validate GeoJSON structure
-            if 'type' not in geo_json or 'coordinates' not in geo_json:
-                app.logger.error("Missing required GeoJSON properties")
-                return False, "Invalid GeoJSON: missing required properties"
-
-            if geo_json['type'] not in ['Polygon', 'MultiPolygon']:
-                app.logger.error(f"Invalid GeoJSON type: {geo_json['type']}")
-                return False, "Invalid GeoJSON: type must be Polygon or MultiPolygon"
-
-            # Validate geometry
             geom = shape(geo_json)
             if not geom.is_valid:
-                app.logger.error("Invalid geometry")
                 return False, "Invalid GeoJSON: geometry is not valid"
-
-            # Calculate area
-            area_km2 = calculate_area(geo_json)
-            app.logger.info(f"Calculated area: {area_km2} km²")
-
-            # Apply right-hand rule
-            geo_json = rewind(geo_json)
-            app.logger.info("Applied right-hand rule to GeoJSON")
-
-            return True, {
-                'geo_json': geo_json,
-                'area_km2': area_km2
-            }
-
+            if geom.geom_type not in ['Polygon', 'MultiPolygon']:
+                return False, "Invalid GeoJSON: only valid Polygon and MultiPolygon types are accepted"
         except Exception as e:
-            app.logger.error(f"Error validating GeoJSON structure: {str(e)}")
-            return False, f"Invalid GeoJSON: {str(e)}"
+            return False, f"Invalid GeoJSON structure: {str(e)}"
 
+        rewound = rewind(geo_json)
+        
+        area_km2 = calculate_area(rewound)
+
+        return True, {
+            "geo_json": rewound,
+            "area_km2": area_km2
+        }
+    except json.JSONDecodeError:
+        return False, "Invalid JSON format"
     except Exception as e:
-        app.logger.error(f"Unexpected error in validate_geo_json: {str(e)}")
-        return False, f"Error processing GeoJSON: {str(e)}"
+        return False, f"Error validating GeoJSON: {str(e)}"
+
+def validate_general(value, allowed_values=None):
+    if allowed_values:
+        return validate_allowed_values(value, allowed_values)
+    return len(str(value).strip()) > 0, "Value cannot be empty"
+
+def validate_url(value, allowed_values=None):
+    try:
+        result = urlparse(value)
+        return all([result.scheme, result.netloc]), "Invalid URL format"
+    except:
+        return False, "Invalid URL"
+
+def validate_email(value, allowed_values=None):
+    email_regex = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+    return bool(re.match(email_regex, value)), "Invalid email format"
+
+def validate_phone(value, allowed_values=None):
+    phone_regex = r'^\+?1?\d{9,15}$'
+    return bool(re.match(phone_regex, value)), "Invalid phone number format"
 
 validation_functions = {
     'number': [validate_non_negative_number],
     'integer': [validate_non_negative_integer],
     'date': [validate_date],
-    'select': [validate_allowed_values]
+    'select': [validate_allowed_values],
+    'geo_json': [validate_geo_json],
+    'text': [validate_general],
+    'url': [validate_url],
+    'email': [validate_email],
+    'tel': [validate_phone]
 }
+
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', port=5000, debug=True)
