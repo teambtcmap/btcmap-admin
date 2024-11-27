@@ -125,12 +125,43 @@ function initializeMap() {
 // Update map with GeoJSON
 function updateMapWithGeoJson(geoJson) {
     try {
-        logDebug('Updating map with GeoJSON');
+        logDebug('Updating map with GeoJSON input:', geoJson);
+
+        // Remove existing layer
         if (geoJsonLayer) {
             map.removeLayer(geoJsonLayer);
         }
 
-        geoJsonLayer = L.geoJSON(geoJson).addTo(map);
+        // Handle string input
+        if (typeof geoJson === 'string') {
+            geoJson = JSON.parse(geoJson);
+        }
+
+        // Check if input is valid GeoJSON
+        if (!geoJson || typeof geoJson !== 'object') {
+            throw new Error('Invalid GeoJSON: input must be a GeoJSON object');
+        }
+
+        // Handle different GeoJSON types
+        let processedGeoJson = geoJson;
+        if (geoJson.type === 'Feature') {
+            // Extract geometry from Feature
+            processedGeoJson = geoJson.geometry;
+        }
+
+        // Validate geometry type
+        if (!['Polygon', 'MultiPolygon'].includes(processedGeoJson.type)) {
+            throw new Error('Invalid geometry type: must be Polygon or MultiPolygon');
+        }
+
+        // Create feature only if necessary
+        const mapGeoJson = {
+            type: 'Feature',
+            geometry: processedGeoJson
+        };
+
+        logDebug('Processed GeoJSON for map:', mapGeoJson);
+        geoJsonLayer = L.geoJSON(mapGeoJson).addTo(map);
         map.fitBounds(geoJsonLayer.getBounds());
         logDebug('GeoJSON updated successfully');
         return true;
@@ -193,14 +224,29 @@ function showGeoJson() {
 
 function updateGeoJson() {
     try {
-        const geoJson = JSON.parse(elements.geoJsonInput.value);
+        logDebug('Starting GeoJSON update');
+        const inputGeoJson = JSON.parse(elements.geoJsonInput.value);
+        
+        // Process and validate GeoJSON
+        let processedGeoJson = inputGeoJson;
+        if (inputGeoJson.type === 'Feature') {
+            processedGeoJson = inputGeoJson.geometry;
+        }
+
+        // Validate geometry type
+        if (!processedGeoJson || !['Polygon', 'MultiPolygon'].includes(processedGeoJson.type)) {
+            throw new Error('Invalid geometry: must be Polygon or MultiPolygon');
+        }
+
+        logDebug('Processed GeoJSON for API:', processedGeoJson);
+
         fetch('/api/set_area_tag', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 id: '{{ area.id }}',
                 name: 'geo_json',
-                value: geoJson
+                value: processedGeoJson
             })
         })
         .then(response => response.json())
@@ -208,15 +254,16 @@ function updateGeoJson() {
             if (data.error) {
                 throw new Error(data.error.message || 'Failed to update GeoJSON');
             }
+            logDebug('GeoJSON successfully updated on server');
             showToast('Success', 'GeoJSON updated successfully', 'success');
             elements.geoJsonEditor.style.display = 'none';
         })
         .catch(error => {
-            logDebug('Failed to update GeoJSON', error);
+            logDebug('Failed to update GeoJSON on server', error);
             showToast('Error', error.message, 'error');
         });
     } catch (error) {
-        logDebug('Failed to parse GeoJSON', error);
+        logDebug('Failed to process GeoJSON input', error);
         showToast('Error', 'Invalid GeoJSON: ' + error.message, 'error');
     }
 }
