@@ -363,7 +363,13 @@ document.addEventListener('DOMContentLoaded', function() {
             feedback.style.display = 'none';
         }
 
-        const validation = validateNumericInput(rawValue, fieldRequirements.type);
+        let validation;
+        if (fieldRequirements.type === 'number' || fieldRequirements.type === 'integer') {
+            validation = validateNumericValue(rawValue, fieldRequirements.type);
+        } else {
+            validation = validateValue(rawValue, fieldRequirements);
+        }
+        
         if (!validation.isValid) {
             input.classList.add('is-invalid');
             if (feedback) {
@@ -411,6 +417,59 @@ document.addEventListener('DOMContentLoaded', function() {
             }
             showToast('Error', error.message, 'error');
         });
+        const select = valueCell.querySelector('.tag-select');
+        const editBtn = row.querySelector('.edit-tag');
+        const updateBtn = row.querySelector('.update-tag');
+        const cancelBtn = row.querySelector('.cancel-edit');
+        const deleteBtn = row.querySelector('.delete-tag');
+
+        content.classList.remove('d-none');
+        input.classList.add('d-none');
+        select.classList.add('d-none');
+        editBtn.classList.remove('d-none');
+        updateBtn.classList.add('d-none');
+        cancelBtn.classList.add('d-none');
+
+        // Reset validation state
+        input.classList.remove('is-invalid');
+        const feedback = valueCell.querySelector('.invalid-feedback');
+        if (feedback) {
+            feedback.style.display = 'none';
+        }
+    }
+
+    // Set up event listeners for all tags
+    document.querySelectorAll('#tags-table tbody tr').forEach(row => {
+        const editBtn = row.querySelector('.edit-tag');
+        const updateBtn = row.querySelector('.update-tag');
+        const cancelBtn = row.querySelector('.cancel-edit');
+        const deleteBtn = row.querySelector('.delete-tag');
+
+        if (editBtn) {
+            editBtn.addEventListener('click', () => startEditing(row));
+        }
+        if (updateBtn) {
+            updateBtn.addEventListener('click', () => updateTag(row));
+        }
+        if (cancelBtn) {
+            cancelBtn.addEventListener('click', () => cancelEditing(row));
+        }
+        if (deleteBtn) {
+            deleteBtn.addEventListener('click', () => {
+                const key = row.dataset.key;
+                showToast(
+                    'Confirm Delete',
+                    `Are you sure you want to remove the tag "${key}"?`,
+                    'warning',
+                    {
+                        confirmButtonText: 'Yes, delete it',
+                        cancelButtonText: 'Cancel',
+                        onConfirm: () => removeTag('{{ area.id }}', key)
+                    }
+                );
+            });
+        }
+    });
     }
 
     function cancelEditing(row) {
