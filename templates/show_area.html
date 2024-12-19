@@ -449,227 +449,230 @@ window.addEventListener('beforeunload', () => {
         map = null;
         mapInitialized = false;
     }
+});
+
 // Image handling
-    const imageElements = {
-        input: document.getElementById('image-input'),
-        preview: document.getElementById('image-preview'),
-        previewImg: document.getElementById('preview-img'),
-        uploadBtn: document.getElementById('upload-image-btn'),
-        editBtn: document.getElementById('edit-image-btn'),
-        removeBtn: document.getElementById('remove-image-btn'),
-        editor: document.querySelector('.image-editor'),
-        canvas: document.getElementById('image-canvas'),
-        saveBtn: document.getElementById('save-image-btn'),
-        cancelBtn: document.getElementById('cancel-image-btn')
-    };
+const imageElements = {
+    input: document.getElementById('image-input'),
+    preview: document.getElementById('image-preview'),
+    previewImg: document.getElementById('preview-img'),
+    uploadBtn: document.getElementById('upload-image-btn'),
+    editBtn: document.getElementById('edit-image-btn'),
+    removeBtn: document.getElementById('remove-image-btn'),
+    editor: document.querySelector('.image-editor'),
+    canvas: document.getElementById('image-canvas'),
+    saveBtn: document.getElementById('save-image-btn'),
+    cancelBtn: document.getElementById('cancel-image-btn')
+};
 
-    let fabricCanvas;
-    let currentImage = null;
+let fabricCanvas;
+let currentImage = null;
 
-    // Initialize fabric canvas
-    function initializeFabricCanvas() {
-        fabricCanvas = new fabric.Canvas('image-canvas', {
-            width: 300,
-            height: 300
-        });
+// Initialize fabric canvas
+function initializeFabricCanvas() {
+    if (fabricCanvas) {
+        fabricCanvas.dispose();
     }
+    fabricCanvas = new fabric.Canvas('image-canvas', {
+        width: 300,
+        height: 300
+    });
+}
 
-    // Validate image dimensions and size
-    function validateImage(file) {
-        return new Promise((resolve, reject) => {
-            if (file.size > 1024 * 1024) {
-                reject('Image size must be less than 1MB');
+// Validate image dimensions and size
+function validateImage(file) {
+    return new Promise((resolve, reject) => {
+        if (file.size > 1024 * 1024) {
+            reject('Image size must be less than 1MB');
+            return;
+        }
+
+        const img = new Image();
+        img.onload = () => {
+            const aspectRatio = img.width / img.height;
+            if (Math.abs(aspectRatio - 1) > 0.01) {
+                reject('Image must be square (1:1 aspect ratio)');
                 return;
             }
-
-            const img = new Image();
-            img.onload = () => {
-                const aspectRatio = img.width / img.height;
-                if (Math.abs(aspectRatio - 1) > 0.01) {
-                    reject('Image must be square (1:1 aspect ratio)');
-                    return;
-                }
-                resolve(img);
-            };
-            img.onerror = () => reject('Invalid image file');
-            img.src = URL.createObjectURL(file);
-        });
-    }
-
-    // Convert image to base64
-    function getBase64Image(img) {
-        const canvas = document.createElement('canvas');
-        canvas.width = img.width;
-        canvas.height = img.height;
-        const ctx = canvas.getContext('2d');
-        ctx.drawImage(img, 0, 0);
-        return canvas.toDataURL();
-    }
-
-    // Image upload handling
-    imageElements.uploadBtn.addEventListener('click', () => {
-        imageElements.input.click();
-    });
-
-    imageElements.input.addEventListener('change', async (e) => {
-        const file = e.target.files[0];
-        if (!file) return;
-
-        try {
-            const img = await validateImage(file);
-            const base64 = getBase64Image(img);
-            
-            // Update preview
-            imageElements.previewImg.src = base64;
-            imageElements.preview.style.display = 'block';
-            imageElements.editBtn.style.display = 'inline-block';
-            imageElements.removeBtn.style.display = 'inline-block';
-            
-            // Store current image
-            currentImage = {
-                base64: base64,
-                extension: file.name.split('.').pop().toLowerCase()
-            };
-
-            // Submit image to server
-            updateImage();
-        } catch (error) {
-            showToast('Error', error, 'error');
-            imageElements.input.value = '';
-        }
-    });
-
-    // Image editing
-    imageElements.editBtn.addEventListener('click', () => {
-        if (!imageElements.previewImg.src) return;
-        
-        if (!fabricCanvas) {
-            initializeFabricCanvas();
-        }
-
-        fabric.Image.fromURL(imageElements.previewImg.src, (img) => {
-            fabricCanvas.clear();
-            
-            // Scale image to fit canvas
-            const scale = Math.min(300 / img.width, 300 / img.height);
-            img.scale(scale);
-            
-            // Center image
-            img.set({
-                left: (300 - img.width * scale) / 2,
-                top: (300 - img.height * scale) / 2
-            });
-            
-            fabricCanvas.add(img);
-            fabricCanvas.setActiveObject(img);
-            imageElements.editor.style.display = 'block';
-        });
-    });
-
-    // Save edited image
-    imageElements.saveBtn.addEventListener('click', () => {
-        if (!fabricCanvas) return;
-        
-        const dataURL = fabricCanvas.toDataURL({
-            format: 'png',
-            quality: 0.8
-        });
-        
-        imageElements.previewImg.src = dataURL;
-        currentImage = {
-            base64: dataURL.split(',')[1],
-            extension: 'png'
+            resolve(img);
         };
-        imageElements.editor.style.display = 'none';
+        img.onerror = () => reject('Invalid image file');
+        img.src = URL.createObjectURL(file);
+    });
+}
+
+// Convert image to base64
+function getBase64Image(img) {
+    const canvas = document.createElement('canvas');
+    canvas.width = img.width;
+    canvas.height = img.height;
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(img, 0, 0);
+    const dataURL = canvas.toDataURL();
+    return dataURL.split(',')[1]; // Return only the base64 data
+}
+
+// Image upload handling
+imageElements.uploadBtn.addEventListener('click', () => {
+    imageElements.input.click();
+});
+
+imageElements.input.addEventListener('change', async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    try {
+        const img = await validateImage(file);
+        const base64Data = getBase64Image(img);
         
-        // Submit updated image to server
+        // Update preview
+        imageElements.previewImg.src = `data:${file.type};base64,${base64Data}`;
+        imageElements.preview.style.display = 'block';
+        imageElements.editBtn.style.display = 'inline-block';
+        imageElements.removeBtn.style.display = 'inline-block';
+        
+        // Store current image
+        currentImage = {
+            base64: base64Data,
+            extension: file.name.split('.').pop().toLowerCase()
+        };
+
+        // Submit image to server
         updateImage();
-    });
-
-    // Cancel image editing
-    imageElements.cancelBtn.addEventListener('click', () => {
-        imageElements.editor.style.display = 'none';
-    });
-
-    // Remove image
-    imageElements.removeBtn.addEventListener('click', () => {
-        showToast(
-            'Confirm Delete',
-            'Are you sure you want to remove the area icon?',
-            'warning',
-            {
-                confirmButtonText: 'Yes, remove it',
-                cancelButtonText: 'Cancel',
-                onConfirm: () => removeImage()
-            }
-        );
-    });
-
-    // Update image on server
-    function updateImage() {
-        if (!currentImage) return;
-
-        fetch('/api/set_area_icon', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                id: '{{ area.id }}',
-                image: currentImage.base64,
-                extension: currentImage.extension
-            })
-        })
-        .then(response => {
-            if (!response.ok) {
-                return response.json().then(data => {
-                    throw new Error(data.error || `HTTP error! status: ${response.status}`);
-                });
-            }
-            return response.json();
-        })
-        .then(data => {
-            showToast('Success', 'Image updated successfully', 'success');
-        })
-        .catch(error => {
-            console.error('Error updating image:', error);
-            showToast('Error', error.message || 'Failed to update image', 'error');
-        });
-    }
-
-    // Remove image from server
-    function removeImage() {
-        fetch('/api/remove_area_tag', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                id: '{{ area.id }}',
-                tag: 'icon:square'
-            })
-        })
-        .then(response => {
-            if (!response.ok) {
-                return response.json().then(data => {
-                    throw new Error(data.error || `HTTP error! status: ${response.status}`);
-                });
-            }
-            return response.json();
-        })
-        .then(data => {
-            imageElements.preview.style.display = 'none';
-            imageElements.editBtn.style.display = 'none';
-            imageElements.removeBtn.style.display = 'none';
-            imageElements.input.value = '';
-            currentImage = null;
-            showToast('Success', 'Image removed successfully', 'success');
-        })
-        .catch(error => {
-            console.error('Error removing image:', error);
-            showToast('Error', error.message || 'Failed to remove image', 'error');
-        });
+    } catch (error) {
+        showToast('Error', error, 'error');
+        imageElements.input.value = '';
     }
 });
+
+// Image editing
+imageElements.editBtn.addEventListener('click', () => {
+    if (!imageElements.previewImg.src) return;
+    
+    initializeFabricCanvas();
+
+    fabric.Image.fromURL(imageElements.previewImg.src, (img) => {
+        fabricCanvas.clear();
+        
+        // Scale image to fit canvas
+        const scale = Math.min(300 / img.width, 300 / img.height);
+        img.scale(scale);
+        
+        // Center image
+        img.set({
+            left: (300 - img.width * scale) / 2,
+            top: (300 - img.height * scale) / 2
+        });
+        
+        fabricCanvas.add(img);
+        fabricCanvas.setActiveObject(img);
+        imageElements.editor.style.display = 'block';
+    });
+});
+
+// Save edited image
+imageElements.saveBtn.addEventListener('click', () => {
+    if (!fabricCanvas) return;
+    
+    const dataURL = fabricCanvas.toDataURL({
+        format: 'png',
+        quality: 0.8
+    });
+    
+    imageElements.previewImg.src = dataURL;
+    currentImage = {
+        base64: dataURL.split(',')[1],
+        extension: 'png'
+    };
+    imageElements.editor.style.display = 'none';
+    
+    // Submit updated image to server
+    updateImage();
+});
+
+// Cancel image editing
+imageElements.cancelBtn.addEventListener('click', () => {
+    imageElements.editor.style.display = 'none';
+});
+
+// Remove image
+imageElements.removeBtn.addEventListener('click', () => {
+    showToast(
+        'Confirm Delete',
+        'Are you sure you want to remove the area icon?',
+        'warning',
+        {
+            confirmButtonText: 'Yes, remove it',
+            cancelButtonText: 'Cancel',
+            onConfirm: () => removeImage()
+        }
+    );
+});
+
+// Update image on server
+function updateImage() {
+    if (!currentImage) return;
+
+    fetch('/api/set_area_icon', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+            id: '{{ area.id }}',
+            image: currentImage.base64,
+            extension: currentImage.extension
+        })
+    })
+    .then(response => {
+        if (!response.ok) {
+            return response.json().then(data => {
+                throw new Error(data.error || `HTTP error! status: ${response.status}`);
+            });
+        }
+        return response.json();
+    })
+    .then(data => {
+        showToast('Success', 'Image updated successfully', 'success');
+    })
+    .catch(error => {
+        console.error('Error updating image:', error);
+        showToast('Error', error.message || 'Failed to update image', 'error');
+    });
+}
+
+// Remove image from server
+function removeImage() {
+    fetch('/api/remove_area_tag', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+            id: '{{ area.id }}',
+            tag: 'icon:square'
+        })
+    })
+    .then(response => {
+        if (!response.ok) {
+            return response.json().then(data => {
+                throw new Error(data.error || `HTTP error! status: ${response.status}`);
+            });
+        }
+        return response.json();
+    })
+    .then(data => {
+        imageElements.preview.style.display = 'none';
+        imageElements.editBtn.style.display = 'none';
+        imageElements.removeBtn.style.display = 'none';
+        imageElements.input.value = '';
+        currentImage = null;
+        showToast('Success', 'Image removed successfully', 'success');
+    })
+    .catch(error => {
+        console.error('Error removing image:', error);
+        showToast('Error', error.message || 'Failed to remove image', 'error');
+    });
+}
 </script>
 {% endblock %}
