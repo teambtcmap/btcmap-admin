@@ -221,18 +221,27 @@ function updateGeoJson() {
                 value: geoJson
             })
         })
-        .then(response => response.json())
+        .then(response => {
+            if (!response.ok) {
+                return response.json().then(data => {
+                    throw new Error(data.error || `HTTP error! status: ${response.status}`);
+                });
+            }
+            return response.json();
+        })
         .then(data => {
             if (data.error) {
-                throw new Error(data.error.message || 'Failed to update GeoJSON');
+                throw new Error(data.error || 'Failed to update GeoJSON');
             }
             logDebug('GeoJSON successfully updated on server');
             showToast('Success', 'GeoJSON updated successfully', 'success');
             elements.geoJsonEditor.style.display = 'none';
+            // Refresh the map with the updated GeoJSON
+            updateMapWithGeoJson(geoJson);
         })
         .catch(error => {
             logDebug('Failed to update GeoJSON on server', error);
-            showToast('Error', error.message, 'error');
+            showToast('Error', error.message || 'Failed to update GeoJSON', 'error');
         });
     } catch (error) {
         logDebug('Failed to process GeoJSON input', error);
