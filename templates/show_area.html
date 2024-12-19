@@ -475,7 +475,12 @@ function initializeFabricCanvas() {
     }
     fabricCanvas = new fabric.Canvas('image-canvas', {
         width: 300,
-        height: 300
+        height: 300,
+        backgroundColor: '#ffffff'
+    });
+    fabricCanvas.setDimensions({
+        width: '300px',
+        height: '300px'
     });
 }
 
@@ -551,52 +556,89 @@ imageElements.input.addEventListener('change', async (e) => {
 
 // Image editing
 imageElements.editBtn.addEventListener('click', () => {
-    if (!imageElements.previewImg.src) return;
-    
-    initializeFabricCanvas();
+    console.log('Edit button clicked');
+    if (!imageElements.previewImg.src) {
+        console.error('No image source available');
+        return;
+    }
 
-    fabric.Image.fromURL(imageElements.previewImg.src, (img) => {
-        fabricCanvas.clear();
-        
-        // Scale image to fit canvas
-        const scale = Math.min(300 / img.width, 300 / img.height);
-        img.scale(scale);
-        
-        // Center image
-        img.set({
-            left: (300 - img.width * scale) / 2,
-            top: (300 - img.height * scale) / 2
+    try {
+        initializeFabricCanvas();
+        console.log('Fabric canvas initialized');
+
+        fabric.Image.fromURL(imageElements.previewImg.src, (img) => {
+            try {
+                fabricCanvas.clear();
+                console.log('Canvas cleared');
+
+                // Scale image to fit canvas
+                const scale = Math.min(300 / img.width, 300 / img.height);
+                img.scale(scale);
+
+                // Center image
+                img.set({
+                    left: (300 - img.width * scale) / 2,
+                    top: (300 - img.height * scale) / 2
+                });
+
+                fabricCanvas.add(img);
+                fabricCanvas.setActiveObject(img);
+                console.log('Image added to canvas');
+
+                imageElements.editor.style.display = 'block';
+            } catch (error) {
+                console.error('Error setting up image in canvas:', error);
+                showToast('Error', 'Failed to load image for editing', 'error');
+            }
         });
-        
-        fabricCanvas.add(img);
-        fabricCanvas.setActiveObject(img);
-        imageElements.editor.style.display = 'block';
-    });
+    } catch (error) {
+        console.error('Error initializing image editor:', error);
+        showToast('Error', 'Failed to initialize image editor', 'error');
+    }
 });
 
 // Save edited image
 imageElements.saveBtn.addEventListener('click', () => {
-    if (!fabricCanvas) return;
-    
-    const dataURL = fabricCanvas.toDataURL({
-        format: 'png',
-        quality: 0.8
-    });
-    
-    imageElements.previewImg.src = dataURL;
-    currentImage = {
-        base64: dataURL.split(',')[1],
-        extension: 'png'
-    };
-    imageElements.editor.style.display = 'none';
-    
-    // Submit updated image to server
-    updateImage();
+    console.log('Save button clicked');
+    if (!fabricCanvas) {
+        console.error('No fabric canvas available');
+        return;
+    }
+
+    try {
+        const dataURL = fabricCanvas.toDataURL({
+            format: 'png',
+            quality: 0.8
+        });
+        console.log('Generated data URL from canvas');
+
+        imageElements.previewImg.src = dataURL;
+        currentImage = {
+            base64: dataURL.split(',')[1],
+            extension: 'png'
+        };
+        console.log('Updated current image object');
+
+        imageElements.editor.style.display = 'none';
+        fabricCanvas.dispose();
+        fabricCanvas = null;
+
+        // Submit updated image to server
+        updateImage();
+    } catch (error) {
+        console.error('Error saving edited image:', error);
+        showToast('Error', 'Failed to save edited image', 'error');
+    }
 });
 
 // Cancel image editing
 imageElements.cancelBtn.addEventListener('click', () => {
+    console.log('Cancel button clicked');
     imageElements.editor.style.display = 'none';
+    if (fabricCanvas) {
+        fabricCanvas.dispose();
+        fabricCanvas = null;
+    }
 });
 
 // Remove image
