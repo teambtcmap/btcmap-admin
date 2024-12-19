@@ -192,12 +192,11 @@ def show_area(area_id):
         type_requirements = AREA_TYPE_REQUIREMENTS.get(area_type, {})
 
         geo_json = area['tags'].get('geo_json')
-        if geo_json:
-            is_valid, result = validate_geo_json(geo_json)
-            if is_valid:
-                geo_json = result['geo_json']
-            else:
-                app.logger.error(f"Invalid GeoJSON for area {area_id}: {result}")
+        if geo_json and isinstance(geo_json, str):
+            try:
+                geo_json = json.loads(geo_json)
+            except json.JSONDecodeError:
+                app.logger.error(f"Invalid JSON string for geo_json in area {area_id}")
                 geo_json = None
 
         return render_template('show_area.html',

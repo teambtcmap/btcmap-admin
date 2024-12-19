@@ -137,17 +137,6 @@ function updateMapWithGeoJson(geoJson) {
             geoJson = JSON.parse(geoJson);
         }
 
-        // Basic validation
-        if (!geoJson || typeof geoJson !== 'object') {
-            throw new Error('Invalid GeoJSON: input must be a GeoJSON object');
-        }
-
-        // Validate geometry type
-        const geometry = geoJson.type === 'Feature' ? geoJson.geometry : geoJson;
-        if (!['Polygon', 'MultiPolygon'].includes(geometry.type)) {
-            throw new Error('Invalid geometry type: must be Polygon or MultiPolygon');
-        }
-
         logDebug('Adding GeoJSON to map:', geoJson);
         geoJsonLayer = L.geoJSON(geoJson).addTo(map);
         map.fitBounds(geoJsonLayer.getBounds());
@@ -220,17 +209,7 @@ function updateGeoJson() {
     try {
         logDebug('Starting GeoJSON update');
         const geoJson = JSON.parse(elements.geoJsonInput.value);
-        
-        // Basic validation
-        if (!geoJson || typeof geoJson !== 'object') {
-            throw new Error('Invalid GeoJSON: must be a valid GeoJSON object');
-        }
-
-        // Validate geometry type
-        if (!['Polygon', 'MultiPolygon'].includes(geoJson.type)) {
-            throw new Error('Invalid geometry type: must be Polygon or MultiPolygon');
-        }
-
+            
         logDebug('Sending GeoJSON to API:', geoJson);
 
         fetch('/api/set_area_tag', {
