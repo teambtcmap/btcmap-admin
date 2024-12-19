@@ -554,38 +554,66 @@ validation_functions = {
 
 @app.route('/api/set_area_icon', methods=['POST'])
 def set_area_icon():
+    app.logger.debug('Received set_area_icon request')
     data = request.json
     if not data:
+        app.logger.error('No JSON data received')
         return jsonify({'error': 'Invalid request data'}), 400
 
     area_id = data.get('id')
     image_data = data.get('image')
     extension = data.get('extension', '').lower()
+    
+    app.logger.debug(f'Received image request - ID: {area_id}, Extension: {extension}, Data length: {len(image_data) if image_data else 0}')
 
     if not all([area_id, image_data, extension]):
-        return jsonify({'error': 'Missing required fields'}), 400
+        missing = []
+        if not area_id: missing.append('area_id')
+        if not image_data: missing.append('image_data')
+        if not extension: missing.append('extension')
+        error_msg = f'Missing required fields: {", ".join(missing)}'
+        app.logger.error(error_msg)
+        return jsonify({'error': error_msg}), 400
 
     if extension not in ['png', 'jpg', 'jpeg']:
+        app.logger.error(f'Invalid extension: {extension}')
         return jsonify({'error': 'Invalid image format. Only PNG and JPEG are supported'}), 400
 
     try:
+        app.logger.debug('Starting image processing')
         # Decode base64 image
-        image_bytes = base64.b64decode(image_data)
-        image = Image.open(BytesIO(image_bytes))
+        try:
+            image_bytes = base64.b64decode(image_data)
+            app.logger.debug(f'Successfully decoded base64 data, size: {len(image_bytes)} bytes')
+        except Exception as e:
+            app.logger.error(f'Base64 decode error: {str(e)}')
+            return jsonify({'error': 'Invalid base64 image data'}), 400
+
+        try:
+            image = Image.open(BytesIO(image_bytes))
+            app.logger.debug(f'Successfully opened image: size={image.size}, mode={image.mode}')
+        except Exception as e:
+            app.logger.error(f'Error opening image: {str(e)}')
+            return jsonify({'error': 'Invalid image format'}), 400
 
         # Validate image dimensions
         width, height = image.size
+        app.logger.debug(f'Image dimensions: {width}x{height}')
         if width != height:
+            app.logger.error(f'Non-square image: {width}x{height}')
             return jsonify({'error': 'Image must be square (1:1 aspect ratio)'}), 400
 
         if width > 1024 or height > 1024:
+            app.logger.error(f'Image too large: {width}x{height}')
             return jsonify({'error': 'Image dimensions must be 1024x1024 pixels or smaller'}), 400
 
         # Convert RGBA to RGB if necessary
         if image.mode == 'RGBA':
+            app.logger.debug('Converting RGBA to RGB')
             background = Image.new('RGB', image.size, (255, 255, 255))
             background.paste(image, mask=image.split()[3])
             image = background
+            app.logger.debug('RGBA conversion complete')
 
         # Save optimized image to BytesIO
         output = BytesIO()

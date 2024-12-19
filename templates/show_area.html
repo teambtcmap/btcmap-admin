@@ -503,13 +503,17 @@ function validateImage(file) {
 
 // Convert image to base64
 function getBase64Image(img) {
+    console.log('Converting image to base64');
     const canvas = document.createElement('canvas');
     canvas.width = img.width;
     canvas.height = img.height;
     const ctx = canvas.getContext('2d');
     ctx.drawImage(img, 0, 0);
-    const dataURL = canvas.toDataURL();
-    return dataURL.split(',')[1]; // Return only the base64 data
+    const dataURL = canvas.toDataURL('image/png');
+    console.log('Image converted to data URL');
+    const base64Data = dataURL.split(',')[1];
+    console.log('Base64 data extracted, length:', base64Data.length);
+    return base64Data;
 }
 
 // Image upload handling
