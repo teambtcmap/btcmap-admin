@@ -8,6 +8,9 @@ from collections import Counter
 from geojson_rewind import rewind
 from urllib.parse import urlparse
 import re
+import base64
+from PIL import Image
+from io import BytesIO
 from shapely.geometry import shape, mapping
 from shapely.ops import transform
 import pyproj
@@ -548,6 +551,64 @@ validation_functions = {
     'email': [validate_email],
     'tel': [validate_phone]
 }
+
+@app.route('/api/set_area_icon', methods=['POST'])
+def set_area_icon():
+    data = request.json
+    if not data:
+        return jsonify({'error': 'Invalid request data'}), 400
+
+    area_id = data.get('id')
+    image_data = data.get('image')
+    extension = data.get('extension', '').lower()
+
+    if not all([area_id, image_data, extension]):
+        return jsonify({'error': 'Missing required fields'}), 400
+
+    if extension not in ['png', 'jpg', 'jpeg']:
+        return jsonify({'error': 'Invalid image format. Only PNG and JPEG are supported'}), 400
+
+    try:
+        # Decode base64 image
+        image_bytes = base64.b64decode(image_data)
+        image = Image.open(BytesIO(image_bytes))
+
+        # Validate image dimensions
+        width, height = image.size
+        if width != height:
+            return jsonify({'error': 'Image must be square (1:1 aspect ratio)'}), 400
+
+        if width > 1024 or height > 1024:
+            return jsonify({'error': 'Image dimensions must be 1024x1024 pixels or smaller'}), 400
+
+        # Convert RGBA to RGB if necessary
+        if image.mode == 'RGBA':
+            background = Image.new('RGB', image.size, (255, 255, 255))
+            background.paste(image, mask=image.split()[3])
+            image = background
+
+        # Save optimized image to BytesIO
+        output = BytesIO()
+        image.save(output, format='PNG' if extension == 'png' else 'JPEG', 
+                  optimize=True, quality=85)
+        output.seek(0)
+        optimized_image = base64.b64encode(output.read()).decode('utf-8')
+
+        # Send to RPC
+        result = rpc_call('set_area_icon', {
+            'id': area_id,
+            'image': optimized_image,
+            'extension': extension
+        })
+
+        if 'error' in result:
+            return jsonify({'error': result['error']}), 400
+
+        return jsonify({'success': True})
+
+    except Exception as e:
+        app.logger.error(f"Error processing image: {str(e)}")
+        return jsonify({'error': f'Error processing image: {str(e)}'}), 400
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)
