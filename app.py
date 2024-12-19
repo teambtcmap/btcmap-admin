@@ -311,11 +311,10 @@ def set_area_tag():
         if not is_valid:
             return jsonify({'error': result}), 400
 
-        geo_json = jsonify(value)
         result = rpc_call('set_area_tag', {
             'id': area_id,
             'name': 'geo_json',
-            'value': geo_json
+            'value': value
         })
 
         if 'error' in result:
