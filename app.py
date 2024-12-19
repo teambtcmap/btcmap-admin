@@ -281,6 +281,8 @@ def add_area():
 @app.route('/api/set_area_tag', methods=['POST'])
 def set_area_tag():
     data = request.json
+    print(data)
+    
     if not data:
         return jsonify({'error': 'Invalid request data'}), 400
 

@@ -209,20 +209,20 @@ function updateGeoJson() {
     try {
         logDebug('Starting GeoJSON update');
         const rawInput = elements.geoJsonInput.value;
-        logDebug('Raw input:', rawInput);
         
-        // Parse the input to validate it's proper JSON
+        // Parse and stringify to remove formatting/whitespace
         const geoJson = JSON.parse(rawInput);
-        logDebug('Parsed GeoJSON:', geoJson);
+        const cleanGeoJson = JSON.stringify(geoJson);
+        
+        logDebug('Clean GeoJSON:', cleanGeoJson);
 
-        // Send the raw input to avoid double parsing
         fetch('/api/set_area_tag', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 id: '{{ area.id }}',
                 name: 'geo_json',
-                value: rawInput
+                value: cleanGeoJson
             })
         })
         .then(response => {
