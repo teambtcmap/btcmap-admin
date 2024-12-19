@@ -309,9 +309,7 @@ def set_area_tag():
         if not is_valid:
             return jsonify({'error': result}), 400
 
-        geo_json = result['geo_json']
-        area_km2 = result['area_km2']
-
+        geo_json = jsonify(value)
         result = rpc_call('set_area_tag', {
             'id': area_id,
             'name': 'geo_json',
@@ -321,6 +319,7 @@ def set_area_tag():
         if 'error' in result:
             return jsonify({'error': f'Failed to update geo_json: {result["error"]}'}), 400
 
+        area_km2 = calculate_area(value)
         area_result = rpc_call('set_area_tag', {
             'id': area_id,
             'name': 'area_km2',
@@ -331,12 +330,7 @@ def set_area_tag():
             return jsonify({'error': f'Failed to update area: {area_result["error"]}'}), 400
 
         return jsonify({'success': True, 'message': 'GeoJSON and area updated successfully'})
-    else:
-        result = rpc_call('set_area_tag', {
-            'id': area_id,
-            'name': key,
-            'value': value
-        })
+
         return jsonify(result)
 
 @app.route('/api/remove_area_tag', methods=['POST'])
@@ -436,7 +430,7 @@ def rpc_call(method, params):
     try:
         response = requests.post(f"{API_BASE_URL}/rpc",
                                  json=payload,
-                                 timeout=10)
+                                 timeout=20)
         response.raise_for_status()
         return response.json()
     except requests.exceptions.Timeout:
@@ -505,8 +499,8 @@ def validate_geo_json(value):
 
         try:
             geom = shape(geo_json)
-            if not geom.is_valid:
-                return False, "Invalid GeoJSON: geometry is not valid"
+            #if not geom.is_valid:
+            #    return False, "Invalid GeoJSON: geometry is not valid"
             if geom.geom_type not in ['Polygon', 'MultiPolygon']:
                 return False, "Invalid GeoJSON: only valid Polygon and MultiPolygon types are accepted"
         except Exception as e:
@@ -514,11 +508,8 @@ def validate_geo_json(value):
 
         rewound = rewind(geo_json)
         
-        area_km2 = calculate_area(rewound)
-
         return True, {
             "geo_json": rewound,
-            "area_km2": area_km2
         }
     except json.JSONDecodeError:
         return False, "Invalid JSON format"

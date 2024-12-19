@@ -208,17 +208,21 @@ function showGeoJson() {
 function updateGeoJson() {
     try {
         logDebug('Starting GeoJSON update');
-        const geoJson = JSON.parse(elements.geoJsonInput.value);
-            
-        logDebug('Sending GeoJSON to API:', geoJson);
+        const rawInput = elements.geoJsonInput.value;
+        logDebug('Raw input:', rawInput);
+        
+        // Parse the input to validate it's proper JSON
+        const geoJson = JSON.parse(rawInput);
+        logDebug('Parsed GeoJSON:', geoJson);
 
+        // Send the raw input to avoid double parsing
         fetch('/api/set_area_tag', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 id: '{{ area.id }}',
                 name: 'geo_json',
-                value: geoJson
+                value: rawInput
             })
         })
         .then(response => {
