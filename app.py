@@ -285,7 +285,7 @@ def add_area():
 def set_area_tag():
     data = request.json
     print(data)
-    
+
     if not data:
         return jsonify({'error': 'Invalid request data'}), 400
 
@@ -511,7 +511,7 @@ def validate_geo_json(value):
             return False, f"Invalid GeoJSON structure: {str(e)}"
 
         rewound = rewind(geo_json)
-        
+
         return True, {
             "geo_json": rewound,
         }
@@ -563,7 +563,7 @@ def set_area_icon():
     area_id = data.get('id')
     image_data = data.get('image')
     extension = data.get('extension', '').lower()
-    
+
     app.logger.debug(f'Received image request - ID: {area_id}, Extension: {extension}, Data length: {len(image_data) if image_data else 0}')
 
     if not all([area_id, image_data, extension]):
@@ -617,7 +617,7 @@ def set_area_icon():
 
         # Save optimized image to BytesIO
         output = BytesIO()
-        image.save(output, format='PNG' if extension == 'png' else 'JPEG', 
+        image.save(output, format='PNG' if extension == 'png' else 'JPEG',
                   optimize=True, quality=85)
         output.seek(0)
         optimized_image = base64.b64encode(output.read()).decode('utf-8')
