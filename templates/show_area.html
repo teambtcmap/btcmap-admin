@@ -659,6 +659,7 @@ imageElements.removeBtn.addEventListener('click', () => {
 function updateImage() {
     if (!currentImage) return;
 
+    console.log('Updating image on server');
     fetch('/api/set_area_icon', {
         method: 'POST',
         headers: {
@@ -673,12 +674,19 @@ function updateImage() {
     .then(response => {
         if (!response.ok) {
             return response.json().then(data => {
-                throw new Error(data.error || `HTTP error! status: ${response.status}`);
+                const errorMessage = data.error || `HTTP error! status: ${response.status}`;
+                console.error('Server error:', errorMessage);
+                throw new Error(errorMessage);
             });
         }
         return response.json();
     })
     .then(data => {
+        if (data.error) {
+            console.error('API error:', data.error);
+            throw new Error(typeof data.error === 'string' ? data.error : JSON.stringify(data.error));
+        }
+        console.log('Image updated successfully');
         showToast('Success', 'Image updated successfully', 'success');
     })
     .catch(error => {
@@ -689,6 +697,7 @@ function updateImage() {
 
 // Remove image from server
 function removeImage() {
+    console.log('Removing image');
     fetch('/api/remove_area_tag', {
         method: 'POST',
         headers: {
@@ -702,17 +711,24 @@ function removeImage() {
     .then(response => {
         if (!response.ok) {
             return response.json().then(data => {
-                throw new Error(data.error || `HTTP error! status: ${response.status}`);
+                const errorMessage = data.error || `HTTP error! status: ${response.status}`;
+                console.error('Server error:', errorMessage);
+                throw new Error(errorMessage);
             });
         }
         return response.json();
     })
     .then(data => {
+        if (data.error) {
+            console.error('API error:', data.error);
+            throw new Error(typeof data.error === 'string' ? data.error : JSON.stringify(data.error));
+        }
         imageElements.preview.style.display = 'none';
         imageElements.editBtn.style.display = 'none';
         imageElements.removeBtn.style.display = 'none';
         imageElements.input.value = '';
         currentImage = null;
+        console.log('Image removed successfully');
         showToast('Success', 'Image removed successfully', 'success');
     })
     .catch(error => {
@@ -720,5 +736,6 @@ function removeImage() {
         showToast('Error', error.message || 'Failed to remove image', 'error');
     });
 }
+
 </script>
 {% endblock %}
