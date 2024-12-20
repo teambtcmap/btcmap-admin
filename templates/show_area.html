@@ -15,18 +15,18 @@
                 <img id="preview-img" class="img-fluid" style="max-width: 300px; max-height: 300px;" 
                      src="{{ area.tags.get('icon:square', '') if 'icon:square' in area.tags else '' }}">
             </div>
-            <input type="file" id="image-input" class="form-control mb-2" accept="image/png,image/jpeg,image/jpg" style="display: none;">
-            <div class="btn-group">
-                <button id="upload-image-btn" class="btn btn-primary">Upload Image</button>
-                <button id="edit-image-btn" class="btn btn-secondary" {% if 'icon:square' not in area.tags %}style="display: none;"{% endif %}>Edit Image</button>
-                <button id="remove-image-btn" class="btn btn-danger" {% if 'icon:square' not in area.tags %}style="display: none;"{% endif %}>Remove</button>
-            </div>
-            <div class="image-editor" style="display: none;">
+            <div class="image-editor" style="display: none; position: absolute; background: white; z-index: 10;">
                 <canvas id="image-canvas"></canvas>
                 <div class="btn-group mt-2">
                     <button id="save-image-btn" class="btn btn-success">Update</button>
                     <button id="cancel-image-btn" class="btn btn-secondary">Cancel</button>
                 </div>
+            </div>
+            <input type="file" id="image-input" class="form-control mb-2" accept="image/png,image/jpeg,image/jpg" style="display: none;">
+            <div class="btn-group">
+                <button id="upload-image-btn" class="btn btn-primary">New Image</button>
+                <button id="edit-image-btn" class="btn btn-secondary" {% if 'icon:square' not in area.tags %}style="display: none;"{% endif %}>Edit Image</button>
+                <button id="remove-image-btn" class="btn btn-danger" {% if 'icon:square' not in area.tags %}style="display: none;"{% endif %}>Cancel</button>
             </div>
             <small class="text-muted d-block mt-2">
                 Supported formats: PNG, JPEG. Image must be square and under 1MB.
@@ -563,6 +563,14 @@ imageElements.editBtn.addEventListener('click', () => {
     }
 
     try {
+        // Store current state for possible revert
+        currentImage.previousState = {
+            url: imageElements.previewImg.src,
+            base64: currentImage.base64,
+            extension: currentImage.extension
+        };
+
+        imageElements.preview.style.display = 'none';
         initializeFabricCanvas();
         console.log('Fabric canvas initialized');
 
@@ -571,11 +579,9 @@ imageElements.editBtn.addEventListener('click', () => {
                 fabricCanvas.clear();
                 console.log('Canvas cleared');
 
-                // Scale image to fit canvas
                 const scale = Math.min(300 / img.width, 300 / img.height);
                 img.scale(scale);
 
-                // Center image
                 img.set({
                     left: (300 - img.width * scale) / 2,
                     top: (300 - img.height * scale) / 2
@@ -643,16 +649,18 @@ imageElements.cancelBtn.addEventListener('click', () => {
 
 // Remove image
 imageElements.removeBtn.addEventListener('click', () => {
-    showToast(
-        'Confirm Delete',
-        'Are you sure you want to remove the area icon?',
-        'warning',
-        {
-            confirmButtonText: 'Yes, remove it',
-            cancelButtonText: 'Cancel',
-            onConfirm: () => removeImage()
-        }
-    );
+    console.log('Cancel button clicked');
+    if (currentImage && currentImage.previousState) {
+        imageElements.previewImg.src = currentImage.previousState.url;
+        currentImage = currentImage.previousState;
+        showToast('Info', 'Changes reverted', 'info');
+    } else {
+        imageElements.preview.style.display = 'none';
+        imageElements.editBtn.style.display = 'none';
+        imageElements.removeBtn.style.display = 'none';
+        imageElements.input.value = '';
+        currentImage = null;
+    }
 });
 
 // Update image on server
@@ -660,13 +668,15 @@ function updateImage() {
     if (!currentImage) return;
 
     console.log('Updating image on server');
+    const areaId = '{{ area.id }}';
+
     fetch('/api/set_area_icon', {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-            id: '{{ area.id }}',
+            id: areaId,
             image: currentImage.base64,
             extension: currentImage.extension
         })
@@ -674,23 +684,48 @@ function updateImage() {
     .then(async response => {
         const data = await response.json();
         if (!response.ok) {
-            const errorMessage = data.error || `HTTP error! status: ${response.status}`;
-            console.error('Server error:', errorMessage);
-            throw new Error(errorMessage);
+            throw new Error(data.error || `HTTP error! status: ${response.status}`);
         }
         return data;
     })
     .then(data => {
         if (data.error) {
-            console.error('API error:', data.error);
             throw new Error(data.error);
         }
-        console.log('Image updated successfully');
+
+        // Update icon:square tag with the new URL
+        const newIconUrl = `https://static.btcmap.org/images/areas/${areaId}.${currentImage.extension}`;
+
+        // Update the preview image source
+        imageElements.previewImg.src = newIconUrl;
+
+        // Update the icon:square tag value
+        return fetch('/api/set_area_tag', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                id: areaId,
+                name: 'icon:square',
+                value: newIconUrl
+            })
+        });
+    })
+    .then(async response => {
+        const data = await response.json();
+        if (!response.ok || data.error) {
+            throw new Error(data.error || 'Failed to update icon:square tag');
+        }
+        console.log('Image and tag updated successfully');
         showToast('Success', 'Image updated successfully', 'success');
     })
     .catch(error => {
         console.error('Error updating image:', error);
         showToast('Error', error.message, 'error');
+        // Revert changes on error
+        if (currentImage.previousState) {
+            imageElements.previewImg.src = currentImage.previousState.url;
+            currentImage = currentImage.previousState;
+        }
     });
 }
 
