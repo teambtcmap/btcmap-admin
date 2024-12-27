@@ -465,28 +465,53 @@ const imageElements = {
     cancelBtn: document.getElementById('cancel-image-btn')
 };
 
-let fabricCanvas;
+let fabricCanvas = null;
 let currentImage = null;
 
 // Initialize fabric canvas
 function initializeFabricCanvas() {
-    if (fabricCanvas) {
-        fabricCanvas.dispose();
+    try {
+        console.log('Initializing fabric canvas');
+
+        // Cleanup existing canvas if any
+        if (fabricCanvas) {
+            fabricCanvas.dispose();
+            fabricCanvas = null;
+        }
+
+        // Initialize new canvas
+        fabricCanvas = new fabric.Canvas('image-canvas', {
+            width: 300,
+            height: 300,
+            backgroundColor: '#ffffff'
+        });
+
+        if (!fabricCanvas) {
+            throw new Error('Failed to create fabric canvas');
+        }
+
+        fabricCanvas.setDimensions({
+            width: '300px',
+            height: '300px'
+        });
+
+        console.log('Fabric canvas initialized successfully');
+        return true;
+    } catch (error) {
+        console.error('Error initializing fabric canvas:', error);
+        showToast('Error', 'Failed to initialize image editor: ' + error.message, 'error');
+        return false;
     }
-    fabricCanvas = new fabric.Canvas('image-canvas', {
-        width: 300,
-        height: 300,
-        backgroundColor: '#ffffff'
-    });
-    fabricCanvas.setDimensions({
-        width: '300px',
-        height: '300px'
-    });
 }
 
 // Validate image dimensions and size
 function validateImage(file) {
     return new Promise((resolve, reject) => {
+        if (!file) {
+            reject('No file selected');
+            return;
+        }
+
         if (file.size > 1024 * 1024) {
             reject('Image size must be less than 1MB');
             return;
@@ -506,21 +531,6 @@ function validateImage(file) {
     });
 }
 
-// Convert image to base64
-function getBase64Image(img) {
-    console.log('Converting image to base64');
-    const canvas = document.createElement('canvas');
-    canvas.width = img.width;
-    canvas.height = img.height;
-    const ctx = canvas.getContext('2d');
-    ctx.drawImage(img, 0, 0);
-    const dataURL = canvas.toDataURL('image/png');
-    console.log('Image converted to data URL');
-    const base64Data = dataURL.split(',')[1];
-    console.log('Base64 data extracted, length:', base64Data.length);
-    return base64Data;
-}
-
 // Image upload handling
 imageElements.uploadBtn.addEventListener('click', () => {
     imageElements.input.click();
@@ -532,22 +542,26 @@ imageElements.input.addEventListener('change', async (e) => {
 
     try {
         const img = await validateImage(file);
-        const base64Data = getBase64Image(img);
-        
-        // Update preview
-        imageElements.previewImg.src = `data:${file.type};base64,${base64Data}`;
-        imageElements.preview.style.display = 'block';
-        imageElements.editBtn.style.display = 'inline-block';
-        imageElements.removeBtn.style.display = 'inline-block';
-        
-        // Store current image
         currentImage = {
-            base64: base64Data,
-            extension: file.name.split('.').pop().toLowerCase()
+            file: file,
+            img: img
         };
 
-        // Submit image to server
-        updateImage();
+        const reader = new FileReader();
+        reader.onload = (event) => {
+            const base64Data = event.target.result.split(',')[1];
+            currentImage.base64 = base64Data;
+            currentImage.extension = file.name.split('.').pop().toLowerCase();
+
+            imageElements.previewImg.src = event.target.result;
+            imageElements.preview.style.display = 'block';
+            imageElements.editBtn.style.display = 'inline-block';
+            imageElements.removeBtn.style.display = 'inline-block';
+
+            // Update image on server
+            updateImage();
+        };
+        reader.readAsDataURL(file);
     } catch (error) {
         showToast('Error', error, 'error');
         imageElements.input.value = '';
@@ -564,24 +578,31 @@ imageElements.editBtn.addEventListener('click', () => {
 
     try {
         // Store current state for possible revert
+        if (!currentImage) {
+            currentImage = {};
+        }
         currentImage.previousState = {
             url: imageElements.previewImg.src,
             base64: currentImage.base64,
             extension: currentImage.extension
         };
 
+        // Hide preview and show editor
         imageElements.preview.style.display = 'none';
-        initializeFabricCanvas();
-        console.log('Fabric canvas initialized');
+        if (!initializeFabricCanvas()) {
+            throw new Error('Failed to initialize canvas');
+        }
 
+        // Load image into canvas
         fabric.Image.fromURL(imageElements.previewImg.src, (img) => {
+            if (!img) {
+                throw new Error('Failed to load image');
+            }
+
             try {
                 fabricCanvas.clear();
-                console.log('Canvas cleared');
-
                 const scale = Math.min(300 / img.width, 300 / img.height);
                 img.scale(scale);
-
                 img.set({
                     left: (300 - img.width * scale) / 2,
                     top: (300 - img.height * scale) / 2
@@ -589,17 +610,22 @@ imageElements.editBtn.addEventListener('click', () => {
 
                 fabricCanvas.add(img);
                 fabricCanvas.setActiveObject(img);
-                console.log('Image added to canvas');
-
                 imageElements.editor.style.display = 'block';
             } catch (error) {
                 console.error('Error setting up image in canvas:', error);
-                showToast('Error', 'Failed to load image for editing', 'error');
+                throw error;
             }
         });
     } catch (error) {
         console.error('Error initializing image editor:', error);
-        showToast('Error', 'Failed to initialize image editor', 'error');
+        showToast('Error', 'Failed to initialize image editor: ' + error.message, 'error');
+        // Cleanup on error
+        if (fabricCanvas) {
+            fabricCanvas.dispose();
+            fabricCanvas = null;
+        }
+        imageElements.preview.style.display = 'block';
+        imageElements.editor.style.display = 'none';
     }
 });
 
@@ -608,6 +634,7 @@ imageElements.saveBtn.addEventListener('click', () => {
     console.log('Save button clicked');
     if (!fabricCanvas) {
         console.error('No fabric canvas available');
+        showToast('Error', 'Editor not initialized', 'error');
         return;
     }
 
@@ -616,38 +643,47 @@ imageElements.saveBtn.addEventListener('click', () => {
             format: 'png',
             quality: 0.8
         });
-        console.log('Generated data URL from canvas');
 
         imageElements.previewImg.src = dataURL;
         currentImage = {
             base64: dataURL.split(',')[1],
-            extension: 'png'
+            extension: 'png',
+            previousState: currentImage.previousState
         };
-        console.log('Updated current image object');
 
         imageElements.editor.style.display = 'none';
-        fabricCanvas.dispose();
-        fabricCanvas = null;
+        imageElements.preview.style.display = 'block';
 
-        // Submit updated image to server
+        if (fabricCanvas) {
+            fabricCanvas.dispose();
+            fabricCanvas = null;
+        }
+
         updateImage();
     } catch (error) {
         console.error('Error saving edited image:', error);
-        showToast('Error', 'Failed to save edited image', 'error');
+        showToast('Error', 'Failed to save edited image: ' + error.message, 'error');
     }
 });
 
 // Cancel image editing
 imageElements.cancelBtn.addEventListener('click', () => {
-    console.log('Cancel button clicked');
+    console.log('Cancel editing clicked');
     imageElements.editor.style.display = 'none';
+    imageElements.preview.style.display = 'block';
+
     if (fabricCanvas) {
         fabricCanvas.dispose();
         fabricCanvas = null;
     }
+
+    if (currentImage && currentImage.previousState) {
+        imageElements.previewImg.src = currentImage.previousState.url;
+        currentImage = currentImage.previousState;
+    }
 });
 
-// Remove image
+// Cancel/Remove image
 imageElements.removeBtn.addEventListener('click', () => {
     console.log('Cancel button clicked');
     if (currentImage && currentImage.previousState) {
@@ -665,7 +701,10 @@ imageElements.removeBtn.addEventListener('click', () => {
 
 // Update image on server
 function updateImage() {
-    if (!currentImage) return;
+    if (!currentImage || !currentImage.base64) {
+        console.error('No image data available');
+        return;
+    }
 
     console.log('Updating image on server');
     const areaId = '{{ area.id }}';
@@ -690,7 +729,7 @@ function updateImage() {
     })
     .then(data => {
         if (data.error) {
-            throw new Error(data.error);
+            throw new Error(typeof data.error === 'string' ? data.error : JSON.stringify(data.error));
         }
 
         // Update icon:square tag with the new URL
@@ -713,60 +752,21 @@ function updateImage() {
     .then(async response => {
         const data = await response.json();
         if (!response.ok || data.error) {
-            throw new Error(data.error || 'Failed to update icon:square tag');
+            throw new Error(typeof data.error === 'string' ? data.error : JSON.stringify(data.error));
         }
         console.log('Image and tag updated successfully');
         showToast('Success', 'Image updated successfully', 'success');
     })
     .catch(error => {
         console.error('Error updating image:', error);
-        showToast('Error', error.message, 'error');
+        const errorMessage = typeof error === 'string' ? error : error.message;
+        showToast('Error', errorMessage, 'error');
+
         // Revert changes on error
-        if (currentImage.previousState) {
+        if (currentImage && currentImage.previousState) {
             imageElements.previewImg.src = currentImage.previousState.url;
             currentImage = currentImage.previousState;
         }
-    });
-}
-
-// Remove image from server
-function removeImage() {
-    console.log('Removing image');
-    fetch('/api/remove_area_tag', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-            id: '{{ area.id }}',
-            tag: 'icon:square'
-        })
-    })
-    .then(async response => {
-        const data = await response.json();
-        if (!response.ok) {
-            const errorMessage = data.error || `HTTP error! status: ${response.status}`;
-            console.error('Server error:', errorMessage);
-            throw new Error(errorMessage);
-        }
-        return data;
-    })
-    .then(data => {
-        if (data.error) {
-            console.error('API error:', data.error);
-            throw new Error(data.error);
-        }
-        imageElements.preview.style.display = 'none';
-        imageElements.editBtn.style.display = 'none';
-        imageElements.removeBtn.style.display = 'none';
-        imageElements.input.value = '';
-        currentImage = null;
-        console.log('Image removed successfully');
-        showToast('Success', 'Image removed successfully', 'success');
-    })
-    .catch(error => {
-        console.error('Error removing image:', error);
-        showToast('Error', error.message, 'error');
     });
 }
 

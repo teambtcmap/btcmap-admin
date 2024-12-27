@@ -335,7 +335,16 @@ def set_area_tag():
 
         return jsonify({'success': True, 'message': 'GeoJSON and area updated successfully'})
 
-        return jsonify(result)
+    result = rpc_call('set_area_tag', {
+        'id': area_id,
+        'name': key,
+        'value': value
+    })
+
+    if 'error' in result:
+        return jsonify({'error': result['error']}), 400
+
+    return jsonify({'success': True})
 
 @app.route('/api/remove_area_tag', methods=['POST'])
 def remove_area_tag():
