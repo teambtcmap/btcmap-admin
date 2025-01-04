@@ -213,6 +213,8 @@ def add_area():
         try:
             tags = request.json
             app.logger.info(f"Parsed JSON data: {tags}")
+            app.logger.info(f"GeoJSON data type: {type(tags.get('geo_json'))}")
+            app.logger.info(f"GeoJSON content: {tags.get('geo_json')}")
         except Exception as e:
             app.logger.error(f"Error parsing JSON data: {str(e)}")
             return jsonify({'error': {'message': 'Invalid JSON data'}}), 400
@@ -262,13 +264,17 @@ def add_area():
                 }}), 400
 
         if 'geo_json' in tags:
+            app.logger.info("Validating GeoJSON...")
             is_valid, result = validate_geo_json(tags['geo_json'])
             if not is_valid:
+                app.logger.error(f"GeoJSON validation failed: {result}")
                 return jsonify({'error': {'message': result}}), 400
+            app.logger.info(f"Valid GeoJSON result: {result}")
             tags['geo_json'] = result['geo_json']
-            
 
+        app.logger.info(f"Sending to RPC: {tags}")
         result = rpc_call('add_area', {'tags': tags})
+        app.logger.info(f"RPC response: {result}")
 
         if 'error' not in result:
             return jsonify({'success': True})
