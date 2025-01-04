@@ -266,7 +266,7 @@ def add_area():
             if not is_valid:
                 return jsonify({'error': {'message': result}}), 400
             tags['geo_json'] = result['geo_json']
-            tags['area_km2'] = result['area_km2']
+            
 
         result = rpc_call('add_area', {'tags': tags})
 
@@ -502,13 +502,11 @@ def validate_geo_json(value):
             geom = shape(geo_json)
             if geom.geom_type not in ['Polygon', 'MultiPolygon']:
                 return False, "Invalid GeoJSON: only valid Polygon and MultiPolygon types are accepted"
-            # Calculate area after validation
-            area_km2 = calculate_area(geo_json)
-            rewound = rewind(geo_json)
 
+            # Rewind the GeoJSON to ensure correct orientation
+            rewound = rewind(geo_json)
             return True, {
-                "geo_json": json.dumps(rewound),
-                "area_km2": area_km2
+                "geo_json": json.dumps(rewound)
             }
         except Exception as e:
             return False, f"Invalid GeoJSON structure: {str(e)}"
