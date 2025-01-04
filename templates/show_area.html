@@ -295,15 +295,32 @@ function updateTag(row) {
     // Validate the value
     const requirements = {{ area_type_requirements | tojson | safe }}[key] || {};
     let validation;
+    let finalValue;
+
     if (requirements.type === 'number' || requirements.type === 'integer') {
         validation = validateNumericValue(value, requirements.type);
+        if (!validation.isValid) {
+            showToast('Error', validation.message, 'error');
+            return;
+        }
+        finalValue = validation.value; // This will be a number
     } else {
         validation = validateValue(value, requirements);
+        if (!validation.isValid) {
+            showToast('Error', validation.message, 'error');
+            return;
+        }
+        finalValue = value; // Use the original string value
     }
 
-    if (!validation.isValid) {
-        showToast('Error', validation.message, 'error');
-        return;
+    // For GeoJSON, parse it as an object
+    if (key === 'geo_json' && typeof finalValue === 'string') {
+        try {
+            finalValue = JSON.parse(finalValue);
+        } catch (error) {
+            showToast('Error', 'Invalid GeoJSON format', 'error');
+            return;
+        }
     }
 
     fetch('/api/set_area_tag', {
@@ -312,7 +329,7 @@ function updateTag(row) {
         body: JSON.stringify({
             id: '{{ area.id }}',
             name: key,
-            value: validation.value  // Use the validated and properly typed value
+            value: finalValue  // Send the properly typed value
         })
     })
     .then(response => response.json())
@@ -320,7 +337,7 @@ function updateTag(row) {
         if (data.error) {
             throw new Error(data.error.message || 'Failed to update tag');
         }
-        content.textContent = validation.value;
+        content.textContent = value;
         cancelEditing(row);
         showToast('Success', 'Tag updated successfully', 'success');
     })
