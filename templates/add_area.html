@@ -400,8 +400,8 @@ document.addEventListener('DOMContentLoaded', function() {
         // Add type and GeoJSON
         tags['type'] = typeSelect.value;
         if (currentGeoJson) {
-            // Don't modify the GeoJSON, just stringify it directly
-            tags['geo_json'] = JSON.stringify(currentGeoJson);
+            // Send the GeoJSON as a raw object, let the server handle parsing
+            tags['geo_json'] = currentGeoJson;
         }
 
         // Submit the form
