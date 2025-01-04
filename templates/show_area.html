@@ -303,7 +303,9 @@ function updateTag(row) {
             showToast('Error', validation.message, 'error');
             return;
         }
-        // Convert number to string for RPC
+        // Keep the numeric value for display
+        value = validation.value;
+        // Convert to string for RPC
         finalValue = validation.value.toString();
     } else {
         validation = validateValue(value, requirements);
@@ -314,10 +316,12 @@ function updateTag(row) {
         finalValue = value;
     }
 
-    // For GeoJSON, stringify the object
+    // For GeoJSON, parse to validate then stringify for RPC
     if (key === 'geo_json' && typeof finalValue === 'string') {
         try {
+            // Parse to validate
             const geoJson = JSON.parse(finalValue);
+            // Stringify for RPC
             finalValue = JSON.stringify(geoJson);
         } catch (error) {
             showToast('Error', 'Invalid GeoJSON format', 'error');
@@ -331,7 +335,7 @@ function updateTag(row) {
         body: JSON.stringify({
             id: '{{ area.id }}',
             name: key,
-            value: finalValue  // Send all values as strings to RPC
+            value: finalValue  // All values are now strings for RPC
         })
     })
     .then(response => response.json())
@@ -339,7 +343,7 @@ function updateTag(row) {
         if (data.error) {
             throw new Error(data.error.message || 'Failed to update tag');
         }
-        content.textContent = value;
+        content.textContent = value;  // Display the properly typed value
         cancelEditing(row);
         showToast('Success', 'Tag updated successfully', 'success');
     })
