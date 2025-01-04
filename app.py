@@ -282,7 +282,7 @@ def add_area():
 def set_area_tag():
     data = request.json
     print(data)
-    
+
     if not data:
         return jsonify({'error': 'Invalid request data'}), 400
 
@@ -500,18 +500,18 @@ def validate_geo_json(value):
 
         try:
             geom = shape(geo_json)
-            #if not geom.is_valid:
-            #    return False, "Invalid GeoJSON: geometry is not valid"
             if geom.geom_type not in ['Polygon', 'MultiPolygon']:
                 return False, "Invalid GeoJSON: only valid Polygon and MultiPolygon types are accepted"
+            # Calculate area after validation
+            area_km2 = calculate_area(geo_json)
+            rewound = rewind(geo_json)
+
+            return True, {
+                "geo_json": json.dumps(rewound),
+                "area_km2": area_km2
+            }
         except Exception as e:
             return False, f"Invalid GeoJSON structure: {str(e)}"
-
-        rewound = rewind(geo_json)
-        
-        return True, {
-            "geo_json": rewound,
-        }
     except json.JSONDecodeError:
         return False, "Invalid JSON format"
     except Exception as e:

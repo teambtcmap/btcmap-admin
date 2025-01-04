@@ -179,7 +179,6 @@ document.addEventListener('DOMContentLoaded', function() {
                     feedback.style.display = 'none';
                 }
             });
-
             keyInput.addEventListener('blur', function() {
                 validateCustomKey(this);
             });
@@ -369,34 +368,39 @@ document.addEventListener('DOMContentLoaded', function() {
 
     submitAreaBtn.addEventListener('click', function(e) {
         e.preventDefault();
-        
+
         if (!validateForm()) {
             return;
         }
 
         const tags = {};
-        
+
         // Collect all valid tags
         tagsTable.querySelectorAll('tr').forEach(row => {
             const keyElement = row.querySelector('td:first-child');
             const keyInput = keyElement.querySelector('input');
             const key = keyInput ? keyInput.value.trim() : keyElement.textContent.trim();
-            
+
             const valueInput = row.querySelector('td:nth-child(2) input, td:nth-child(2) select');
             if (valueInput && valueInput.value.trim()) {
-                const value = valueInput.value.trim();
+                let value = valueInput.value.trim();
                 const requirements = areaTypeRequirements[typeSelect.value]?.[key] || { type: 'text' };
-                
-                const validation = validateValue(value, { ...requirements, key });
-                if (validation.isValid) {
-                    tags[key] = validation.value;
+
+                // Convert numeric types
+                if (requirements.type === 'number' || requirements.type === 'integer') {
+                    const validation = validateNumericValue(value, requirements.type);
+                    if (validation.isValid) {
+                        value = validation.value; // This will be a number
+                    }
                 }
+                tags[key] = value;
             }
         });
 
         // Add type and GeoJSON
         tags['type'] = typeSelect.value;
         if (currentGeoJson) {
+            // Don't modify the GeoJSON, just stringify it directly
             tags['geo_json'] = JSON.stringify(currentGeoJson);
         }
 
