@@ -209,12 +209,11 @@ function updateGeoJson() {
     try {
         logDebug('Starting GeoJSON update');
         const rawInput = elements.geoJsonInput.value;
-        
-        // Parse and stringify to remove formatting/whitespace
+
+        // Parse the input to get a clean object
         const geoJson = JSON.parse(rawInput);
-        const cleanGeoJson = JSON.stringify(geoJson);
-        
-        logDebug('Clean GeoJSON:', cleanGeoJson);
+
+        logDebug('Clean GeoJSON:', geoJson);
 
         fetch('/api/set_area_tag', {
             method: 'POST',
@@ -222,7 +221,7 @@ function updateGeoJson() {
             body: JSON.stringify({
                 id: '{{ area.id }}',
                 name: 'geo_json',
-                value: cleanGeoJson
+                value: geoJson  // Send the parsed object directly, not stringified again
             })
         })
         .then(response => {
@@ -313,7 +312,7 @@ function updateTag(row) {
         body: JSON.stringify({
             id: '{{ area.id }}',
             name: key,
-            value: validation.value
+            value: validation.value  // Use the validated and properly typed value
         })
     })
     .then(response => response.json())
