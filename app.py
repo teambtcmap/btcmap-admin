@@ -512,7 +512,7 @@ def validate_geo_json(value):
             # Rewind the GeoJSON to ensure correct orientation
             rewound = rewind(geo_json)
             return True, {
-                "geo_json": json.dumps(rewound)
+                "geo_json": rewound  # Return the object directly, not stringified
             }
         except Exception as e:
             return False, f"Invalid GeoJSON structure: {str(e)}"
