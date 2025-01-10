@@ -305,8 +305,8 @@ function updateTag(row) {
         }
         // Keep the numeric value for display
         value = validation.value;
-        // Convert to string for RPC
-        finalValue = validation.value.toString();
+        // Send number as raw value to RPC
+        finalValue = validation.value;
     } else {
         validation = validateValue(value, requirements);
         if (!validation.isValid) {
@@ -316,13 +316,11 @@ function updateTag(row) {
         finalValue = value;
     }
 
-    // For GeoJSON, parse to validate then stringify for RPC
+    // For GeoJSON, parse and send as raw object
     if (key === 'geo_json' && typeof finalValue === 'string') {
         try {
-            // Parse to validate
-            const geoJson = JSON.parse(finalValue);
-            // Stringify for RPC
-            finalValue = JSON.stringify(geoJson);
+            // Parse to validate and send as raw object
+            finalValue = JSON.parse(finalValue);
         } catch (error) {
             showToast('Error', 'Invalid GeoJSON format', 'error');
             return;
@@ -335,7 +333,7 @@ function updateTag(row) {
         body: JSON.stringify({
             id: '{{ area.id }}',
             name: key,
-            value: finalValue  // All values are now strings for RPC
+            value: finalValue  // Send raw objects and numbers, strings for text
         })
     })
     .then(response => response.json())
