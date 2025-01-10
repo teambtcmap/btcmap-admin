@@ -390,17 +390,17 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (requirements.type === 'number' || requirements.type === 'integer') {
                     const validation = validateNumericValue(value, requirements.type);
                     if (validation.isValid) {
-                        value = validation.value; // This will be a number
+                        value = validation.value;  // This will be a number
                     }
                 }
-                tags[key] = value;
+                tags[key] = value;  // Key is always a string
             }
         });
 
         // Add type and GeoJSON
         tags['type'] = typeSelect.value;
         if (currentGeoJson) {
-            // Send the GeoJSON as a raw object, let the server handle parsing
+            // Send the GeoJSON as a raw object
             tags['geo_json'] = currentGeoJson;
         }
 
@@ -410,7 +410,7 @@ document.addEventListener('DOMContentLoaded', function() {
             headers: {
                 'Content-Type': 'application/json'
             },
-            body: JSON.stringify(tags)
+            body: JSON.stringify(tags)  // Keys are strings, values are properly typed
         })
         .then(response => {
             if (!response.ok) {
