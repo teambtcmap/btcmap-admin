@@ -386,7 +386,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 let value = valueInput.value.trim();
                 const requirements = areaTypeRequirements[typeSelect.value]?.[key] || { type: 'text' };
 
-                // Convert numeric types
+                // Convert numeric types to raw numbers
                 if (requirements.type === 'number' || requirements.type === 'integer') {
                     const validation = validateNumericValue(value, requirements.type);
                     if (validation.isValid) {
