@@ -331,9 +331,9 @@ function updateTag(row) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-            id: '{{ area.id }}',
-            name: key,  // Key is always a string
-            value: finalValue  // Value is either raw number, raw object (GeoJSON), or string
+            'id': '{{ area.id }}',  // String value in quotes
+            'name': key,            // String value in quotes
+            'value': finalValue     // Raw for numbers/objects, quoted for strings
         })
     })
     .then(response => response.json())

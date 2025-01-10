@@ -386,22 +386,22 @@ document.addEventListener('DOMContentLoaded', function() {
                 let value = valueInput.value.trim();
                 const requirements = areaTypeRequirements[typeSelect.value]?.[key] || { type: 'text' };
 
-                // Convert numeric types to raw numbers
+                // Convert numeric types
                 if (requirements.type === 'number' || requirements.type === 'integer') {
                     const validation = validateNumericValue(value, requirements.type);
                     if (validation.isValid) {
-                        value = validation.value;  // This will be a number
+                        value = validation.value;  // Raw number
                     }
                 }
-                tags[key] = value;  // Key is always a string
+                tags[key] = value;  // Keys are escaped strings
             }
         });
 
         // Add type and GeoJSON
-        tags['type'] = typeSelect.value;
+        tags['type'] = typeSelect.value;  // String value
         if (currentGeoJson) {
             // Send the GeoJSON as a raw object
-            tags['geo_json'] = currentGeoJson;
+            tags['geo_json'] = currentGeoJson;  // Raw object
         }
 
         // Submit the form
@@ -410,7 +410,7 @@ document.addEventListener('DOMContentLoaded', function() {
             headers: {
                 'Content-Type': 'application/json'
             },
-            body: JSON.stringify(tags)  // Keys are strings, values are properly typed
+            body: JSON.stringify(tags)  // Proper escaping of strings happens here
         })
         .then(response => {
             if (!response.ok) {
