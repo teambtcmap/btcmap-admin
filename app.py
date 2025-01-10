@@ -272,6 +272,10 @@ def add_area():
             app.logger.info(f"Valid GeoJSON result: {result}")
             tags['geo_json'] = result['geo_json']
 
+            area_km2 = calculate_area(tags['geo_json'])
+            tags['area_km2'] = area_km2
+            
+
         app.logger.info(f"Sending to RPC: {tags}")
         result = rpc_call('add_area', {'tags': tags})
         app.logger.info(f"RPC response: {result}")
@@ -287,9 +291,6 @@ def add_area():
 @app.route('/api/set_area_tag', methods=['POST'])
 def set_area_tag():
     data = request.json
-    print("Received data in set_area_tag:", data)
-    print("Type of data:", type(data))
-    print("Raw request data:", request.data)
 
     if not data:
         return jsonify({'error': 'Invalid request data'}), 400
