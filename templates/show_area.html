@@ -185,10 +185,10 @@ function startGeoJsonEditing() {
     logDebug('Starting GeoJSON editing');
     elements.geoJsonEditor.style.display = 'block';
     const geoJson = geoJsonLayer.toGeoJSON();
-    const geometry = geoJson.type === 'FeatureCollection' 
-        ? geoJson.features[0].geometry 
-        : geoJson.type === 'Feature' 
-            ? geoJson.geometry 
+    const geometry = geoJson.type === 'FeatureCollection'
+        ? geoJson.features[0].geometry
+        : geoJson.type === 'Feature'
+            ? geoJson.geometry
             : geoJson;
     elements.geoJsonInput.value = JSON.stringify(geometry, null, 2);
 }
@@ -224,28 +224,28 @@ function updateGeoJson() {
                 value: geoJson  // Send the parsed object directly, not stringified again
             })
         })
-        .then(response => {
-            if (!response.ok) {
-                return response.json().then(data => {
-                    throw new Error(data.error || `HTTP error! status: ${response.status}`);
-                });
-            }
-            return response.json();
-        })
-        .then(data => {
-            if (data.error) {
-                throw new Error(data.error || 'Failed to update GeoJSON');
-            }
-            logDebug('GeoJSON successfully updated on server');
-            showToast('Success', 'GeoJSON updated successfully', 'success');
-            elements.geoJsonEditor.style.display = 'none';
-            // Refresh the map with the updated GeoJSON
-            updateMapWithGeoJson(geoJson);
-        })
-        .catch(error => {
-            logDebug('Failed to update GeoJSON on server', error);
-            showToast('Error', error.message || 'Failed to update GeoJSON', 'error');
-        });
+            .then(response => {
+                if (!response.ok) {
+                    return response.json().then(data => {
+                        throw new Error(data.error || `HTTP error! status: ${response.status}`);
+                    });
+                }
+                return response.json();
+            })
+            .then(data => {
+                if (data.error) {
+                    throw new Error(data.error || 'Failed to update GeoJSON');
+                }
+                logDebug('GeoJSON successfully updated on server');
+                showToast('Success', 'GeoJSON updated successfully', 'success');
+                elements.geoJsonEditor.style.display = 'none';
+                // Refresh the map with the updated GeoJSON
+                updateMapWithGeoJson(geoJson);
+            })
+            .catch(error => {
+                logDebug('Failed to update GeoJSON on server', error);
+                showToast('Error', error.message || 'Failed to update GeoJSON', 'error');
+            });
     } catch (error) {
         logDebug('Failed to process GeoJSON input', error);
         showToast('Error', 'Invalid GeoJSON: ' + error.message, 'error');
@@ -289,8 +289,8 @@ function updateTag(row) {
     const content = valueCell.querySelector('.tag-value-content');
 
     let value = (input && !input.classList.contains('d-none')) ? input.value :
-                (select && !select.classList.contains('d-none')) ? select.value :
-                content.textContent;
+        (select && !select.classList.contains('d-none')) ? select.value :
+            content.textContent;
 
     // Validate the value
     const requirements = {{ area_type_requirements | tojson | safe }}[key] || {};
@@ -331,24 +331,31 @@ function updateTag(row) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-            "id": "{{ area.id }}",  // String value in double quotes
-            "name": key,            // String value in double quotes
-            "value": finalValue     // Raw for numbers/objects, quoted for strings
+            id: "{{ area.id }}",    // Values as quoted strings
+            name: key,              // Tag name as raw (unquoted)
+            value: finalValue       // Raw for numbers/objects, quoted for strings
         })
     })
-    .then(response => response.json())
-    .then(data => {
-        if (data.error) {
-            throw new Error(data.error.message || 'Failed to update tag');
-        }
-        content.textContent = value;  // Display the properly typed value
-        cancelEditing(row);
-        showToast('Success', 'Tag updated successfully', 'success');
-    })
-    .catch(error => {
-        logDebug('Failed to update tag', error);
-        showToast('Error', error.message, 'error');
-    });
+        .then(response => {
+            if (!response.ok) {
+                return response.json().then(data => {
+                    throw new Error(data.error || `HTTP error! status: ${response.status}`);
+                });
+            }
+            return response.json();
+        })
+        .then(data => {
+            if (data.error) {
+                throw new Error(data.error.message || 'Failed to update tag');
+            }
+            content.textContent = value;  // Display the properly typed value
+            cancelEditing(row);
+            showToast('Success', 'Tag updated successfully', 'success');
+        })
+        .catch(error => {
+            logDebug('Failed to update tag', error);
+            showToast('Error', error.message, 'error');
+        });
 }
 
 function cancelEditing(row) {
@@ -381,7 +388,7 @@ function cancelEditing(row) {
 function handleTagsTableClick(e) {
     const target = e.target;
     if (!target.matches('button')) return;
-    
+
     const row = target.closest('tr');
     if (!row) return;
 
