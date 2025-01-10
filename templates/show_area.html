@@ -213,6 +213,8 @@ function updateGeoJson() {
         // Parse the input to get a clean object
         const geoJson = JSON.parse(rawInput);
 
+        console.log("GeoJSON to be sent:", geoJson); //Added console log
+
         logDebug('Clean GeoJSON:', geoJson);
 
         fetch('/api/set_area_tag', {
@@ -326,6 +328,8 @@ function updateTag(row) {
             return;
         }
     }
+
+    console.log("Tag data to be sent:", {id: "{{ area.id }}", name: key, value: finalValue}); //Added console log
 
     fetch('/api/set_area_tag', {
         method: 'POST',
