@@ -410,7 +410,20 @@ document.addEventListener('DOMContentLoaded', function() {
             headers: {
                 'Content-Type': 'application/json'
             },
-            body: JSON.stringify(tags)  // Proper escaping of strings happens here
+            body: JSON.stringify(Object.fromEntries(
+                Object.entries(tags).map(([key, value]) => {
+                    if (key === 'geo_json' && typeof value === 'object') {
+                        // Keep GeoJSON as raw object
+                        return [key, value];
+                    } else if (typeof value === 'number') {
+                        // Keep numbers as raw values
+                        return [key, value];
+                    } else {
+                        // Convert all other values to strings with proper escaping
+                        return [key, String(value)];
+                    }
+                })
+            ))
         })
         .then(response => {
             if (!response.ok) {
