@@ -148,6 +148,7 @@ AREA_TYPE_REQUIREMENTS = {
     }
 }
 
+
 @app.before_request
 def check_auth():
     if request.endpoint and request.endpoint not in [
@@ -155,9 +156,11 @@ def check_auth():
     ] and 'password' not in session:
         return redirect(url_for('login', next=request.url))
 
+
 @app.route('/')
 def home():
     return redirect(url_for('select_area'))
+
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
@@ -171,14 +174,17 @@ def login():
         return redirect(next_page or url_for('select_area'))
     return render_template('login.html')
 
+
 @app.route('/logout')
 def logout():
     session.pop('password', None)
     return redirect(url_for('login'))
 
+
 @app.route('/select_area')
 def select_area():
     return render_template('select_area.html')
+
 
 @app.route('/show_area/<string:area_id>')
 def show_area(area_id):
@@ -196,7 +202,8 @@ def show_area(area_id):
             try:
                 geo_json = json.loads(geo_json)
             except json.JSONDecodeError:
-                app.logger.error(f"Invalid JSON string for geo_json in area {area_id}")
+                app.logger.error(
+                    f"Invalid JSON string for geo_json in area {area_id}")
                 geo_json = None
 
         return render_template('show_area.html',
@@ -204,6 +211,7 @@ def show_area(area_id):
                                area_type_requirements=type_requirements,
                                geo_json=geo_json)
     return render_template('error.html', error="Area not found"), 404
+
 
 @app.route('/add_area', methods=['GET', 'POST'])
 def add_area():
@@ -272,6 +280,9 @@ def add_area():
             app.logger.info(f"Valid GeoJSON result: {result}")
             tags['geo_json'] = result['geo_json']
 
+            area_km2 = calculate_area(tags['geo_json'])
+            tags['area_km2'] = area_km2
+
         app.logger.info(f"Sending to RPC: {tags}")
         result = rpc_call('add_area', {'tags': tags})
         app.logger.info(f"RPC response: {result}")
@@ -284,12 +295,10 @@ def add_area():
     return render_template('add_area.html',
                            area_type_requirements=AREA_TYPE_REQUIREMENTS)
 
+
 @app.route('/api/set_area_tag', methods=['POST'])
 def set_area_tag():
     data = request.json
-    print("Received data in set_area_tag:", data)
-    print("Type of data:", type(data))
-    print("Raw request data:", request.data)
 
     if not data:
         return jsonify({'error': 'Invalid request data'}), 400
@@ -308,9 +317,11 @@ def set_area_tag():
 
     requirements = AREA_TYPE_REQUIREMENTS.get(area_type, {}).get(key, {})
 
-    validation_funcs = validation_functions.get(requirements.get('type', 'text'), [validate_general])
+    validation_funcs = validation_functions.get(
+        requirements.get('type', 'text'), [validate_general])
     for validation_func in validation_funcs:
-        is_valid, error_message = validation_func(value, requirements.get('allowed_values'))
+        is_valid, error_message = validation_func(
+            value, requirements.get('allowed_values'))
         if not is_valid:
             return jsonify({'error': f'{key}: {error_message}'}), 400
 
@@ -326,7 +337,9 @@ def set_area_tag():
         })
 
         if 'error' in result:
-            return jsonify({'error': f'Failed to update geo_json: {result["error"]}'}), 400
+            return jsonify(
+                {'error':
+                 f'Failed to update geo_json: {result["error"]}'}), 400
 
         area_km2 = calculate_area(value)
         area_result = rpc_call('set_area_tag', {
@@ -336,9 +349,14 @@ def set_area_tag():
         })
 
         if 'error' in area_result:
-            return jsonify({'error': f'Failed to update area: {area_result["error"]}'}), 400
+            return jsonify(
+                {'error':
+                 f'Failed to update area: {area_result["error"]}'}), 400
 
-        return jsonify({'success': True, 'message': 'GeoJSON and area updated successfully'})
+        return jsonify({
+            'success': True,
+            'message': 'GeoJSON and area updated successfully'
+        })
 
     result = rpc_call('set_area_tag', {
         'id': area_id,
@@ -346,6 +364,7 @@ def set_area_tag():
         'value': value
     })
     return jsonify(result)
+
 
 @app.route('/api/remove_area_tag', methods=['POST'])
 def remove_area_tag():
@@ -371,6 +390,7 @@ def remove_area_tag():
     result = rpc_call('remove_area_tag', {'id': area_id, 'tag': tag})
     return jsonify(result)
 
+
 @app.route('/api/remove_area', methods=['POST'])
 def remove_area():
     data = request.json
@@ -378,6 +398,7 @@ def remove_area():
         return jsonify({'error': 'Invalid request data'}), 400
     result = rpc_call('remove_area', {'id': data.get('id')})
     return jsonify(result)
+
 
 @app.route('/api/search_areas', methods=['POST'])
 def search_areas():
@@ -409,11 +430,13 @@ def search_areas():
             f"An unexpected error occurred. Please try again later."
         }), 500
 
+
 def get_area(area_id):
     result = rpc_call('get_area', {'id': area_id})
     if 'error' not in result:
         return result['result']
     return None
+
 
 def calculate_area(geo_json):
     if isinstance(geo_json, str):
@@ -430,6 +453,7 @@ def calculate_area(geo_json):
     area_m2 = geom_proj.area
 
     return round(area_m2 / 1_000_000, 2)
+
 
 def rpc_call(method, params):
     payload = {
@@ -457,6 +481,7 @@ def rpc_call(method, params):
         app.logger.error(f"Unexpected error in RPC call to {method}: {str(e)}")
         raise
 
+
 def format_date(date_string):
     if date_string:
         try:
@@ -465,6 +490,7 @@ def format_date(date_string):
         except ValueError:
             return date_string
     return 'N/A'
+
 
 def validate_non_negative_number(value, allowed_values=None):
     if not isinstance(value, (int, float)) and not (isinstance(
@@ -476,6 +502,7 @@ def validate_non_negative_number(value, allowed_values=None):
     except ValueError:
         return False, "Value must be a number"
 
+
 def validate_non_negative_integer(value, allowed_values=None):
     if not isinstance(value, int) and not (isinstance(value, str)
                                            and value.isdigit()):
@@ -486,6 +513,7 @@ def validate_non_negative_integer(value, allowed_values=None):
     except ValueError:
         return False, "Value must be an integer"
 
+
 def validate_date(value, allowed_values=None):
     try:
         datetime.strptime(value, '%Y-%m-%d')
@@ -493,11 +521,13 @@ def validate_date(value, allowed_values=None):
     except ValueError:
         return False, "Invalid date format. Please use YYYY-MM-DD"
 
+
 def validate_allowed_values(value, allowed_values):
     if allowed_values and value.lower() in allowed_values:
         return True, None
     else:
         return False, f"Invalid value. Please choose from {', '.join(allowed_values)}"
+
 
 def validate_geo_json(value):
     try:
@@ -519,7 +549,8 @@ def validate_geo_json(value):
             # Rewind the GeoJSON to ensure correct orientation
             rewound = rewind(geo_json)
             return True, {
-                "geo_json": rewound  # Return the object directly, not stringified
+                "geo_json":
+                rewound  # Return the object directly, not stringified
             }
         except Exception as e:
             return False, f"Invalid GeoJSON structure: {str(e)}"
@@ -528,10 +559,12 @@ def validate_geo_json(value):
     except Exception as e:
         return False, f"Error validating GeoJSON: {str(e)}"
 
+
 def validate_general(value, allowed_values=None):
     if allowed_values:
         return validate_allowed_values(value, allowed_values)
     return len(str(value).strip()) > 0, "Value cannot be empty"
+
 
 def validate_url(value, allowed_values=None):
     try:
@@ -540,13 +573,16 @@ def validate_url(value, allowed_values=None):
     except:
         return False, "Invalid URL"
 
+
 def validate_email(value, allowed_values=None):
     email_regex = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
     return bool(re.match(email_regex, value)), "Invalid email format"
 
+
 def validate_phone(value, allowed_values=None):
     phone_regex = r'^\+?1?\d{9,15}$'
     return bool(re.match(phone_regex, value)), "Invalid phone number format"
+
 
 validation_functions = {
     'number': [validate_non_negative_number],
