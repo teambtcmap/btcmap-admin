@@ -337,7 +337,8 @@ function getExistingKeys() {
 
 function validateCustomKey(keyInput) {
     const key = keyInput.value.trim();
-    const validation = validateKey(key, getExistingKeys());
+    const existingKeys = getExistingKeys();
+    const validation = validateKey(key, existingKeys);
     const feedback = keyInput.nextElementSibling;
 
     keyInput.classList.toggle('is-invalid', !validation.isValid);
@@ -444,12 +445,14 @@ function addOptionalField() {
 
     const existingKeys = getExistingKeys();
     const areaTypeReqs = {{ area_type_requirements | tojson | safe }};
+
+    // Only get optional fields for the current area type
     const optionalFields = Object.entries(areaTypeReqs[areaType] || {})
         .filter(([key, req]) => !req.required && !existingKeys.includes(key) && key !== 'geo_json')
         .map(([key]) => key);
 
     if (optionalFields.length === 0) {
-        showToast('Info', 'All optional fields have been added', 'info');
+        showToast('Info', `All optional fields for ${areaType} have been added`, 'info');
         return;
     }
 
@@ -524,7 +527,7 @@ function updateTag(row) {
             showToast('Error', validation.message, 'error');
             return;
         }
-        finalValue = validation.value;  // Raw number
+        finalValue = Number(value); // Convert to raw number
     }
 
     fetch('/api/set_area_tag', {
@@ -533,7 +536,7 @@ function updateTag(row) {
         body: JSON.stringify({
             id: "{{ area.id }}",
             name: key,
-            value: finalValue
+            value: finalValue // Will be sent as raw number for numeric fields
         })
     })
     .then(response => {
@@ -548,7 +551,6 @@ function updateTag(row) {
         if (data.error) {
             throw new Error(data.error.message || 'Failed to update tag');
         }
-        // Update the displayed value
         const content = valueCell.querySelector('.tag-value-content');
         content.textContent = value;
         cancelEditing(row);
