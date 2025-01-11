@@ -29,18 +29,18 @@
             <table id="tags-table" class="table table-striped">
                 <thead>
                     <tr>
-                        <th>Key</th>
-                        <th>Value</th>
-                        <th>Actions</th>
+                        <th style="width: 30%">Key</th>
+                        <th style="width: 50%">Value</th>
+                        <th style="width: 20%">Actions</th>
                     </tr>
                 </thead>
                 <tbody>
-                    {% for key, value in area.tags.items() %}
+                    {% for key, value in area.tags.items() if key != 'geo_json' %}
                     {% set requirements = area_type_requirements.get(key, {}) %}
                     <tr data-key="{{ key }}">
                         <td>{{ key }}</td>
                         <td class="tag-value-cell">
-                            <span class="tag-value-content">{{ value }}</span>
+                            <span class="tag-value-content text-break">{{ value }}</span>
                             {% if requirements.get('allowed_values') %}
                             <select class="form-control tag-select d-none">
                                 {% for allowed_value in requirements.allowed_values %}
@@ -52,13 +52,15 @@
                             {% endif %}
                             <div class="invalid-feedback"></div>
                         </td>
-                        <td>
-                            <button class="btn btn-primary btn-sm edit-tag">Edit</button>
-                            <button class="btn btn-success btn-sm update-tag d-none">Update</button>
-                            <button class="btn btn-secondary btn-sm cancel-edit d-none">Cancel</button>
-                            {% if not requirements.get('required', False) %}
-                            <button class="btn btn-danger btn-sm delete-tag">Remove</button>
-                            {% endif %}
+                        <td class="text-nowrap">
+                            <div class="btn-group">
+                                <button class="btn btn-primary btn-sm edit-tag">Edit</button>
+                                <button class="btn btn-success btn-sm update-tag d-none">Update</button>
+                                <button class="btn btn-secondary btn-sm cancel-edit d-none">Cancel</button>
+                                {% if not requirements.get('required', False) %}
+                                <button class="btn btn-danger btn-sm delete-tag">Remove</button>
+                                {% endif %}
+                            </div>
                         </td>
                     </tr>
                     {% endfor %}
@@ -278,6 +280,47 @@ function cancelGeoJsonEditing() {
     elements.geoJsonEditor.style.display = 'none';
 }
 
+// Tag editing functions
+function startEditing(row) {
+    logDebug('Starting tag editing');
+    const valueCell = row.querySelector('.tag-value-cell');
+    const content = valueCell.querySelector('.tag-value-content');
+    const input = valueCell.querySelector('.tag-input');
+    const select = valueCell.querySelector('.tag-select');
+    const editBtn = row.querySelector('.edit-tag');
+    const updateBtn = row.querySelector('.update-tag');
+    const cancelBtn = row.querySelector('.cancel-edit');
+
+    content.classList.add('d-none');
+    if (input) {
+        input.classList.remove('d-none');
+        input.value = content.textContent.trim();
+    }
+    if (select) {
+        select.classList.remove('d-none');
+    }
+    editBtn.classList.add('d-none');
+    updateBtn.classList.remove('d-none');
+    cancelBtn.classList.remove('d-none');
+}
+
+function cancelEditing(row) {
+    const valueCell = row.querySelector('.tag-value-cell');
+    const content = valueCell.querySelector('.tag-value-content');
+    const input = valueCell.querySelector('.tag-input');
+    const select = valueCell.querySelector('.tag-select');
+    const editBtn = row.querySelector('.edit-tag');
+    const updateBtn = row.querySelector('.update-tag');
+    const cancelBtn = row.querySelector('.cancel-edit');
+
+    content.classList.remove('d-none');
+    if (input) input.classList.add('d-none');
+    if (select) select.classList.add('d-none');
+    editBtn.classList.remove('d-none');
+    updateBtn.classList.add('d-none');
+    cancelBtn.classList.add('d-none');
+}
+
 // Tag management functions
 function getExistingKeys() {
     const keys = [];
@@ -285,7 +328,7 @@ function getExistingKeys() {
         const keyElement = row.querySelector('td:first-child');
         const keyInput = keyElement.querySelector('input');
         const key = keyInput ? keyInput.value.trim() : keyElement.textContent.trim();
-        if (key) {
+        if (key && key !== 'geo_json') {
             keys.push(key);
         }
     });
@@ -338,17 +381,17 @@ function createTagRow(key, value = '', isRequired = false, isCustom = false, all
                 <div class="invalid-feedback">Please enter a valid value</div>
             `}
         </td>
-        <td>
-            <button class="btn btn-success btn-sm update-tag">Update</button>
-            <button class="btn btn-danger btn-sm remove-field">Remove</button>
+        <td class="text-nowrap">
+            <div class="btn-group">
+                <button class="btn btn-success btn-sm update-tag">Update</button>
+                <button class="btn btn-danger btn-sm remove-field">Remove</button>
+            </div>
         </td>
     `;
 
-    // Add event listeners
     if (!isRequired) {
         row.querySelector('.remove-field').addEventListener('click', function() {
             row.remove();
-            updateOptionalFieldSelect();
         });
     }
 
@@ -402,7 +445,7 @@ function addOptionalField() {
     const existingKeys = getExistingKeys();
     const areaTypeReqs = {{ area_type_requirements | tojson | safe }};
     const optionalFields = Object.entries(areaTypeReqs[areaType] || {})
-        .filter(([key, req]) => !req.required && !existingKeys.includes(key))
+        .filter(([key, req]) => !req.required && !existingKeys.includes(key) && key !== 'geo_json')
         .map(([key]) => key);
 
     if (optionalFields.length === 0) {
@@ -423,8 +466,10 @@ function addOptionalField() {
             <input type="text" class="form-control" disabled>
             <div class="invalid-feedback">Please enter a valid value</div>
         </td>
-        <td>
-            <button type="button" class="btn btn-danger btn-sm remove-field">Remove</button>
+        <td class="text-nowrap">
+            <div class="btn-group">
+                <button type="button" class="btn btn-danger btn-sm remove-field">Remove</button>
+            </div>
         </td>
     `;
 
@@ -503,6 +548,10 @@ function updateTag(row) {
         if (data.error) {
             throw new Error(data.error.message || 'Failed to update tag');
         }
+        // Update the displayed value
+        const content = valueCell.querySelector('.tag-value-content');
+        content.textContent = value;
+        cancelEditing(row);
         showToast('Success', 'Tag updated successfully', 'success');
     })
     .catch(error => {
@@ -538,7 +587,6 @@ function handleTagsTableClick(e) {
         );
     }
 }
-
 
 function removeTag(areaId, tag) {
     fetch('/api/remove_area_tag', {
