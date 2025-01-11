@@ -35,19 +35,20 @@
                     </tr>
                 </thead>
                 <tbody>
-                    {% for key, requirements in area_type_requirements.items() %}
+                    {% for key, value in area.tags.items() %}
+                    {% set requirements = area_type_requirements.get(key, {}) %}
                     <tr data-key="{{ key }}">
                         <td>{{ key }}</td>
                         <td class="tag-value-cell">
-                            <span class="tag-value-content">{{ area.tags.get(key, '') }}</span>
+                            <span class="tag-value-content">{{ value }}</span>
                             {% if requirements.get('allowed_values') %}
                             <select class="form-control tag-select d-none">
-                                {% for value in requirements.allowed_values %}
-                                <option value="{{ value }}" {% if value == area.tags.get(key) %}selected{% endif %}>{{ value }}</option>
+                                {% for allowed_value in requirements.allowed_values %}
+                                <option value="{{ allowed_value }}" {% if allowed_value == value %}selected{% endif %}>{{ allowed_value }}</option>
                                 {% endfor %}
                             </select>
                             {% else %}
-                            <input type="text" class="form-control tag-input d-none" value="{{ area.tags.get(key, '') }}">
+                            <input type="text" class="form-control tag-input d-none" value="{{ value }}">
                             {% endif %}
                             <div class="invalid-feedback"></div>
                         </td>
@@ -517,13 +518,14 @@ function handleTagsTableClick(e) {
     const row = target.closest('tr');
     if (!row) return;
 
-    if (target.classList.contains('update-tag')) {
+    if (target.classList.contains('edit-tag')) {
+        startEditing(row);
+    } else if (target.classList.contains('update-tag')) {
         updateTag(row);
-    } else if (target.classList.contains('remove-field')) {
-        const keyElement = row.querySelector('td:first-child');
-        const keyInput = keyElement.querySelector('input');
-        const key = keyInput ? keyInput.value.trim() : keyElement.textContent.trim();
-
+    } else if (target.classList.contains('cancel-edit')) {
+        cancelEditing(row);
+    } else if (target.classList.contains('delete-tag')) {
+        const key = row.dataset.key;
         showToast(
             'Confirm Delete',
             `Are you sure you want to remove the tag "${key}"?`,
@@ -535,6 +537,38 @@ function handleTagsTableClick(e) {
             }
         );
     }
+}
+
+
+function removeTag(areaId, tag) {
+    fetch('/api/remove_area_tag', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: areaId, tag: tag })
+    })
+    .then(response => {
+        if (!response.ok) {
+            return response.json().then(data => {
+                throw new Error(data.error || `HTTP error! status: ${response.status}`);
+            });
+        }
+        return response.json();
+    })
+    .then(data => {
+        if (data.error) {
+            throw new Error(data.error.message || 'Failed to remove tag');
+        }
+        // Remove the row from the table
+        const row = document.querySelector(`tr[data-key="${tag}"]`);
+        if (row) {
+            row.remove();
+        }
+        showToast('Success', 'Tag removed successfully', 'success');
+    })
+    .catch(error => {
+        logDebug('Failed to remove tag', error);
+        showToast('Error', error.message, 'error');
+    });
 }
 
 // Initialize everything after DOM is loaded
