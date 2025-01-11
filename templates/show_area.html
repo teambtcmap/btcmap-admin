@@ -4,17 +4,17 @@
 
 {% block content %}
 <div class="container">
-    <h1>Area Details</h1>
-    <h2>{{ area.tags.get('name', 'Unnamed Area') }} ({{ area.tags.get('type', 'Unknown Type') }})</h2>
+    <h1 class="mt-5">Area Details</h1>
+    <h2 class="mb-4">{{ area.tags.get('name', 'Unnamed Area') }} ({{ area.tags.get('type', 'Unknown Type') }})</h2>
 
-    <!-- Map container -->
-    <div id="map-container">
-        <div id="map"></div>
-        <button id="edit-geojson-btn" class="btn btn-primary">Edit GeoJSON</button>
+    <!-- Map container with consistent styling -->
+    <div id="map-container" class="position-relative mb-4">
+        <div id="map" style="height: 400px; width: 100%;"></div>
+        <button id="edit-geojson-btn" class="btn btn-primary position-absolute" style="top: 10px; right: 10px; z-index: 1000;">Edit GeoJSON</button>
     </div>
 
-    <!-- GeoJSON editor -->
-    <div id="geojson-editor" class="mb-3" style="display: none;">
+    <!-- GeoJSON editor with improved styling -->
+    <div id="geojson-editor" class="mb-4" style="display: none;">
         <textarea id="geojson-input" class="form-control mb-2" rows="5"></textarea>
         <div class="btn-group">
             <button id="show-btn" class="btn btn-primary">Show</button>
@@ -23,48 +23,60 @@
         </div>
     </div>
 
-    <!-- Area information -->
-    <table id="tags-table" class="table table-striped">
-        <thead>
-            <tr>
-                <th>Key</th>
-                <th>Value</th>
-                <th>Actions</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for key, requirements in area_type_requirements.items() %}
-            <tr data-key="{{ key }}">
-                <td>{{ key }}</td>
-                <td class="tag-value-cell">
-                    <span class="tag-value-content">{{ area.tags.get(key, '') }}</span>
-                    {% if requirements.get('allowed_values') %}
-                    <select class="form-control tag-select d-none">
-                        {% for value in requirements.allowed_values %}
-                        <option value="{{ value }}" {% if value == area.tags.get(key) %}selected{% endif %}>{{ value }}</option>
-                        {% endfor %}
-                    </select>
-                    {% else %}
-                    <input type="text" class="form-control tag-input d-none" value="{{ area.tags.get(key, '') }}">
-                    {% endif %}
-                    <div class="invalid-feedback"></div>
-                </td>
-                <td>
-                    <button class="btn btn-primary btn-sm edit-tag">Edit</button>
-                    <button class="btn btn-success btn-sm update-tag d-none">Update</button>
-                    <button class="btn btn-secondary btn-sm cancel-edit d-none">Cancel</button>
-                    {% if not requirements.get('required', False) %}
-                    <button class="btn btn-danger btn-sm delete-tag">Remove</button>
-                    {% endif %}
-                </td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
+    <!-- Area information with card styling -->
+    <div class="card mb-4">
+        <div class="card-body">
+            <table id="tags-table" class="table table-striped">
+                <thead>
+                    <tr>
+                        <th>Key</th>
+                        <th>Value</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for key, requirements in area_type_requirements.items() %}
+                    <tr data-key="{{ key }}">
+                        <td>{{ key }}</td>
+                        <td class="tag-value-cell">
+                            <span class="tag-value-content">{{ area.tags.get(key, '') }}</span>
+                            {% if requirements.get('allowed_values') %}
+                            <select class="form-control tag-select d-none">
+                                {% for value in requirements.allowed_values %}
+                                <option value="{{ value }}" {% if value == area.tags.get(key) %}selected{% endif %}>{{ value }}</option>
+                                {% endfor %}
+                            </select>
+                            {% else %}
+                            <input type="text" class="form-control tag-input d-none" value="{{ area.tags.get(key, '') }}">
+                            {% endif %}
+                            <div class="invalid-feedback"></div>
+                        </td>
+                        <td>
+                            <div class="btn-group">
+                                <button class="btn btn-primary btn-sm edit-tag">Edit</button>
+                                <button class="btn btn-success btn-sm update-tag d-none">Update</button>
+                                <button class="btn btn-secondary btn-sm cancel-edit d-none">Cancel</button>
+                                {% if not requirements.get('required', False) %}
+                                <button class="btn btn-danger btn-sm delete-tag">Remove</button>
+                                {% endif %}
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
 
-    <div class="mt-4 danger-zone">
-        <h3>Danger Zone</h3>
-        <button class="btn btn-danger" onclick="removeArea('{{ area.id }}')">Remove Area</button>
+    <!-- Centered and styled danger zone -->
+    <div class="card text-center border-danger mt-5 mb-4">
+        <div class="card-header bg-danger text-white">
+            <h3 class="mb-0">Danger Zone</h3>
+        </div>
+        <div class="card-body">
+            <p class="text-muted mb-3">Once you delete an area, there is no going back. Please be certain.</p>
+            <button class="btn btn-danger btn-lg" onclick="removeArea('{{ area.id }}')">Remove Area</button>
+        </div>
     </div>
 </div>
 {% endblock %}
