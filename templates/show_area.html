@@ -324,6 +324,7 @@ function cancelEditing(row) {
 // Tag management functions
 function getExistingKeys() {
     const keys = [];
+    // Get all existing keys from the table rows
     elements.tagsTable.querySelectorAll('tbody tr').forEach(row => {
         const keyElement = row.querySelector('td:first-child');
         const keyInput = keyElement.querySelector('input');
@@ -338,6 +339,24 @@ function getExistingKeys() {
 function validateCustomKey(keyInput) {
     const key = keyInput.value.trim();
     const existingKeys = getExistingKeys();
+
+    // Get all possible keys from area type requirements
+    const areaType = '{{ area.tags.get("type", "") }}';
+    const areaTypeReqs = {{ area_type_requirements | tojson | safe }};
+    const allPossibleKeys = Object.keys(areaTypeReqs[areaType] || {});
+
+    // Key shouldn't exist in either current keys or be a reserved key
+    if (existingKeys.includes(key) || allPossibleKeys.includes(key) || key === 'geo_json' || key === 'type') {
+        keyInput.classList.add('is-invalid');
+        const feedback = keyInput.nextElementSibling;
+        if (feedback && feedback.classList.contains('invalid-feedback')) {
+            feedback.textContent = 'This key already exists';
+            feedback.style.display = 'block';
+        }
+        showToast('Error', 'This key already exists', 'error');
+        return false;
+    }
+
     const validation = validateKey(key, existingKeys);
     const feedback = keyInput.nextElementSibling;
 
@@ -446,13 +465,18 @@ function addOptionalField() {
     const existingKeys = getExistingKeys();
     const areaTypeReqs = {{ area_type_requirements | tojson | safe }};
 
-    // Only get optional fields for the current area type
+    // Filter optional fields specifically for the current area type
     const optionalFields = Object.entries(areaTypeReqs[areaType] || {})
-        .filter(([key, req]) => !req.required && !existingKeys.includes(key) && key !== 'geo_json')
+        .filter(([key, req]) => {
+            return !req.required && // not required
+                   !existingKeys.includes(key) && // not already added
+                   key !== 'geo_json' && // not geo_json
+                   key !== 'type'; // not type
+        })
         .map(([key]) => key);
 
     if (optionalFields.length === 0) {
-        showToast('Info', `All optional fields for ${areaType} have been added`, 'info');
+        showToast('Info', `All optional fields for ${areaType} type have been added`, 'info');
         return;
     }
 
@@ -514,29 +538,38 @@ function updateTag(row) {
     const input = valueCell.querySelector('input, select');
     const value = input.value.trim();
 
-    // Validate the value
-    const areaTypeReqs = {{ area_type_requirements | tojson | safe }};
+    // Get field requirements
     const areaType = '{{ area.tags.get("type", "") }}';
+    const areaTypeReqs = {{ area_type_requirements | tojson | safe }};
     const requirements = areaTypeReqs[areaType]?.[key] || { type: 'text' };
 
     let finalValue = value;
 
-    if (requirements.type === 'number' || requirements.type === 'integer') {
-        const validation = validateNumericValue(value, requirements.type);
+    // Handle numeric fields
+    if (key === 'population' || requirements.type === 'integer') {
+        const validation = validateNumericValue(value, 'integer');
         if (!validation.isValid) {
             showToast('Error', validation.message, 'error');
             return;
         }
-        finalValue = Number(value); // Convert to raw number
+        finalValue = parseInt(value, 10); // Convert to raw integer
+    } else if (key === 'area_km2' || requirements.type === 'number') {
+        const validation = validateNumericValue(value, 'number');
+        if (!validation.isValid) {
+            showToast('Error', validation.message, 'error');
+            return;
+        }
+        finalValue = parseFloat(value); // Convert to raw float
     }
 
+    // Send the update request
     fetch('/api/set_area_tag', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
             id: "{{ area.id }}",
             name: key,
-            value: finalValue // Will be sent as raw number for numeric fields
+            value: finalValue // This will be a raw number for numeric fields
         })
     })
     .then(response => {
