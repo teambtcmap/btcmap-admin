@@ -35,36 +35,42 @@
                     </tr>
                 </thead>
                 <tbody>
-                    {% for key, requirements in area_type_requirements.items() %}
-                    <tr data-key="{{ key }}">
-                        <td>{{ key }}</td>
-                        <td class="tag-value-cell">
-                            <span class="tag-value-content">{{ area.tags.get(key, '') }}</span>
-                            {% if requirements.get('allowed_values') %}
-                            <select class="form-control tag-select d-none">
-                                {% for value in requirements.allowed_values %}
-                                <option value="{{ value }}" {% if value == area.tags.get(key) %}selected{% endif %}>{{ value }}</option>
-                                {% endfor %}
-                            </select>
-                            {% else %}
-                            <input type="text" class="form-control tag-input d-none" value="{{ area.tags.get(key, '') }}">
-                            {% endif %}
-                            <div class="invalid-feedback"></div>
-                        </td>
-                        <td>
-                            <div class="btn-group">
-                                <button class="btn btn-primary btn-sm edit-tag">Edit</button>
-                                <button class="btn btn-success btn-sm update-tag d-none">Update</button>
-                                <button class="btn btn-secondary btn-sm cancel-edit d-none">Cancel</button>
-                                {% if not requirements.get('required', False) %}
-                                <button class="btn btn-danger btn-sm delete-tag">Remove</button>
+                    {% for key in area.tags.keys() %}
+                        {% if key in area_type_requirements %}
+                        <tr data-key="{{ key }}">
+                            <td>{{ key }}</td>
+                            <td class="tag-value-cell">
+                                <span class="tag-value-content">{{ area.tags.get(key, '') }}</span>
+                                {% if area_type_requirements[key].get('allowed_values') %}
+                                <select class="form-control tag-select d-none">
+                                    {% for value in area_type_requirements[key].allowed_values %}
+                                    <option value="{{ value }}" {% if value == area.tags.get(key) %}selected{% endif %}>{{ value }}</option>
+                                    {% endfor %}
+                                </select>
+                                {% else %}
+                                <input type="text" class="form-control tag-input d-none" value="{{ area.tags.get(key, '') }}">
                                 {% endif %}
-                            </div>
-                        </td>
-                    </tr>
+                                <div class="invalid-feedback"></div>
+                            </td>
+                            <td>
+                                <div class="btn-group">
+                                    <button class="btn btn-primary btn-sm edit-tag">Edit</button>
+                                    <button class="btn btn-success btn-sm update-tag d-none">Update</button>
+                                    <button class="btn btn-secondary btn-sm cancel-edit d-none">Cancel</button>
+                                    {% if not area_type_requirements[key].get('required', False) %}
+                                    <button class="btn btn-danger btn-sm delete-tag">Remove</button>
+                                    {% endif %}
+                                </div>
+                            </td>
+                        </tr>
+                        {% endif %}
                     {% endfor %}
                 </tbody>
             </table>
+            <div class="mt-3 text-center">
+                <button type="button" id="add-optional-field-btn" class="btn btn-secondary">Add Optional Field</button>
+                <button type="button" id="add-custom-field-btn" class="btn btn-secondary">Add Custom Field</button>
+            </div>
         </div>
     </div>
 
@@ -180,6 +186,17 @@ function initializeEventListeners() {
             elements.cancelBtn.addEventListener('click', cancelGeoJsonEditing);
         }
 
+        // Add Optional and Custom Field buttons
+        const addOptionalFieldBtn = document.getElementById('add-optional-field-btn');
+        const addCustomFieldBtn = document.getElementById('add-custom-field-btn');
+
+        if (addOptionalFieldBtn) {
+            addOptionalFieldBtn.addEventListener('click', addOptionalField);
+        }
+        if (addCustomFieldBtn) {
+            addCustomFieldBtn.addEventListener('click', addCustomField);
+        }
+
         // Tags table event delegation
         if (elements.tagsTable) {
             elements.tagsTable.addEventListener('click', handleTagsTableClick);
@@ -190,6 +207,165 @@ function initializeEventListeners() {
         logDebug('Failed to initialize event listeners', error);
         showToast('Error', 'Failed to initialize event listeners: ' + error.message, 'error');
     }
+}
+
+function getExistingKeys() {
+    const keys = [];
+    elements.tagsTable.querySelectorAll('tr').forEach(row => {
+        const keyElement = row.querySelector('td:first-child');
+        const keyInput = keyElement.querySelector('input');
+        const key = keyInput ? keyInput.value.trim() : keyElement.textContent.trim();
+        if (key) {
+            keys.push(key);
+        }
+    });
+    return keys;
+}
+
+function addOptionalField() {
+    const areaType = '{{ area.tags.get("type", "") }}';
+    if (!areaType) {
+        showToast('Error', 'Area type not found', 'error');
+        return;
+    }
+
+    const existingKeys = getExistingKeys();
+    const areaTypeRequirements = {{ area_type_requirements | tojson | safe }};
+    const optionalFields = Object.entries(areaTypeRequirements)
+        .filter(([key, req]) => !req.required && !existingKeys.includes(key))
+        .map(([key]) => key);
+
+    if (optionalFields.length === 0) {
+        showToast('Info', 'All optional fields have been added', 'info');
+        return;
+    }
+
+    const newRow = document.createElement('tr');
+    newRow.innerHTML = `
+        <td>
+            <select class="form-control optional-field-select" required>
+                <option value="">Select Optional Field</option>
+                ${optionalFields.map(field => `<option value="${field}">${field}</option>`).join('')}
+            </select>
+            <div class="invalid-feedback">Please select a field</div>
+        </td>
+        <td>
+            <input type="text" class="form-control" disabled>
+            <div class="invalid-feedback">Please enter a valid value</div>
+        </td>
+        <td>
+            <button type="button" class="btn btn-danger btn-sm remove-field">Remove</button>
+        </td>
+    `;
+
+    const optionalFieldSelect = newRow.querySelector('.optional-field-select');
+    optionalFieldSelect.addEventListener('change', function() {
+        const selectedField = this.value;
+        if (!selectedField) return;
+
+        const requirements = areaTypeRequirements[selectedField];
+        const row = createTagRow(
+            selectedField,
+            '',
+            false,
+            false,
+            requirements.allowed_values
+        );
+        elements.tagsTable.querySelector('tbody').replaceChild(row, newRow);
+    });
+
+    newRow.querySelector('.remove-field').addEventListener('click', () => newRow.remove());
+    elements.tagsTable.querySelector('tbody').appendChild(newRow);
+}
+
+function createTagRow(key, value = '', isRequired = false, isCustom = false, allowedValues = null) {
+    const row = document.createElement('tr');
+    const isNumericField = key === 'population' || key === 'area_km2';
+
+    row.setAttribute('data-key', isCustom ? '' : key);
+    row.innerHTML = `
+        <td>
+            ${isCustom ? 
+                `<input type="text" class="form-control custom-key" placeholder="Custom Key" required>
+                 <div class="invalid-feedback">Please enter a valid key</div>` 
+                : key}
+        </td>
+        <td class="tag-value-cell">
+            ${allowedValues ? `
+                <select class="form-control tag-select">
+                    <option value="">Select ${key}</option>
+                    ${allowedValues.map(val => `<option value="${val}">${val}</option>`).join('')}
+                </select>
+            ` : `
+                <input type="${isNumericField ? 'number' : 'text'}" 
+                       class="form-control${isNumericField ? ' numeric-field' : ''}" 
+                       value="${value}"
+                       ${isNumericField ? `min="0" step="${key === 'population' ? '1' : '0.01'}"` : ''}>
+            `}
+            <div class="invalid-feedback"></div>
+        </td>
+        <td>
+            <div class="btn-group">
+                <button class="btn btn-success btn-sm update-tag">Update</button>
+                <button class="btn btn-secondary btn-sm cancel-edit">Cancel</button>
+                <button class="btn btn-danger btn-sm remove-field">Remove</button>
+            </div>
+        </td>
+    `;
+
+    if (isCustom) {
+        const keyInput = row.querySelector('.custom-key');
+        keyInput.addEventListener('input', function() {
+            this.classList.remove('is-invalid');
+            const feedback = this.nextElementSibling;
+            if (feedback) {
+                feedback.style.display = 'none';
+            }
+        });
+        keyInput.addEventListener('blur', function() {
+            validateCustomKey(this);
+        });
+    }
+
+    const removeBtn = row.querySelector('.remove-field');
+    if (removeBtn) {
+        removeBtn.addEventListener('click', () => row.remove());
+    }
+
+    const updateBtn = row.querySelector('.update-tag');
+    if (updateBtn) {
+        updateBtn.addEventListener('click', () => updateTag(row));
+    }
+
+    const cancelBtn = row.querySelector('.cancel-edit');
+    if (cancelBtn) {
+        cancelBtn.addEventListener('click', () => row.remove());
+    }
+
+    return row;
+}
+
+function addCustomField() {
+    const newRow = createTagRow('', '', false, true);
+    elements.tagsTable.querySelector('tbody').appendChild(newRow);
+}
+
+function validateCustomKey(keyInput) {
+    const key = keyInput.value.trim();
+    const validation = validateKey(key, getExistingKeys());
+    const feedback = keyInput.nextElementSibling;
+
+    keyInput.classList.toggle('is-invalid', !validation.isValid);
+    if (feedback && feedback.classList.contains('invalid-feedback')) {
+        feedback.textContent = validation.message;
+        feedback.style.display = validation.isValid ? 'none' : 'block';
+    }
+
+    if (!validation.isValid) {
+        showToast('Error', validation.message, 'error');
+    }
+
+    return validation.isValid;
 }
 
 // GeoJSON editing functions
