@@ -133,13 +133,13 @@ AREA_TYPE_REQUIREMENTS = {
             'required': False,
             'type': 'url'
         },
+        'contact:geyser': {
+            'required': False,
+            'type': 'url'
+        }
         'tips:lightning_address': {
             'required': False,
             'type': 'text'
-        },
-        'tips:url': {
-            'required': False,
-            'type': 'url'
         },
         'description': {
             'required': False,
