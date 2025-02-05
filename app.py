@@ -456,18 +456,19 @@ def calculate_area(geo_json):
 
 
 def rpc_call(method, params):
+    headers = {
+        'Authorization': f'Bearer {session.get("password")}'
+    }
     payload = {
         "jsonrpc": "2.0",
         "method": method,
-        "params": {
-            "password": session.get('password'),
-            **params
-        },
+        "params": params,
         "id": 1
     }
     try:
         response = requests.post(f"{API_BASE_URL}/rpc",
                                  json=payload,
+                                 headers=headers,
                                  timeout=20)
         response.raise_for_status()
         return response.json()
