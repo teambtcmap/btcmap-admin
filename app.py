@@ -5,10 +5,8 @@ from flask_session import Session
 import json
 from datetime import timedelta
 import constants
-from helper import (
-    format_date, validate_geo_json, calculate_area, rpc_call,
-    validation_functions
-)
+from helper import (format_date, validate_geo_json, calculate_area, rpc_call,
+                    validation_functions)
 
 FLASK_CONFIG = {
     'SECRET_KEY': os.urandom(24),
@@ -21,7 +19,6 @@ app = Flask(__name__)
 app.config.update(FLASK_CONFIG)
 Session(app)
 
-API_BASE_URL = "https://api.btcmap.org"
 
 @app.before_request
 def check_auth():
@@ -30,9 +27,11 @@ def check_auth():
     ] and 'password' not in session:
         return redirect(url_for('login', next=request.url))
 
+
 @app.route('/')
 def home():
     return redirect(url_for('select_area'))
+
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
@@ -46,14 +45,17 @@ def login():
         return redirect(next_page or url_for('select_area'))
     return render_template('login.html')
 
+
 @app.route('/logout')
 def logout():
     session.pop('password', None)
     return redirect(url_for('login'))
 
+
 @app.route('/select_area')
 def select_area():
     return render_template('select_area.html')
+
 
 @app.route('/show_area/<string:area_id>')
 def show_area(area_id):
@@ -76,10 +78,11 @@ def show_area(area_id):
                 geo_json = None
 
         return render_template('show_area.html',
-                            area=area,
-                            area_type_requirements=type_requirements,
-                            geo_json=geo_json)
+                               area=area,
+                               area_type_requirements=type_requirements,
+                               geo_json=geo_json)
     return render_template('error.html', error="Area not found"), 404
+
 
 @app.route('/add_area', methods=['GET', 'POST'])
 def add_area():
@@ -118,8 +121,8 @@ def add_area():
 
         validation_errors = []
 
-        for key, requirements in constants.AREA_TYPE_REQUIREMENTS.get(area_type,
-                                                        {}).items():
+        for key, requirements in constants.AREA_TYPE_REQUIREMENTS.get(
+                area_type, {}).items():
             if requirements['required'] and key not in tags:
                 validation_errors.append(f'Missing required field: {key}')
             elif key in tags:
@@ -160,8 +163,10 @@ def add_area():
         app.logger.error(f"Error from RPC call: {result['error']}")
         return jsonify({'error': result['error']}), 400
 
-    return render_template('add_area.html',
-                        area_type_requirements=constants.AREA_TYPE_REQUIREMENTS)
+    return render_template(
+        'add_area.html',
+        area_type_requirements=constants.AREA_TYPE_REQUIREMENTS)
+
 
 @app.route('/api/set_area_tag', methods=['POST'])
 def set_area_tag():
@@ -182,7 +187,8 @@ def set_area_tag():
     if not area_type or area_type not in constants.AREA_TYPES:
         return jsonify({'error': 'Invalid area type'}), 400
 
-    requirements = constants.AREA_TYPE_REQUIREMENTS.get(area_type, {}).get(key, {})
+    requirements = constants.AREA_TYPE_REQUIREMENTS.get(area_type,
+                                                        {}).get(key, {})
 
     validation_funcs = validation_functions.get(
         requirements.get('type', 'text'), [validate_general])
@@ -206,7 +212,7 @@ def set_area_tag():
         if 'error' in result:
             return jsonify(
                 {'error':
-                f'Failed to update geo_json: {result["error"]}'}), 400
+                 f'Failed to update geo_json: {result["error"]}'}), 400
 
         area_km2 = calculate_area(value)
         area_result = rpc_call('set_area_tag', {
@@ -218,7 +224,7 @@ def set_area_tag():
         if 'error' in area_result:
             return jsonify(
                 {'error':
-                f'Failed to update area: {area_result["error"]}'}), 400
+                 f'Failed to update area: {area_result["error"]}'}), 400
 
         return jsonify({
             'success': True,
@@ -231,6 +237,7 @@ def set_area_tag():
         'value': value
     })
     return jsonify(result)
+
 
 @app.route('/api/remove_area_tag', methods=['POST'])
 def remove_area_tag():
@@ -250,11 +257,13 @@ def remove_area_tag():
         return jsonify({'error': 'Invalid area type'}), 400
 
     if constants.AREA_TYPE_REQUIREMENTS.get(area_type,
-                                {}).get(tag, {}).get('required', False):
+                                            {}).get(tag,
+                                                    {}).get('required', False):
         return jsonify({'error': f'Cannot remove required tag: {tag}'}), 400
 
     result = rpc_call('remove_area_tag', {'id': area_id, 'tag': tag})
     return jsonify(result)
+
 
 @app.route('/api/remove_area', methods=['POST'])
 def remove_area():
@@ -263,6 +272,7 @@ def remove_area():
         return jsonify({'error': 'Invalid request data'}), 400
     result = rpc_call('remove_area', {'id': data.get('id')})
     return jsonify(result)
+
 
 @app.route('/api/search_areas', methods=['POST'])
 def search_areas():
@@ -286,7 +296,7 @@ def search_areas():
     except requests.exceptions.RequestException as e:
         app.logger.error(f"Network error in search_areas: {str(e)}")
         return jsonify({'error':
-                     "Network error. Please try again later."}), 500
+                        "Network error. Please try again later."}), 500
     except Exception as e:
         app.logger.error(f"Error in search_areas: {str(e)}")
         return jsonify({
@@ -294,11 +304,13 @@ def search_areas():
             f"An unexpected error occurred. Please try again later."
         }), 500
 
+
 def get_area(area_id):
     result = rpc_call('get_area', {'id': area_id})
     if 'error' not in result:
         return result['result']
     return None
+
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)

@@ -1,3 +1,5 @@
+API_BASE_URL = "https://api.btcmap.org"
+
 CONTINENTS = [
     'africa', 'asia', 'europe', 'north-america', 'oceania', 'south-america'
 ]
