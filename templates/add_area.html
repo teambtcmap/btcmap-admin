@@ -7,18 +7,12 @@
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.12/cropper.min.css">
 <style>
 .image-container {
-    width: 100%;
-    height: 400px;
-    background-color: #f8f9fa;
-    margin-bottom: 1rem;
+    width: 500px;
+    height: 500px;
+    margin: 0 auto;
+    background: #f8f9fa;
     position: relative;
     display: none;
-}
-
-#preview-image {
-    display: block;
-    max-width: 100%;
-    max-height: 100%;
 }
 
 .zoom-controls {
@@ -30,18 +24,18 @@
     background: rgba(255, 255, 255, 0.9);
     padding: 5px;
     border-radius: 4px;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
 }
 
 .final-preview {
-    max-width: 150px;
-    max-height: 150px;
-    margin: 10px auto;
+    width: 150px;
+    height: 150px;
+    object-fit: cover;
     border: 2px solid #ddd;
     border-radius: 4px;
+    margin: 10px 0;
 }
 
-/* Override Cropper.js container to fit our layout */
+/* Cropper.js overrides */
 .cropper-container {
     width: 100% !important;
     height: 100% !important;
@@ -51,20 +45,6 @@
 .cropper-face {
     border-radius: 0;
 }
-
-.cropper-wrap-box {
-    background-color: #f8f9fa;
-}
-
-/* Additional containment rules */
-.image-editor-card {
-    overflow: hidden;
-}
-
-.cropper-container img {
-    max-width: none !important;
-    max-height: none !important;
-}
 </style>
 {% endblock %}
 
@@ -73,20 +53,19 @@
     <h1 class="mt-5">Add New Area</h1>
 
     <!-- Image Upload Section -->
-    <div class="card mb-4 image-editor-card">
+    <div class="card mb-4">
         <div class="card-body">
             <h5 class="card-title">Area Icon</h5>
 
-            <!-- File input -->
+            <!-- File Upload -->
             <div class="mb-3">
                 <input type="file" id="icon-upload" class="form-control" accept="image/*">
                 <div class="invalid-feedback">Please select a valid image file</div>
             </div>
 
-            <!-- Main image container for preview and cropping -->
+            <!-- Image Preview & Cropping -->
             <div id="image-container" class="image-container">
-                <img id="preview-image" src="">
-                <!-- Zoom controls -->
+                <img id="preview-image" src="" style="display: none; max-width: 100%; max-height: 100%;">
                 <div class="zoom-controls">
                     <button class="btn btn-sm btn-light me-2" id="zoom-in">
                         <i class="fas fa-search-plus"></i>
@@ -97,8 +76,8 @@
                 </div>
             </div>
 
-            <!-- Cropping controls -->
-            <div id="crop-controls" class="text-center mb-3" style="display: none;">
+            <!-- Crop Controls -->
+            <div id="crop-controls" class="text-center mt-3" style="display: none;">
                 <button id="crop-button" class="btn btn-primary me-2">
                     <i class="fas fa-crop"></i> Crop & Save
                 </button>
@@ -107,8 +86,8 @@
                 </button>
             </div>
 
-            <!-- Final preview after cropping -->
-            <div id="final-preview-container" class="text-center" style="display: none;">
+            <!-- Final Preview -->
+            <div id="final-preview-container" class="text-center mt-3" style="display: none;">
                 <h6>Final Preview</h6>
                 <img id="final-preview" class="final-preview">
             </div>
@@ -169,9 +148,9 @@
 {% endblock %}
 
 {% block scripts %}
-<!-- Font Awesome for icons -->
+<!-- Font Awesome -->
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
-<!-- Add Cropper.js -->
+<!-- Cropper.js -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.12/cropper.min.js"></script>
 <script src="{{ url_for('static', filename='js/validation.js') }}"></script>
 <script>
@@ -504,7 +483,9 @@ document.addEventListener('DOMContentLoaded', function() {
             cropper.destroy();
             cropper = null;
         }
-        imageContainer.style.display = 'none';
+
+        // Reset display states
+        previewImage.style.display = 'none';
         cropControls.style.display = 'none';
         finalPreviewContainer.style.display = 'none';
 
@@ -516,33 +497,25 @@ document.addEventListener('DOMContentLoaded', function() {
 
         const reader = new FileReader();
         reader.onload = function(e) {
-            // Show image container and controls
+            // Show container and image
             imageContainer.style.display = 'block';
-            cropControls.style.display = 'block';
-
-            // Set up preview
+            previewImage.style.display = 'block';
             previewImage.src = e.target.result;
 
-            // Initialize cropper with improved options
+            // Initialize cropper
             cropper = new Cropper(previewImage, {
                 aspectRatio: 1,
-                viewMode: 2, // Restrict view to the container
-                dragMode: 'move', // Allow moving the image
+                viewMode: 1,
+                dragMode: 'move',
                 autoCropArea: 0.8,
-                restore: false,
+                cropBoxResizable: true,
+                cropBoxMovable: true,
                 guides: true,
                 center: true,
                 highlight: false,
-                cropBoxMovable: true,
-                cropBoxResizable: true,
-                toggleDragModeOnDblclick: false,
-                background: true,
-                responsive: true,
-                zoomOnTouch: false,
-                zoomOnWheel: false,
+                background: false,
                 ready: function() {
-                    // Ensure cropper is visible
-                    this.cropper.crop();
+                    cropControls.style.display = 'block';
                 }
             });
         };
@@ -574,7 +547,7 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
 
-        // Show final preview
+        // Update final preview
         finalPreview.src = canvas.toDataURL();
         finalPreviewContainer.style.display = 'block';
 
@@ -582,7 +555,7 @@ document.addEventListener('DOMContentLoaded', function() {
         croppedImageData = canvas.toDataURL().split(',')[1];
         const fileExtension = iconUpload.files[0].name.split('.').pop().toLowerCase();
 
-        // Add to form data
+        // Update form data
         let iconRow = Array.from(tagsTable.querySelectorAll('tr')).find(row => {
             const keyElement = row.querySelector('td:first-child');
             return keyElement.textContent.trim() === 'icon:square';
@@ -593,11 +566,11 @@ document.addEventListener('DOMContentLoaded', function() {
             tagsTable.appendChild(iconRow);
         }
 
-        // Store the file extension and base64 data for later use
+        // Store the file extension and base64 data
         iconRow.dataset.fileExtension = fileExtension;
         iconRow.dataset.base64Data = croppedImageData;
 
-        // Hide the cropping interface
+        // Hide cropping interface
         imageContainer.style.display = 'none';
         cropControls.style.display = 'none';
 
