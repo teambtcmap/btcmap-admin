@@ -3,9 +3,9 @@
 {% block title %}Add Area{% endblock %}
 
 {% block head %}
-<!-- Add Cropper.js CSS -->
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.12/cropper.min.css">
 <style>
+/* Image container styles */
 .image-container {
     width: 500px;
     height: 500px;
@@ -15,6 +15,7 @@
     display: none;
 }
 
+/* Control styles */
 .zoom-controls {
     position: absolute;
     bottom: 10px;
@@ -26,6 +27,7 @@
     border-radius: 4px;
 }
 
+/* Preview image */
 .final-preview {
     width: 150px;
     height: 150px;
@@ -35,7 +37,7 @@
     margin: 10px 0;
 }
 
-/* Cropper.js overrides */
+/* Cropper overrides */
 .cropper-container {
     width: 100% !important;
     height: 100% !important;
@@ -65,7 +67,7 @@
 
             <!-- Image Preview & Cropping -->
             <div id="image-container" class="image-container">
-                <img id="preview-image" src="" style="display: none; max-width: 100%; max-height: 100%;">
+                <img id="preview-image" style="max-width: 100%; max-height: 100%; display: none;">
                 <div class="zoom-controls">
                     <button class="btn btn-sm btn-light me-2" id="zoom-in">
                         <i class="fas fa-search-plus"></i>
@@ -148,9 +150,7 @@
 {% endblock %}
 
 {% block scripts %}
-<!-- Font Awesome -->
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
-<!-- Cropper.js -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.12/cropper.min.js"></script>
 <script src="{{ url_for('static', filename='js/validation.js') }}"></script>
 <script>
@@ -457,14 +457,10 @@ document.addEventListener('DOMContentLoaded', function() {
         return isValid;
     }
 
-    // Image handling variables
-    let cropper = null;
-    let croppedImageData = null;
-
-    // Image upload elements
+    // Image handling elements
     const iconUpload = document.getElementById('icon-upload');
-    const previewImage = document.getElementById('preview-image');
     const imageContainer = document.getElementById('image-container');
+    const previewImage = document.getElementById('preview-image');
     const cropControls = document.getElementById('crop-controls');
     const cropButton = document.getElementById('crop-button');
     const cancelCropButton = document.getElementById('cancel-crop');
@@ -473,23 +469,27 @@ document.addEventListener('DOMContentLoaded', function() {
     const zoomInButton = document.getElementById('zoom-in');
     const zoomOutButton = document.getElementById('zoom-out');
 
-    // Handle image upload
-    iconUpload.addEventListener('change', function(e) {
-        const file = e.target.files[0];
-        if (!file) return;
+    let cropper = null;
 
-        // Reset previous state
+    function resetImageInterface() {
         if (cropper) {
             cropper.destroy();
             cropper = null;
         }
-
-        // Reset display states
+        imageContainer.style.display = 'none';
         previewImage.style.display = 'none';
         cropControls.style.display = 'none';
         finalPreviewContainer.style.display = 'none';
+        previewImage.src = '';
+    }
 
-        // Validate file type
+    // Handle file upload
+    iconUpload.addEventListener('change', function(e) {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        resetImageInterface();
+
         if (!file.type.startsWith('image/')) {
             showToast('Error', 'Please select a valid image file', 'error');
             return;
@@ -497,23 +497,20 @@ document.addEventListener('DOMContentLoaded', function() {
 
         const reader = new FileReader();
         reader.onload = function(e) {
-            // Show container and image
             imageContainer.style.display = 'block';
             previewImage.style.display = 'block';
             previewImage.src = e.target.result;
 
-            // Initialize cropper
             cropper = new Cropper(previewImage, {
                 aspectRatio: 1,
                 viewMode: 1,
                 dragMode: 'move',
                 autoCropArea: 0.8,
-                cropBoxResizable: true,
-                cropBoxMovable: true,
                 guides: true,
                 center: true,
                 highlight: false,
-                background: false,
+                cropBoxMovable: true,
+                cropBoxResizable: true,
                 ready: function() {
                     cropControls.style.display = 'block';
                 }
@@ -531,15 +528,13 @@ document.addEventListener('DOMContentLoaded', function() {
         if (cropper) cropper.zoom(-0.1);
     });
 
-    // Handle crop button click
+    // Handle crop
     cropButton.addEventListener('click', function() {
         if (!cropper) return;
 
         const canvas = cropper.getCroppedCanvas({
             width: 512,
-            height: 512,
-            imageSmoothingEnabled: true,
-            imageSmoothingQuality: 'high'
+            height: 512
         });
 
         if (!canvas) {
@@ -547,15 +542,12 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
 
-        // Update final preview
         finalPreview.src = canvas.toDataURL();
         finalPreviewContainer.style.display = 'block';
 
-        // Store cropped image data
-        croppedImageData = canvas.toDataURL().split(',')[1];
+        const croppedImageData = canvas.toDataURL().split(',')[1];
         const fileExtension = iconUpload.files[0].name.split('.').pop().toLowerCase();
 
-        // Update form data
         let iconRow = Array.from(tagsTable.querySelectorAll('tr')).find(row => {
             const keyElement = row.querySelector('td:first-child');
             return keyElement.textContent.trim() === 'icon:square';
@@ -566,26 +558,18 @@ document.addEventListener('DOMContentLoaded', function() {
             tagsTable.appendChild(iconRow);
         }
 
-        // Store the file extension and base64 data
         iconRow.dataset.fileExtension = fileExtension;
         iconRow.dataset.base64Data = croppedImageData;
 
-        // Hide cropping interface
         imageContainer.style.display = 'none';
         cropControls.style.display = 'none';
 
         showToast('Success', 'Image cropped successfully', 'success');
     });
 
-    // Handle cancel crop
+    // Handle cancel
     cancelCropButton.addEventListener('click', function() {
-        if (cropper) {
-            cropper.destroy();
-            cropper = null;
-        }
-        imageContainer.style.display = 'none';
-        cropControls.style.display = 'none';
-        finalPreviewContainer.style.display = 'none';
+        resetImageInterface();
         iconUpload.value = '';
     });
 
