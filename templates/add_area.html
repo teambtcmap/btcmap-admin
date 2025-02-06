@@ -572,15 +572,69 @@ function setupImageHandling() {
 
 
     cropButton.addEventListener('click', function() {
-        const canvas = cropper.getCroppedCanvas();
-        croppedCanvas.width = canvas.width;
-        croppedCanvas.height = canvas.height;
-        croppedCanvas.getContext('2d').drawImage(canvas, 0, 0);
-        croppedCanvas.style.display = 'block';
-        imagePreview.style.display = 'none';
-        cropContainer.style.display = 'none';
-        // Add your logic to send the cropped image data to the server here
-        console.log("Cropped image data:", croppedCanvas.toDataURL());
+        const canvas = cropper.getCroppedCanvas({
+            width: 300,
+            height: 300,
+            minWidth: 300,
+            minHeight: 300,
+            maxWidth: 300,
+            maxHeight: 300
+        });
+        
+        if (!canvas) {
+            showToast('Error', 'Failed to crop image', 'error');
+            return;
+        }
+
+        const base64Data = canvas.toDataURL('image/png').split(',')[1];
+        
+        // Send to server
+        fetch('/api/set_area_icon', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                id: document.querySelector('input[name="id"]')?.value,
+                icon_base64: base64Data,
+                icon_ext: 'png'
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.error) {
+                throw new Error(data.error.message || 'Failed to set icon');
+            }
+            
+            // Update the icon:square tag if it exists
+            const iconUrl = `https://static.btcmap.org/images/areas/${document.querySelector('input[name="id"]')?.value}.png`;
+            const tagsTable = document.getElementById('tags-table').querySelector('tbody');
+            let iconRow = Array.from(tagsTable.querySelectorAll('tr')).find(row => {
+                const keyCell = row.querySelector('td:first-child');
+                return keyCell.textContent.trim() === 'icon:square';
+            });
+            
+            if (iconRow) {
+                const valueInput = iconRow.querySelector('input');
+                if (valueInput) {
+                    valueInput.value = iconUrl;
+                }
+            }
+
+            // Update display
+            croppedCanvas.width = canvas.width;
+            croppedCanvas.height = canvas.height;
+            croppedCanvas.getContext('2d').drawImage(canvas, 0, 0);
+            croppedCanvas.style.display = 'block';
+            imagePreview.style.display = 'none';
+            cropContainer.style.display = 'none';
+            
+            showToast('Success', 'Image cropped and saved successfully', 'success');
+        })
+        .catch(error => {
+            console.error('Error setting icon:', error);
+            showToast('Error', error.message || 'Failed to set icon', 'error');
+        });
     });
 }
 </script>
