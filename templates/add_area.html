@@ -7,23 +7,17 @@
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.12/cropper.min.css">
 <style>
 .image-container {
-    max-width: 100%;
+    width: 100%;
     height: 400px;
     background-color: #f8f9fa;
     margin-bottom: 1rem;
     position: relative;
-    overflow: hidden;
+    display: none;
 }
 
-.preview-image {
+#preview-image {
+    max-height: 100%;
     max-width: 100%;
-    max-height: 400px;
-    display: block;
-    margin: auto;
-}
-
-.cropper-container {
-    margin: auto;
 }
 
 .zoom-controls {
@@ -45,6 +39,21 @@
     border: 2px solid #ddd;
     border-radius: 4px;
 }
+
+/* Override Cropper.js container to fit our layout */
+.cropper-container {
+    width: 100% !important;
+    height: 100% !important;
+}
+
+.cropper-view-box,
+.cropper-face {
+    border-radius: 0;
+}
+
+.cropper-wrap-box {
+    background-color: #f8f9fa;
+}
 </style>
 {% endblock %}
 
@@ -56,29 +65,31 @@
     <div class="card mb-4">
         <div class="card-body">
             <h5 class="card-title">Area Icon</h5>
+
+            <!-- File input -->
             <div class="mb-3">
                 <input type="file" id="icon-upload" class="form-control" accept="image/*">
                 <div class="invalid-feedback">Please select a valid image file</div>
             </div>
 
             <!-- Main image container for preview and cropping -->
-            <div id="image-container" class="image-container" style="display: none;">
-                <img id="preview-image" class="preview-image">
+            <div id="image-container" class="image-container">
+                <img id="preview-image" src="">
 
                 <!-- Zoom controls -->
                 <div class="zoom-controls">
-                    <button class="btn btn-sm btn-light" id="zoom-in">
-                        <i class="fas fa-search-plus"></i> Zoom In
+                    <button class="btn btn-sm btn-light me-2" id="zoom-in">
+                        <i class="fas fa-search-plus"></i>
                     </button>
                     <button class="btn btn-sm btn-light" id="zoom-out">
-                        <i class="fas fa-search-minus"></i> Zoom Out
+                        <i class="fas fa-search-minus"></i>
                     </button>
                 </div>
             </div>
 
             <!-- Cropping controls -->
-            <div id="crop-controls" class="text-center" style="display: none;">
-                <button id="crop-button" class="btn btn-primary">
+            <div id="crop-controls" class="text-center mb-3" style="display: none;">
+                <button id="crop-button" class="btn btn-primary me-2">
                     <i class="fas fa-crop"></i> Crop & Save
                 </button>
                 <button id="cancel-crop" class="btn btn-secondary">
@@ -483,6 +494,8 @@ document.addEventListener('DOMContentLoaded', function() {
             cropper.destroy();
             cropper = null;
         }
+        imageContainer.style.display = 'none';
+        cropControls.style.display = 'none';
         finalPreviewContainer.style.display = 'none';
 
         // Validate file type
@@ -513,7 +526,10 @@ document.addEventListener('DOMContentLoaded', function() {
                 cropBoxMovable: true,
                 cropBoxResizable: true,
                 toggleDragModeOnDblclick: false,
-                background: true
+                background: true,
+                responsive: true,
+                zoomOnTouch: false,
+                zoomOnWheel: false
             });
         };
         reader.readAsDataURL(file);
