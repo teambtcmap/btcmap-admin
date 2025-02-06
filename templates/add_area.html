@@ -562,12 +562,16 @@ function setupImageHandling() {
             autoCropArea: 1,
             minContainerWidth: 300,
             minContainerHeight: 300,
+            zoomable: true,
+            scalable: true
         });
     };
 
     zoomSlider.addEventListener('input', function() {
-        const zoomLevel = parseFloat(this.value);
-        cropper.zoomTo(zoomLevel);
+        if (cropper) {
+            const zoomLevel = parseFloat(this.value);
+            cropper.scale(zoomLevel, zoomLevel);
+        }
     });
 
 
