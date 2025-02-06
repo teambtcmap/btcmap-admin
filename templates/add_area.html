@@ -5,47 +5,24 @@
 {% block head %}
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.12/cropper.min.css">
 <style>
-/* Image container styles */
-.image-container {
-    width: 500px;
-    height: 500px;
+#cropperContainer {
+    max-width: 500px;
     margin: 0 auto;
-    background: #f8f9fa;
-    position: relative;
     display: none;
 }
 
-/* Control styles */
-.zoom-controls {
-    position: absolute;
-    bottom: 10px;
-    left: 50%;
-    transform: translateX(-50%);
-    z-index: 1000;
-    background: rgba(255, 255, 255, 0.9);
-    padding: 5px;
-    border-radius: 4px;
+#cropPreview {
+    max-width: 100%;
+    display: block;
 }
 
-/* Preview image */
-.final-preview {
+#croppedPreview {
     width: 150px;
     height: 150px;
     object-fit: cover;
-    border: 2px solid #ddd;
-    border-radius: 4px;
+    border: 1px solid #ddd;
+    display: none;
     margin: 10px 0;
-}
-
-/* Cropper overrides */
-.cropper-container {
-    width: 100% !important;
-    height: 100% !important;
-}
-
-.cropper-view-box,
-.cropper-face {
-    border-radius: 0;
 }
 </style>
 {% endblock %}
@@ -61,37 +38,21 @@
 
             <!-- File Upload -->
             <div class="mb-3">
-                <input type="file" id="icon-upload" class="form-control" accept="image/*">
-                <div class="invalid-feedback">Please select a valid image file</div>
+                <input type="file" id="imageInput" class="form-control" accept="image/*">
             </div>
 
-            <!-- Image Preview & Cropping -->
-            <div id="image-container" class="image-container">
-                <img id="preview-image" style="max-width: 100%; max-height: 100%; display: none;">
-                <div class="zoom-controls">
-                    <button class="btn btn-sm btn-light me-2" id="zoom-in">
-                        <i class="fas fa-search-plus"></i>
-                    </button>
-                    <button class="btn btn-sm btn-light" id="zoom-out">
-                        <i class="fas fa-search-minus"></i>
-                    </button>
+            <!-- Cropper Container -->
+            <div id="cropperContainer">
+                <img id="cropPreview">
+                <div class="mt-3">
+                    <button id="cropButton" class="btn btn-primary">Crop Image</button>
+                    <button id="cancelButton" class="btn btn-secondary">Cancel</button>
                 </div>
             </div>
 
-            <!-- Crop Controls -->
-            <div id="crop-controls" class="text-center mt-3" style="display: none;">
-                <button id="crop-button" class="btn btn-primary me-2">
-                    <i class="fas fa-crop"></i> Crop & Save
-                </button>
-                <button id="cancel-crop" class="btn btn-secondary">
-                    <i class="fas fa-times"></i> Cancel
-                </button>
-            </div>
-
             <!-- Final Preview -->
-            <div id="final-preview-container" class="text-center mt-3" style="display: none;">
-                <h6>Final Preview</h6>
-                <img id="final-preview" class="final-preview">
+            <div id="previewContainer" class="text-center">
+                <img id="croppedPreview">
             </div>
         </div>
     </div>
@@ -100,7 +61,6 @@
     <div id="map" class="position-relative mb-3" style="height: 400px; width: 100%;">
         <button id="edit-geojson-btn" class="btn btn-primary btn-sm position-absolute" style="top: 10px; right: 10px; z-index: 1000;">Edit GeoJSON</button>
     </div>
-
     <!-- GeoJSON editing section -->
     <div id="geojson-editor" class="mb-3">
         <textarea id="geojson-input" class="form-control mb-2" rows="5" style="display: none;"></textarea>
@@ -130,9 +90,7 @@
                             <th>Actions</th>
                         </tr>
                     </thead>
-                    <tbody>
-                        <!-- Tags will be dynamically added here -->
-                    </tbody>
+                    <tbody></tbody>
                 </table>
                 <div class="mt-3 text-center">
                     <button type="button" id="add-optional-field-btn" class="btn btn-secondary">Add Optional Field</button>
@@ -142,7 +100,6 @@
         </div>
     </div>
 
-    <!-- Separate section for Add Area button -->
     <div class="mt-4 text-center">
         <button id="submit-area-btn" class="btn btn-primary btn-lg">Add Area</button>
     </div>
@@ -150,11 +107,101 @@
 {% endblock %}
 
 {% block scripts %}
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.12/cropper.min.js"></script>
 <script src="{{ url_for('static', filename='js/validation.js') }}"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
+    // Image cropping functionality
+    const imageInput = document.getElementById('imageInput');
+    const cropperContainer = document.getElementById('cropperContainer');
+    const cropPreview = document.getElementById('cropPreview');
+    const cropButton = document.getElementById('cropButton');
+    const cancelButton = document.getElementById('cancelButton');
+    const croppedPreview = document.getElementById('croppedPreview');
+
+    let cropper = null;
+
+    function resetCropper() {
+        if (cropper) {
+            cropper.destroy();
+            cropper = null;
+        }
+        cropperContainer.style.display = 'none';
+        croppedPreview.style.display = 'none';
+        imageInput.value = '';
+    }
+
+    imageInput.addEventListener('change', function(e) {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        // Reset previous state
+        resetCropper();
+
+        if (!file.type.startsWith('image/')) {
+            alert('Please select an image file');
+            return;
+        }
+
+        // Read and display the image
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            cropPreview.src = e.target.result;
+            cropperContainer.style.display = 'block';
+
+            // Initialize cropper
+            cropper = new Cropper(cropPreview, {
+                aspectRatio: 1,
+                viewMode: 1,
+                autoCropArea: 1,
+                background: false
+            });
+        };
+        reader.readAsDataURL(file);
+    });
+
+    cropButton.addEventListener('click', function() {
+        if (!cropper) return;
+
+        const canvas = cropper.getCroppedCanvas({
+            width: 512,
+            height: 512
+        });
+
+        if (!canvas) {
+            alert('Cropping failed. Please try again.');
+            return;
+        }
+
+        // Display cropped image
+        croppedPreview.src = canvas.toDataURL();
+        croppedPreview.style.display = 'block';
+
+        // Store cropped data
+        const croppedData = canvas.toDataURL().split(',')[1];
+        const fileExt = imageInput.files[0].name.split('.').pop().toLowerCase();
+
+        // Update form data
+        let iconRow = Array.from(document.querySelectorAll('#tags-table tr')).find(row => {
+            const keyCell = row.querySelector('td:first-child');
+            return keyCell?.textContent.trim() === 'icon:square';
+        });
+
+        if (!iconRow) {
+            iconRow = createTagRow('icon:square', '', false);
+            document.querySelector('#tags-table tbody').appendChild(iconRow);
+        }
+
+        iconRow.dataset.fileExtension = fileExt;
+        iconRow.dataset.base64Data = croppedData;
+
+        // Clean up
+        cropperContainer.style.display = 'none';
+    });
+
+    cancelButton.addEventListener('click', resetCropper);
+
+
     const areaTypeRequirements = {{ area_type_requirements | tojson | safe }};
     const typeSelect = document.getElementById('type');
     const tagsTable = document.getElementById('tags-table').querySelector('tbody');
@@ -220,16 +267,13 @@ document.addEventListener('DOMContentLoaded', function() {
         return validation.isValid;
     }
 
-    function createTagRow(key, value = '', isRequired = false, isCustom = false, allowedValues = null) {
+    function createTagRow(key, value = '', isRequired = false, allowedValues = null) {
         const row = document.createElement('tr');
         const isNumericField = key === 'population' || key === 'area_km2';
 
         row.innerHTML = `
             <td>
-                ${isCustom ? 
-                    `<input type="text" class="form-control custom-key" placeholder="Custom Key" required>
-                     <div class="invalid-feedback">Please enter a valid key</div>` 
-                    : key}
+                ${key}
             </td>
             <td>
                 ${allowedValues ? `
@@ -257,26 +301,6 @@ document.addEventListener('DOMContentLoaded', function() {
             row.querySelector('.remove-field').addEventListener('click', function() {
                 row.remove();
                 updateOptionalFieldSelect();
-            });
-        }
-
-        if (isCustom) {
-            const keyInput = row.querySelector('.custom-key');
-
-            keyInput.addEventListener('input', function() {
-                this.classList.remove('is-invalid');
-                const feedback = this.nextElementSibling;
-                if (feedback && feedback.classList.contains('invalid-feedback')) {
-                    feedback.style.display = 'none';
-                }
-            });
-            keyInput.addEventListener('blur', function() {
-                validateCustomKey(this);
-            });
-
-            // Add validation on focus out
-            keyInput.addEventListener('focusout', function() {
-                validateCustomKey(this);
             });
         }
 
@@ -315,10 +339,10 @@ document.addEventListener('DOMContentLoaded', function() {
                 .filter(([_, requirements]) => requirements.required)
                 .forEach(([key, requirements]) => {
                     tagsTable.appendChild(createTagRow(
-                        key, 
-                        '', 
-                        true, 
-                        false, 
+                        key,
+                        '',
+                        true,
+                        false,
                         requirements.allowed_values
                     ));
                 });
@@ -456,122 +480,6 @@ document.addEventListener('DOMContentLoaded', function() {
 
         return isValid;
     }
-
-    // Image handling elements
-    const iconUpload = document.getElementById('icon-upload');
-    const imageContainer = document.getElementById('image-container');
-    const previewImage = document.getElementById('preview-image');
-    const cropControls = document.getElementById('crop-controls');
-    const cropButton = document.getElementById('crop-button');
-    const cancelCropButton = document.getElementById('cancel-crop');
-    const finalPreviewContainer = document.getElementById('final-preview-container');
-    const finalPreview = document.getElementById('final-preview');
-    const zoomInButton = document.getElementById('zoom-in');
-    const zoomOutButton = document.getElementById('zoom-out');
-
-    let cropper = null;
-
-    function resetImageInterface() {
-        if (cropper) {
-            cropper.destroy();
-            cropper = null;
-        }
-        imageContainer.style.display = 'none';
-        previewImage.style.display = 'none';
-        cropControls.style.display = 'none';
-        finalPreviewContainer.style.display = 'none';
-        previewImage.src = '';
-    }
-
-    // Handle file upload
-    iconUpload.addEventListener('change', function(e) {
-        const file = e.target.files[0];
-        if (!file) return;
-
-        resetImageInterface();
-
-        if (!file.type.startsWith('image/')) {
-            showToast('Error', 'Please select a valid image file', 'error');
-            return;
-        }
-
-        const reader = new FileReader();
-        reader.onload = function(e) {
-            imageContainer.style.display = 'block';
-            previewImage.style.display = 'block';
-            previewImage.src = e.target.result;
-
-            cropper = new Cropper(previewImage, {
-                aspectRatio: 1,
-                viewMode: 1,
-                dragMode: 'move',
-                autoCropArea: 0.8,
-                guides: true,
-                center: true,
-                highlight: false,
-                cropBoxMovable: true,
-                cropBoxResizable: true,
-                ready: function() {
-                    cropControls.style.display = 'block';
-                }
-            });
-        };
-        reader.readAsDataURL(file);
-    });
-
-    // Zoom controls
-    zoomInButton.addEventListener('click', () => {
-        if (cropper) cropper.zoom(0.1);
-    });
-
-    zoomOutButton.addEventListener('click', () => {
-        if (cropper) cropper.zoom(-0.1);
-    });
-
-    // Handle crop
-    cropButton.addEventListener('click', function() {
-        if (!cropper) return;
-
-        const canvas = cropper.getCroppedCanvas({
-            width: 512,
-            height: 512
-        });
-
-        if (!canvas) {
-            showToast('Error', 'Failed to crop image', 'error');
-            return;
-        }
-
-        finalPreview.src = canvas.toDataURL();
-        finalPreviewContainer.style.display = 'block';
-
-        const croppedImageData = canvas.toDataURL().split(',')[1];
-        const fileExtension = iconUpload.files[0].name.split('.').pop().toLowerCase();
-
-        let iconRow = Array.from(tagsTable.querySelectorAll('tr')).find(row => {
-            const keyElement = row.querySelector('td:first-child');
-            return keyElement.textContent.trim() === 'icon:square';
-        });
-
-        if (!iconRow) {
-            iconRow = createTagRow('icon:square', '', false, false);
-            tagsTable.appendChild(iconRow);
-        }
-
-        iconRow.dataset.fileExtension = fileExtension;
-        iconRow.dataset.base64Data = croppedImageData;
-
-        imageContainer.style.display = 'none';
-        cropControls.style.display = 'none';
-
-        showToast('Success', 'Image cropped successfully', 'success');
-    });
-
-    // Handle cancel
-    cancelCropButton.addEventListener('click', function() {
-        resetImageInterface();
-        iconUpload.value = '';
-    });
 
     submitAreaBtn.addEventListener('click', async function(e) {
         e.preventDefault();
