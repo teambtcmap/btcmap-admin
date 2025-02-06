@@ -571,6 +571,8 @@ function setupImageHandling() {
     });
 
 
+    let croppedImageData = null;
+
     cropButton.addEventListener('click', function() {
         const canvas = cropper.getCroppedCanvas({
             width: 300,
@@ -586,55 +588,108 @@ function setupImageHandling() {
             return;
         }
 
-        const base64Data = canvas.toDataURL('image/png').split(',')[1];
+        croppedImageData = canvas.toDataURL('image/png').split(',')[1];
         
-        // Send to server
-        fetch('/api/set_area_icon', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                id: document.querySelector('input[name="id"]')?.value,
-                icon_base64: base64Data,
-                icon_ext: 'png'
-            })
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.error) {
-                throw new Error(data.error.message || 'Failed to set icon');
+        // Update display
+        croppedCanvas.width = canvas.width;
+        croppedCanvas.height = canvas.height;
+        croppedCanvas.getContext('2d').drawImage(canvas, 0, 0);
+        croppedCanvas.style.display = 'block';
+        imagePreview.style.display = 'none';
+        cropContainer.style.display = 'none';
+        
+        showToast('Success', 'Image cropped successfully', 'success');
+    });
+
+    // Modify the submit area button event listener
+    submitAreaBtn.addEventListener('click', async function(e) {
+        e.preventDefault();
+
+        if (!validateForm()) {
+            return;
+        }
+
+        const tags = {};
+        tagsTable.querySelectorAll('tr').forEach(row => {
+            const keyElement = row.querySelector('td:first-child');
+            const keyInput = keyElement.querySelector('input');
+            const key = keyInput ? keyInput.value.trim() : keyElement.textContent.trim();
+
+            const valueInput = row.querySelector('td:nth-child(2) input, td:nth-child(2) select');
+            if (valueInput && valueInput.value.trim()) {
+                let value = valueInput.value.trim();
+                tags[key] = value;
             }
-            
-            // Update the icon:square tag if it exists
-            const iconUrl = `https://static.btcmap.org/images/areas/${document.querySelector('input[name="id"]')?.value}.png`;
-            const tagsTable = document.getElementById('tags-table').querySelector('tbody');
-            let iconRow = Array.from(tagsTable.querySelectorAll('tr')).find(row => {
-                const keyCell = row.querySelector('td:first-child');
-                return keyCell.textContent.trim() === 'icon:square';
+        });
+
+        tags['type'] = typeSelect.value;
+        if (currentGeoJson) {
+            tags['geo_json'] = currentGeoJson;
+        }
+
+        try {
+            // Create area
+            const areaResponse = await fetch('/add_area', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(tags)
             });
-            
-            if (iconRow) {
-                const valueInput = iconRow.querySelector('input');
-                if (valueInput) {
-                    valueInput.value = iconUrl;
+
+            const areaData = await areaResponse.json();
+            if (areaData.error) {
+                throw new Error(areaData.error.message || 'Failed to add area');
+            }
+
+            const areaId = areaData.id;
+
+            // If we have a cropped image, upload it
+            if (croppedImageData) {
+                const iconResponse = await fetch('/api/set_area_icon', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        id: areaId,
+                        icon_base64: croppedImageData,
+                        icon_ext: 'png'
+                    })
+                });
+
+                const iconData = await iconResponse.json();
+                if (iconData.error) {
+                    throw new Error(iconData.error.message || 'Failed to set icon');
+                }
+
+                // Set icon:square tag
+                const tagResponse = await fetch('/api/set_area_tag', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        id: areaId,
+                        name: 'icon:square',
+                        value: `https://static.btcmap.org/images/areas/${areaId}.png`
+                    })
+                });
+
+                const tagData = await tagResponse.json();
+                if (tagData.error) {
+                    throw new Error(tagData.error.message || 'Failed to set icon tag');
                 }
             }
 
-            // Update display
-            croppedCanvas.width = canvas.width;
-            croppedCanvas.height = canvas.height;
-            croppedCanvas.getContext('2d').drawImage(canvas, 0, 0);
-            croppedCanvas.style.display = 'block';
-            imagePreview.style.display = 'none';
-            cropContainer.style.display = 'none';
-            
-            showToast('Success', 'Image cropped and saved successfully', 'success');
-        })
-        .catch(error => {
-            console.error('Error setting icon:', error);
-            showToast('Error', error.message || 'Failed to set icon', 'error');
-        });
+            showToast('Success', 'Area added successfully', 'success');
+            setTimeout(() => {
+                window.location.href = '/select_area';
+            }, 2000);
+        } catch (error) {
+            console.error('Error:', error);
+            showToast('Error', error.message || 'An unexpected error occurred', 'error');
+        }
     });
 }
 </script>

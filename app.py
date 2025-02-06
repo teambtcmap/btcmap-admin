@@ -159,7 +159,7 @@ def add_area():
         app.logger.info(f"RPC response: {result}")
 
         if 'error' not in result:
-            return jsonify({'success': True})
+            return jsonify({'success': True, 'id': result.get('result', {}).get('id')})
         app.logger.error(f"Error from RPC call: {result['error']}")
         return jsonify({'error': result['error']}), 400
 
