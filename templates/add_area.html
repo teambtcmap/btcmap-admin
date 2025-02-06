@@ -2,65 +2,15 @@
 
 {% block title %}Add Area{% endblock %}
 
-{% block head %}
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.12/cropper.min.css">
-<style>
-#cropperContainer {
-    max-width: 500px;
-    margin: 0 auto;
-    display: none;
-}
-
-#cropPreview {
-    max-width: 100%;
-    display: block;
-}
-
-#croppedPreview {
-    width: 150px;
-    height: 150px;
-    object-fit: cover;
-    border: 1px solid #ddd;
-    display: none;
-    margin: 10px 0;
-}
-</style>
-{% endblock %}
-
 {% block content %}
 <div class="container">
     <h1 class="mt-5">Add New Area</h1>
-
-    <!-- Image Upload Section -->
-    <div class="card mb-4">
-        <div class="card-body">
-            <h5 class="card-title">Area Icon</h5>
-
-            <!-- File Upload -->
-            <div class="mb-3">
-                <input type="file" id="imageInput" class="form-control" accept="image/*">
-            </div>
-
-            <!-- Cropper Container -->
-            <div id="cropperContainer">
-                <img id="cropPreview">
-                <div class="mt-3">
-                    <button id="cropButton" class="btn btn-primary">Crop Image</button>
-                    <button id="cancelButton" class="btn btn-secondary">Cancel</button>
-                </div>
-            </div>
-
-            <!-- Final Preview -->
-            <div id="previewContainer" class="text-center">
-                <img id="croppedPreview">
-            </div>
-        </div>
-    </div>
-
+    
     <!-- Map container with Edit GeoJSON button -->
     <div id="map" class="position-relative mb-3" style="height: 400px; width: 100%;">
         <button id="edit-geojson-btn" class="btn btn-primary btn-sm position-absolute" style="top: 10px; right: 10px; z-index: 1000;">Edit GeoJSON</button>
     </div>
+    
     <!-- GeoJSON editing section -->
     <div id="geojson-editor" class="mb-3">
         <textarea id="geojson-input" class="form-control mb-2" rows="5" style="display: none;"></textarea>
@@ -68,7 +18,7 @@
         <button id="save-locally-btn" class="btn btn-success" style="display: none;">Update</button>
         <button id="cancel-geojson-btn" class="btn btn-secondary" style="display: none;">Cancel</button>
     </div>
-
+    
     <div class="card mt-3">
         <div class="card-body">
             <form id="add-area-form" method="POST" novalidate>
@@ -90,7 +40,9 @@
                             <th>Actions</th>
                         </tr>
                     </thead>
-                    <tbody></tbody>
+                    <tbody>
+                        <!-- Tags will be dynamically added here -->
+                    </tbody>
                 </table>
                 <div class="mt-3 text-center">
                     <button type="button" id="add-optional-field-btn" class="btn btn-secondary">Add Optional Field</button>
@@ -99,7 +51,8 @@
             </form>
         </div>
     </div>
-
+    
+    <!-- Separate section for Add Area button -->
     <div class="mt-4 text-center">
         <button id="submit-area-btn" class="btn btn-primary btn-lg">Add Area</button>
     </div>
@@ -107,101 +60,10 @@
 {% endblock %}
 
 {% block scripts %}
-<script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.12/cropper.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Turf.js/6.5.0/turf.min.js"></script>
 <script src="{{ url_for('static', filename='js/validation.js') }}"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    // Image cropping functionality
-    const imageInput = document.getElementById('imageInput');
-    const cropperContainer = document.getElementById('cropperContainer');
-    const cropPreview = document.getElementById('cropPreview');
-    const cropButton = document.getElementById('cropButton');
-    const cancelButton = document.getElementById('cancelButton');
-    const croppedPreview = document.getElementById('croppedPreview');
-
-    let cropper = null;
-
-    function resetCropper() {
-        if (cropper) {
-            cropper.destroy();
-            cropper = null;
-        }
-        cropperContainer.style.display = 'none';
-        croppedPreview.style.display = 'none';
-        imageInput.value = '';
-    }
-
-    imageInput.addEventListener('change', function(e) {
-        const file = e.target.files[0];
-        if (!file) return;
-
-        // Reset previous state
-        resetCropper();
-
-        if (!file.type.startsWith('image/')) {
-            alert('Please select an image file');
-            return;
-        }
-
-        // Read and display the image
-        const reader = new FileReader();
-        reader.onload = function(e) {
-            cropPreview.src = e.target.result;
-            cropperContainer.style.display = 'block';
-
-            // Initialize cropper
-            cropper = new Cropper(cropPreview, {
-                aspectRatio: 1,
-                viewMode: 1,
-                autoCropArea: 1,
-                background: false
-            });
-        };
-        reader.readAsDataURL(file);
-    });
-
-    cropButton.addEventListener('click', function() {
-        if (!cropper) return;
-
-        const canvas = cropper.getCroppedCanvas({
-            width: 512,
-            height: 512
-        });
-
-        if (!canvas) {
-            alert('Cropping failed. Please try again.');
-            return;
-        }
-
-        // Display cropped image
-        croppedPreview.src = canvas.toDataURL();
-        croppedPreview.style.display = 'block';
-
-        // Store cropped data
-        const croppedData = canvas.toDataURL().split(',')[1];
-        const fileExt = imageInput.files[0].name.split('.').pop().toLowerCase();
-
-        // Update form data
-        let iconRow = Array.from(document.querySelectorAll('#tags-table tr')).find(row => {
-            const keyCell = row.querySelector('td:first-child');
-            return keyCell?.textContent.trim() === 'icon:square';
-        });
-
-        if (!iconRow) {
-            iconRow = createTagRow('icon:square', '', false);
-            document.querySelector('#tags-table tbody').appendChild(iconRow);
-        }
-
-        iconRow.dataset.fileExtension = fileExt;
-        iconRow.dataset.base64Data = croppedData;
-
-        // Clean up
-        cropperContainer.style.display = 'none';
-    });
-
-    cancelButton.addEventListener('click', resetCropper);
-
-
     const areaTypeRequirements = {{ area_type_requirements | tojson | safe }};
     const typeSelect = document.getElementById('type');
     const tagsTable = document.getElementById('tags-table').querySelector('tbody');
@@ -267,13 +129,16 @@ document.addEventListener('DOMContentLoaded', function() {
         return validation.isValid;
     }
 
-    function createTagRow(key, value = '', isRequired = false, allowedValues = null) {
+    function createTagRow(key, value = '', isRequired = false, isCustom = false, allowedValues = null) {
         const row = document.createElement('tr');
         const isNumericField = key === 'population' || key === 'area_km2';
-
+        
         row.innerHTML = `
             <td>
-                ${key}
+                ${isCustom ? 
+                    `<input type="text" class="form-control custom-key" placeholder="Custom Key" required>
+                     <div class="invalid-feedback">Please enter a valid key</div>` 
+                    : key}
             </td>
             <td>
                 ${allowedValues ? `
@@ -304,12 +169,32 @@ document.addEventListener('DOMContentLoaded', function() {
             });
         }
 
+        if (isCustom) {
+            const keyInput = row.querySelector('.custom-key');
+            
+            keyInput.addEventListener('input', function() {
+                this.classList.remove('is-invalid');
+                const feedback = this.nextElementSibling;
+                if (feedback && feedback.classList.contains('invalid-feedback')) {
+                    feedback.style.display = 'none';
+                }
+            });
+            keyInput.addEventListener('blur', function() {
+                validateCustomKey(this);
+            });
+
+            // Add validation on focus out
+            keyInput.addEventListener('focusout', function() {
+                validateCustomKey(this);
+            });
+        }
+
         if (isNumericField) {
             const input = row.querySelector('input.numeric-field');
             input.addEventListener('input', function() {
                 const validation = validateNumericValue(this.value, key === 'population' ? 'integer' : 'number');
                 const feedback = this.nextElementSibling;
-
+                
                 if (!validation.isValid) {
                     this.classList.add('is-invalid');
                     if (feedback) {
@@ -339,10 +224,10 @@ document.addEventListener('DOMContentLoaded', function() {
                 .filter(([_, requirements]) => requirements.required)
                 .forEach(([key, requirements]) => {
                     tagsTable.appendChild(createTagRow(
-                        key,
-                        '',
-                        true,
-                        false,
+                        key, 
+                        '', 
+                        true, 
+                        false, 
                         requirements.allowed_values
                     ));
                 });
@@ -352,7 +237,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     function addOptionalField() {
         const selectedType = typeSelect.value;
-
+        
         if (!selectedType) {
             showToast('Error', 'Please select an area type first', 'error');
             return;
@@ -437,7 +322,7 @@ document.addEventListener('DOMContentLoaded', function() {
             const keyElement = row.querySelector('td:first-child');
             const keyInput = keyElement.querySelector('input');
             const key = keyInput ? keyInput.value.trim() : keyElement.textContent.trim();
-
+            
             // Validate key if it's a custom field
             if (keyInput) {
                 if (!validateCustomKey(keyInput)) {
@@ -481,7 +366,7 @@ document.addEventListener('DOMContentLoaded', function() {
         return isValid;
     }
 
-    submitAreaBtn.addEventListener('click', async function(e) {
+    submitAreaBtn.addEventListener('click', function(e) {
         e.preventDefault();
 
         if (!validateForm()) {
@@ -489,86 +374,78 @@ document.addEventListener('DOMContentLoaded', function() {
         }
 
         const tags = {};
+
         // Collect all valid tags
         tagsTable.querySelectorAll('tr').forEach(row => {
             const keyElement = row.querySelector('td:first-child');
             const keyInput = keyElement.querySelector('input');
             const key = keyInput ? keyInput.value.trim() : keyElement.textContent.trim();
 
-            if (key === 'icon:square' && row.dataset.base64Data) {
-                // Skip adding icon:square to tags, it will be set after area creation
-                return;
-            }
-
             const valueInput = row.querySelector('td:nth-child(2) input, td:nth-child(2) select');
             if (valueInput && valueInput.value.trim()) {
                 let value = valueInput.value.trim();
                 const requirements = areaTypeRequirements[typeSelect.value]?.[key] || { type: 'text' };
 
+                // Convert numeric types
                 if (requirements.type === 'number' || requirements.type === 'integer') {
                     const validation = validateNumericValue(value, requirements.type);
                     if (validation.isValid) {
-                        value = validation.value;
+                        value = validation.value;  // Raw number
                     }
                 }
-                tags[key] = value;
+                tags[key] = value;  // Keys are escaped strings
             }
         });
 
         // Add type and GeoJSON
-        tags['type'] = typeSelect.value;
+        tags['type'] = typeSelect.value;  // String value
         if (currentGeoJson) {
-            tags['geo_json'] = currentGeoJson;
+            // Send the GeoJSON as a raw object
+            tags['geo_json'] = currentGeoJson;  // Raw object
         }
 
-        try {
-            // First, create the area
-            const response = await fetch('/add_area', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify(tags)
-            });
-
-            const data = await response.json();
+        // Submit the form
+        fetch('/add_area', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(Object.fromEntries(
+                Object.entries(tags).map(([key, value]) => {
+                    if (key === 'geo_json' && typeof value === 'object') {
+                        // Keep GeoJSON as raw object
+                        return [key, value];
+                    } else if (typeof value === 'number') {
+                        // Keep numbers as raw values
+                        return [key, value];
+                    } else {
+                        // Convert all other values to strings with proper escaping
+                        return [key, String(value)];
+                    }
+                })
+            ))
+        })
+        .then(response => {
+            if (!response.ok) {
+                return response.json().then(data => {
+                    throw new Error(data.error?.message || `HTTP error! status: ${response.status}`);
+                });
+            }
+            return response.json();
+        })
+        .then(data => {
             if (data.error) {
                 throw new Error(data.error.message || 'Failed to add area');
             }
-
-            // If we have an icon, set it using the RPC endpoint
-            const iconRow = Array.from(tagsTable.querySelectorAll('tr')).find(row => {
-                const keyElement = row.querySelector('td:first-child');
-                return keyElement.textContent.trim() === 'icon:square';
-            });
-
-            if (iconRow && iconRow.dataset.base64Data) {
-                const iconResponse = await fetch('/api/set_area_icon', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        id: data.id,
-                        icon_base64: iconRow.dataset.base64Data,
-                        icon_ext: iconRow.dataset.fileExtension
-                    })
-                });
-
-                const iconData = await iconResponse.json();
-                if (iconData.error) {
-                    throw new Error(iconData.error.message || 'Failed to set area icon');
-                }
-            }
-
             showToast('Success', 'Area added successfully', 'success');
             setTimeout(() => {
                 window.location.href = '/select_area';
             }, 2000);
-        } catch (error) {
-            console.error('Error:', error);
+        })
+        .catch(error => {
+            console.error('Error adding area:', error);
             showToast('Error', error.message || 'An unexpected error occurred', 'error');
-        }
+        });
     });
 
     // Map editing functionality
@@ -581,7 +458,7 @@ document.addEventListener('DOMContentLoaded', function() {
     editGeoJsonBtn.addEventListener('click', function() {
         const editorControls = document.querySelectorAll('#geojson-editor button, #geojson-input');
         editorControls.forEach(control => control.style.display = 'inline-block');
-
+        
         if (currentGeoJson) {
             geojsonInput.value = JSON.stringify(currentGeoJson, null, 2);
             previouslySavedGeoJson = JSON.parse(JSON.stringify(currentGeoJson));
