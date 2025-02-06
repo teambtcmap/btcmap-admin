@@ -1,5 +1,7 @@
 
 from datetime import datetime
+import requests
+import constants
 import json
 import re
 from urllib.parse import urlparse
