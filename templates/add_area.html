@@ -528,6 +528,60 @@ document.addEventListener('DOMContentLoaded', function() {
     addOptionalFieldBtn.addEventListener('click', addOptionalField);
     addCustomFieldBtn.addEventListener('click', addCustomField);
     updateFields();
+    setupImageHandling(); // Call setupImageHandling after DOM is loaded and other initializations.
 });
+
+function setupImageHandling() {
+    const imageInput = document.getElementById('imageInput');
+    const cropContainer = document.getElementById('cropContainer');
+    const imagePreview = document.getElementById('imagePreview');
+    const previewImage = document.getElementById('previewImage');
+    const cropButton = document.getElementById('cropButton');
+    const croppedCanvas = document.getElementById('croppedCanvas');
+    const zoomSlider = document.getElementById('zoomSlider');
+
+    imageInput.addEventListener('change', function(e) {
+        const file = e.target.files[0];
+        const reader = new FileReader();
+
+        reader.onload = function(e) {
+            previewImage.src = e.target.result;
+            imagePreview.style.display = 'block';
+            cropContainer.style.display = 'block';
+        };
+
+        reader.readAsDataURL(file);
+    });
+
+
+    let cropper;
+    previewImage.onload = function() {
+        cropper = new Cropper(previewImage, {
+            aspectRatio: 1 / 1,
+            viewMode: 1,
+            autoCropArea: 1,
+            minContainerWidth: 300,
+            minContainerHeight: 300,
+        });
+    };
+
+    zoomSlider.addEventListener('input', function() {
+        const zoomLevel = parseFloat(this.value);
+        cropper.zoomTo(zoomLevel);
+    });
+
+
+    cropButton.addEventListener('click', function() {
+        const canvas = cropper.getCroppedCanvas();
+        croppedCanvas.width = canvas.width;
+        croppedCanvas.height = canvas.height;
+        croppedCanvas.getContext('2d').drawImage(canvas, 0, 0);
+        croppedCanvas.style.display = 'block';
+        imagePreview.style.display = 'none';
+        cropContainer.style.display = 'none';
+        // Add your logic to send the cropped image data to the server here
+        console.log("Cropped image data:", croppedCanvas.toDataURL());
+    });
+}
 </script>
 {% endblock %}
