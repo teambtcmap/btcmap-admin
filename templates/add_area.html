@@ -5,12 +5,12 @@
 {% block content %}
 <div class="container">
     <h1 class="mt-5">Add New Area</h1>
-    
+
     <!-- Map container with Edit GeoJSON button -->
     <div id="map" class="position-relative mb-3" style="height: 400px; width: 100%;">
         <button id="edit-geojson-btn" class="btn btn-primary btn-sm position-absolute" style="top: 10px; right: 10px; z-index: 1000;">Edit GeoJSON</button>
     </div>
-    
+
     <!-- GeoJSON editing section -->
     <div id="geojson-editor" class="mb-3">
         <textarea id="geojson-input" class="form-control mb-2" rows="5" style="display: none;"></textarea>
@@ -18,7 +18,7 @@
         <button id="save-locally-btn" class="btn btn-success" style="display: none;">Update</button>
         <button id="cancel-geojson-btn" class="btn btn-secondary" style="display: none;">Cancel</button>
     </div>
-    
+
     <!-- Image upload and cropping section -->
 <div class="card mt-3 mb-3">
     <div class="card-body">
@@ -72,7 +72,7 @@
             </form>
         </div>
     </div>
-    
+
     <!-- Separate section for Add Area button -->
     <div class="mt-4 text-center">
         <button id="submit-area-btn" class="btn btn-primary btn-lg">Add Area</button>
@@ -153,7 +153,7 @@ document.addEventListener('DOMContentLoaded', function() {
     function createTagRow(key, value = '', isRequired = false, isCustom = false, allowedValues = null) {
         const row = document.createElement('tr');
         const isNumericField = key === 'population' || key === 'area_km2';
-        
+
         row.innerHTML = `
             <td>
                 ${isCustom ? 
@@ -192,7 +192,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
         if (isCustom) {
             const keyInput = row.querySelector('.custom-key');
-            
+
             keyInput.addEventListener('input', function() {
                 this.classList.remove('is-invalid');
                 const feedback = this.nextElementSibling;
@@ -215,7 +215,7 @@ document.addEventListener('DOMContentLoaded', function() {
             input.addEventListener('input', function() {
                 const validation = validateNumericValue(this.value, key === 'population' ? 'integer' : 'number');
                 const feedback = this.nextElementSibling;
-                
+
                 if (!validation.isValid) {
                     this.classList.add('is-invalid');
                     if (feedback) {
@@ -258,7 +258,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     function addOptionalField() {
         const selectedType = typeSelect.value;
-        
+
         if (!selectedType) {
             showToast('Error', 'Please select an area type first', 'error');
             return;
@@ -343,7 +343,7 @@ document.addEventListener('DOMContentLoaded', function() {
             const keyElement = row.querySelector('td:first-child');
             const keyInput = keyElement.querySelector('input');
             const key = keyInput ? keyInput.value.trim() : keyElement.textContent.trim();
-            
+
             // Validate key if it's a custom field
             if (keyInput) {
                 if (!validateCustomKey(keyInput)) {
@@ -479,7 +479,7 @@ document.addEventListener('DOMContentLoaded', function() {
     editGeoJsonBtn.addEventListener('click', function() {
         const editorControls = document.querySelectorAll('#geojson-editor button, #geojson-input');
         editorControls.forEach(control => control.style.display = 'inline-block');
-        
+
         if (currentGeoJson) {
             geojsonInput.value = JSON.stringify(currentGeoJson, null, 2);
             previouslySavedGeoJson = JSON.parse(JSON.stringify(currentGeoJson));
