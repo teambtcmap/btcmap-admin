@@ -312,5 +312,53 @@ def get_area(area_id):
     return None
 
 
+@app.route('/api/set_area_icon', methods=['POST'])
+def set_area_icon():
+    try:
+        data = request.json
+        if not data:
+            return jsonify({'error': {'message': 'Invalid request data'}}), 400
+
+        area_id = data.get('id')
+        icon_base64 = data.get('icon_base64')
+        icon_ext = data.get('icon_ext')
+
+        if not all([area_id, icon_base64, icon_ext]):
+            return jsonify({
+                'error': {
+                    'message': 'Missing required fields: id, icon_base64, or icon_ext'
+                }
+            }), 400
+
+        # Make the RPC call to set the area icon
+        result = rpc_call('set_area_icon',
+                         {'id': area_id,
+                          'icon_base64': icon_base64,
+                          'icon_ext': icon_ext})
+
+        if 'error' in result:
+            return jsonify({'error': result['error']}), 400
+
+        # After successful icon upload, set the icon:square tag
+        icon_url = f'https://static.btcmap.org/images/areas/{area_id}.{icon_ext}'
+        tag_result = rpc_call('set_area_tag', {
+            'id': area_id,
+            'name': 'icon:square',
+            'value': icon_url
+        })
+
+        if 'error' in tag_result:
+            return jsonify({'error': tag_result['error']}), 400
+
+        return jsonify({'success': True})
+
+    except Exception as e:
+        app.logger.error(f"Error setting area icon: {str(e)}")
+        return jsonify({
+            'error': {
+                'message': 'Failed to set area icon'
+            }
+        }), 500
+
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)
