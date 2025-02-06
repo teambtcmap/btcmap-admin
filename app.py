@@ -2,27 +2,25 @@ import os
 from flask import Flask, render_template, request, jsonify, session, redirect, url_for
 from flask_session import Session
 import json
-from datetime import datetime
+from datetime import timedelta
 import constants
 from helper import (
     format_date, validate_geo_json, calculate_area, rpc_call,
     validation_functions
 )
 
+FLASK_CONFIG = {
+    'SECRET_KEY': os.urandom(24),
+    'SESSION_TYPE': 'filesystem',
+    'SESSION_PERMANENT': True,
+    'PERMANENT_SESSION_LIFETIME': timedelta(minutes=30)
+}
+
 app = Flask(__name__)
-app.config.update(constants.FLASK_CONFIG)
-app.config['SECRET_KEY'] = os.urandom(24)
-app.config['SESSION_TYPE'] = 'filesystem'
-app.config['SESSION_PERMANENT'] = True
-app.config['PERMANENT_SESSION_LIFETIME'] = datetime.timedelta(minutes=30)
+app.config.update(FLASK_CONFIG)
 Session(app)
 
 API_BASE_URL = "https://api.btcmap.org"
-
-CONTINENTS = [
-    'africa', 'asia', 'europe', 'north-america', 'oceania', 'south-america'
-]
-AREA_TYPES = ['community', 'country']
 
 @app.before_request
 def check_auth():

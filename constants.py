@@ -1,12 +1,7 @@
-
-import os
-from datetime import timedelta
-
-API_BASE_URL = "https://api.btcmap.org"
-
 CONTINENTS = [
     'africa', 'asia', 'europe', 'north-america', 'oceania', 'south-america'
 ]
+
 AREA_TYPES = ['community', 'country']
 
 AREA_TYPE_REQUIREMENTS = {
@@ -129,11 +124,4 @@ AREA_TYPE_REQUIREMENTS = {
             'type': 'text'
         }
     }
-}
-
-FLASK_CONFIG = {
-    'SECRET_KEY': os.urandom(24),
-    'SESSION_TYPE': 'filesystem',
-    'SESSION_PERMANENT': True,
-    'PERMANENT_SESSION_LIFETIME': timedelta(minutes=30)
 }
