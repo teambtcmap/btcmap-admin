@@ -102,6 +102,60 @@ def calculate_area(geo_json):
         geo_json = json.loads(geo_json)
 
     geom = shape(geo_json)
+
+def process_image(image_data, max_size=1024):
+    """Process uploaded image to ensure it's square and within size limits"""
+    from PIL import Image
+    import io
+    import base64
+
+    # Convert base64 to image
+    if isinstance(image_data, str) and image_data.startswith('data:image'):
+        image_data = image_data.split(',')[1]
+    
+    image_bytes = base64.b64decode(image_data)
+    img = Image.open(io.BytesIO(image_bytes))
+    
+    # Convert to RGB if necessary
+    if img.mode in ('RGBA', 'LA') or (img.mode == 'P' and 'transparency' in img.info):
+        bg = Image.new('RGB', img.size, (255, 255, 255))
+        if img.mode == 'PA':
+            img = img.convert('RGBA')
+        bg.paste(img, mask=img.split()[-1])
+        img = bg
+    
+    # Resize if larger than max_size
+    if max(img.size) > max_size:
+        ratio = max_size / max(img.size)
+        img = img.resize((int(img.size[0] * ratio), int(img.size[1] * ratio)), Image.Resampling.LANCZOS)
+    
+    # Convert back to base64
+    buffered = io.BytesIO()
+    img.save(buffered, format="PNG")
+    return base64.b64encode(buffered.getvalue()).decode()
+
+def validate_image(base64_str):
+    """Validate image dimensions and format"""
+    import base64
+    import io
+    from PIL import Image
+    
+    try:
+        if base64_str.startswith('data:image'):
+            base64_str = base64_str.split(',')[1]
+        
+        image_data = base64.b64decode(base64_str)
+        img = Image.open(io.BytesIO(image_data))
+        width, height = img.size
+        
+        # Check if image is roughly square (within 10% tolerance)
+        if abs(width - height) / max(width, height) > 0.1:
+            return False, "Image must be square (width and height should be within 10% of each other)"
+            
+        return True, None
+    except Exception as e:
+        return False, f"Invalid image: {str(e)}"
+
     proj = pyproj.Proj(proj='aea', lat_1=geom.bounds[1], lat_2=geom.bounds[3])
     project = lambda x, y: proj(x, y)
     geom_proj = transform(project, geom)
