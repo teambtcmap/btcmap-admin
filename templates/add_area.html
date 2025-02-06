@@ -16,8 +16,9 @@
 }
 
 #preview-image {
-    max-height: 100%;
+    display: block;
     max-width: 100%;
+    max-height: 100%;
 }
 
 .zoom-controls {
@@ -54,6 +55,16 @@
 .cropper-wrap-box {
     background-color: #f8f9fa;
 }
+
+/* Additional containment rules */
+.image-editor-card {
+    overflow: hidden;
+}
+
+.cropper-container img {
+    max-width: none !important;
+    max-height: none !important;
+}
 </style>
 {% endblock %}
 
@@ -62,7 +73,7 @@
     <h1 class="mt-5">Add New Area</h1>
 
     <!-- Image Upload Section -->
-    <div class="card mb-4">
+    <div class="card mb-4 image-editor-card">
         <div class="card-body">
             <h5 class="card-title">Area Icon</h5>
 
@@ -75,7 +86,6 @@
             <!-- Main image container for preview and cropping -->
             <div id="image-container" class="image-container">
                 <img id="preview-image" src="">
-
                 <!-- Zoom controls -->
                 <div class="zoom-controls">
                     <button class="btn btn-sm btn-light me-2" id="zoom-in">
@@ -109,7 +119,7 @@
     <div id="map" class="position-relative mb-3" style="height: 400px; width: 100%;">
         <button id="edit-geojson-btn" class="btn btn-primary btn-sm position-absolute" style="top: 10px; right: 10px; z-index: 1000;">Edit GeoJSON</button>
     </div>
-    
+
     <!-- GeoJSON editing section -->
     <div id="geojson-editor" class="mb-3">
         <textarea id="geojson-input" class="form-control mb-2" rows="5" style="display: none;"></textarea>
@@ -117,7 +127,7 @@
         <button id="save-locally-btn" class="btn btn-success" style="display: none;">Update</button>
         <button id="cancel-geojson-btn" class="btn btn-secondary" style="display: none;">Cancel</button>
     </div>
-    
+
     <div class="card mt-3">
         <div class="card-body">
             <form id="add-area-form" method="POST" novalidate>
@@ -150,7 +160,7 @@
             </form>
         </div>
     </div>
-    
+
     <!-- Separate section for Add Area button -->
     <div class="mt-4 text-center">
         <button id="submit-area-btn" class="btn btn-primary btn-lg">Add Area</button>
@@ -506,7 +516,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
         const reader = new FileReader();
         reader.onload = function(e) {
-            // Show image container
+            // Show image container and controls
             imageContainer.style.display = 'block';
             cropControls.style.display = 'block';
 
@@ -529,7 +539,11 @@ document.addEventListener('DOMContentLoaded', function() {
                 background: true,
                 responsive: true,
                 zoomOnTouch: false,
-                zoomOnWheel: false
+                zoomOnWheel: false,
+                ready: function() {
+                    // Ensure cropper is visible
+                    this.cropper.crop();
+                }
             });
         };
         reader.readAsDataURL(file);
