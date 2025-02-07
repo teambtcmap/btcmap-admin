@@ -298,7 +298,6 @@ def add_area():
 @app.route('/api/set_area_tag', methods=['POST'])
 def set_area_tag():
     data = request.json
-
     if not data:
         return jsonify({'error': 'Invalid request data'}), 400
 
@@ -315,12 +314,10 @@ def set_area_tag():
         return jsonify({'error': 'Invalid area type'}), 400
 
     requirements = AREA_TYPE_REQUIREMENTS.get(area_type, {}).get(key, {})
-
-    validation_funcs = validation_functions.get(
-        requirements.get('type', 'text'), [validate_general])
+    validation_funcs = validation_functions.get(requirements.get('type', 'text'), [validate_general])
+    
     for validation_func in validation_funcs:
-        is_valid, error_message = validation_func(
-            value, requirements.get('allowed_values'))
+        is_valid, error_message = validation_func(value, requirements.get('allowed_values'))
         if not is_valid:
             return jsonify({'error': f'{key}: {error_message}'}), 400
 
@@ -329,40 +326,21 @@ def set_area_tag():
         if not is_valid:
             return jsonify({'error': result}), 400
 
-        result = rpc_call('set_area_tag', {
-            'id': area_id,
-            'name': 'geo_json',
-            'value': value
-        })
-
-        if 'error' in result:
-            return jsonify(
-                {'error':
-                 f'Failed to update geo_json: {result["error"]}'}), 400
+        geo_result = rpc_call('set_area_tag', {'id': area_id, 'name': 'geo_json', 'value': value})
+        if isinstance(geo_result, tuple):
+            return geo_result
 
         area_km2 = calculate_area(value)
-        area_result = rpc_call('set_area_tag', {
-            'id': area_id,
-            'name': 'area_km2',
-            'value': area_km2
-        })
+        area_result = rpc_call('set_area_tag', {'id': area_id, 'name': 'area_km2', 'value': area_km2})
+        if isinstance(area_result, tuple):
+            return area_result
 
-        if 'error' in area_result:
-            return jsonify(
-                {'error':
-                 f'Failed to update area: {area_result["error"]}'}), 400
+        return jsonify({'success': True, 'message': 'GeoJSON and area updated successfully'})
 
-        return jsonify({
-            'success': True,
-            'message': 'GeoJSON and area updated successfully'
-        })
-
-    result = rpc_call('set_area_tag', {
-        'id': area_id,
-        'name': key,
-        'value': value
-    })
-    return jsonify(result)
+    result = rpc_call('set_area_tag', {'id': area_id, 'name': key, 'value': value})
+    if isinstance(result, tuple):
+        return result
+    return jsonify({'success': True})
 
 
 @app.route('/api/remove_area_tag', methods=['POST'])
@@ -382,12 +360,13 @@ def remove_area_tag():
     if not area_type or area_type not in AREA_TYPES:
         return jsonify({'error': 'Invalid area type'}), 400
 
-    if AREA_TYPE_REQUIREMENTS.get(area_type,
-                                  {}).get(tag, {}).get('required', False):
+    if AREA_TYPE_REQUIREMENTS.get(area_type, {}).get(tag, {}).get('required', False):
         return jsonify({'error': f'Cannot remove required tag: {tag}'}), 400
 
     result = rpc_call('remove_area_tag', {'id': area_id, 'tag': tag})
-    return jsonify(result)
+    if isinstance(result, tuple):
+        return result
+    return jsonify({'success': True})
 
 
 @app.route('/api/remove_area', methods=['POST'])
@@ -395,8 +374,11 @@ def remove_area():
     data = request.json
     if not data:
         return jsonify({'error': 'Invalid request data'}), 400
+        
     result = rpc_call('remove_area', {'id': data.get('id')})
-    return jsonify(result)
+    if isinstance(result, tuple):
+        return result
+    return jsonify({'success': True})
 
 
 @app.route('/api/search_areas', methods=['POST'])
