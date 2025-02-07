@@ -1,23 +1,152 @@
 import os
-import requests
 from flask import Flask, render_template, request, jsonify, session, redirect, url_for
 from flask_session import Session
+import requests
 import json
-from datetime import timedelta
-import constants
-from helper import (format_date, validate_geo_json, calculate_area, rpc_call,
-                    validation_functions)
-
-FLASK_CONFIG = {
-    'SECRET_KEY': os.urandom(24),
-    'SESSION_TYPE': 'filesystem',
-    'SESSION_PERMANENT': True,
-    'PERMANENT_SESSION_LIFETIME': timedelta(minutes=30)
-}
+from datetime import datetime, timedelta
+from collections import Counter
+from geojson_rewind import rewind
+from urllib.parse import urlparse
+import re
+from shapely.geometry import shape, mapping
+from shapely.ops import transform
+import pyproj
 
 app = Flask(__name__)
-app.config.update(FLASK_CONFIG)
+app.config['SECRET_KEY'] = os.urandom(24)
+app.config['SESSION_TYPE'] = 'filesystem'
+app.config['SESSION_PERMANENT'] = True
+app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(minutes=30)
 Session(app)
+
+API_BASE_URL = "https://api.btcmap.org"
+
+CONTINENTS = [
+    'africa', 'asia', 'europe', 'north-america', 'oceania', 'south-america'
+]
+AREA_TYPES = ['community', 'country']
+
+AREA_TYPE_REQUIREMENTS = {
+    'community': {
+        'name': {
+            'required': True,
+            'type': 'text'
+        },
+        'url_alias': {
+            'required': True,
+            'type': 'text'
+        },
+        'continent': {
+            'required': True,
+            'type': 'select',
+            'allowed_values': CONTINENTS
+        },
+        'icon:square': {
+            'required': True,
+            'type': 'text'
+        },
+        'population': {
+            'required': True,
+            'type': 'number'
+        },
+        'population:date': {
+            'required': True,
+            'type': 'date'
+        },
+        'area_km2': {
+            'required': False,
+            'type': 'number'
+        },
+        'organization': {
+            'required': False,
+            'type': 'text'
+        },
+        'language': {
+            'required': False,
+            'type': 'text'
+        },
+        'contact:twitter': {
+            'required': False,
+            'type': 'url'
+        },
+        'contact:website': {
+            'required': False,
+            'type': 'url'
+        },
+        'contact:email': {
+            'required': False,
+            'type': 'email'
+        },
+        'contact:telegram': {
+            'required': False,
+            'type': 'url'
+        },
+        'contact:signal': {
+            'required': False,
+            'type': 'url'
+        },
+        'contact:whatsapp': {
+            'required': False,
+            'type': 'url'
+        },
+        'contact:nostr': {
+            'required': False,
+            'type': 'text'
+        },
+        'contact:meetup': {
+            'required': False,
+            'type': 'url'
+        },
+        'contact:discord': {
+            'required': False,
+            'type': 'url'
+        },
+        'contact:instagram': {
+            'required': False,
+            'type': 'url'
+        },
+        'contact:youtube': {
+            'required': False,
+            'type': 'url'
+        },
+        'contact:facebook': {
+            'required': False,
+            'type': 'url'
+        },
+        'contact:linkedin': {
+            'required': False,
+            'type': 'url'
+        },
+        'contact:rss': {
+            'required': False,
+            'type': 'url'
+        },
+        'contact:phone': {
+            'required': False,
+            'type': 'tel'
+        },
+        'contact:github': {
+            'required': False,
+            'type': 'url'
+        },
+        'contact:matrix': {
+            'required': False,
+            'type': 'url'
+        },
+        'contact:geyser': {
+            'required': False,
+            'type': 'url'
+        },
+        'tips:lightning_address': {
+            'required': False,
+            'type': 'text'
+        },
+        'description': {
+            'required': False,
+            'type': 'text'
+        }
+    }
+}
 
 
 @app.before_request
@@ -66,7 +195,7 @@ def show_area(area_id):
         area['last_sync'] = format_date(area.get('last_sync'))
 
         area_type = area['tags'].get('type', '')
-        type_requirements = constants.AREA_TYPE_REQUIREMENTS.get(area_type, {})
+        type_requirements = AREA_TYPE_REQUIREMENTS.get(area_type, {})
 
         geo_json = area['tags'].get('geo_json')
         if geo_json and isinstance(geo_json, str):
@@ -112,7 +241,7 @@ def add_area():
         if not area_type:
             app.logger.error("Missing area type")
             return jsonify({'error': {'message': 'Missing area type'}}), 400
-        if area_type not in constants.AREA_TYPES:
+        if area_type not in AREA_TYPES:
             app.logger.error(f"Invalid area type: {area_type}")
             return jsonify(
                 {'error': {
@@ -121,8 +250,8 @@ def add_area():
 
         validation_errors = []
 
-        for key, requirements in constants.AREA_TYPE_REQUIREMENTS.get(
-                area_type, {}).items():
+        for key, requirements in AREA_TYPE_REQUIREMENTS.get(area_type,
+                                                            {}).items():
             if requirements['required'] and key not in tags:
                 validation_errors.append(f'Missing required field: {key}')
             elif key in tags:
@@ -159,13 +288,12 @@ def add_area():
         app.logger.info(f"RPC response: {result}")
 
         if 'error' not in result:
-            return jsonify({'success': True, 'id': result.get('result', {}).get('id')})
+            return jsonify({'success': True})
         app.logger.error(f"Error from RPC call: {result['error']}")
         return jsonify({'error': result['error']}), 400
 
-    return render_template(
-        'add_area.html',
-        area_type_requirements=constants.AREA_TYPE_REQUIREMENTS)
+    return render_template('add_area.html',
+                           area_type_requirements=AREA_TYPE_REQUIREMENTS)
 
 
 @app.route('/api/set_area_tag', methods=['POST'])
@@ -184,11 +312,10 @@ def set_area_tag():
         return jsonify({'error': 'Area not found'}), 404
 
     area_type = area['tags'].get('type')
-    if not area_type or area_type not in constants.AREA_TYPES:
+    if not area_type or area_type not in AREA_TYPES:
         return jsonify({'error': 'Invalid area type'}), 400
 
-    requirements = constants.AREA_TYPE_REQUIREMENTS.get(area_type,
-                                                        {}).get(key, {})
+    requirements = AREA_TYPE_REQUIREMENTS.get(area_type, {}).get(key, {})
 
     validation_funcs = validation_functions.get(
         requirements.get('type', 'text'), [validate_general])
@@ -253,48 +380,15 @@ def remove_area_tag():
         return jsonify({'error': 'Area not found'}), 404
 
     area_type = area['tags'].get('type')
-    if not area_type or area_type not in constants.AREA_TYPES:
+    if not area_type or area_type not in AREA_TYPES:
         return jsonify({'error': 'Invalid area type'}), 400
 
-    if constants.AREA_TYPE_REQUIREMENTS.get(area_type,
-                                            {}).get(tag,
-                                                    {}).get('required', False):
+    if AREA_TYPE_REQUIREMENTS.get(area_type,
+                                  {}).get(tag, {}).get('required', False):
         return jsonify({'error': f'Cannot remove required tag: {tag}'}), 400
 
     result = rpc_call('remove_area_tag', {'id': area_id, 'tag': tag})
     return jsonify(result)
-
-
-
-@app.route('/api/set_area_icon', methods=['POST'])
-def set_area_icon():
-    data = request.json
-    if not data:
-        return jsonify({'error': 'Invalid request data'}), 400
-        
-    area_id = data.get('id')
-    icon_base64 = data.get('icon_base64')
-    icon_ext = data.get('icon_ext', 'png')
-    
-    if not all([area_id, icon_base64, icon_ext]):
-        return jsonify({'error': 'Missing required fields'}), 400
-        
-    # Validate and process image
-    is_valid, error_message = validate_image(icon_base64)
-    if not is_valid:
-        return jsonify({'error': error_message}), 400
-        
-    processed_image = process_image(icon_base64)
-    
-    # Call RPC to set the icon
-    result = rpc_call('set_area_icon', {
-        'id': area_id,
-        'icon_base64': processed_image,
-        'icon_ext': icon_ext
-    })
-    
-    return jsonify(result)
-
 
 
 @app.route('/api/remove_area', methods=['POST'])
@@ -343,6 +437,165 @@ def get_area(area_id):
         return result['result']
     return None
 
+
+def calculate_area(geo_json):
+    if isinstance(geo_json, str):
+        geo_json = json.loads(geo_json)
+
+    geom = shape(geo_json)
+
+    proj = pyproj.Proj(proj='aea', lat_1=geom.bounds[1], lat_2=geom.bounds[3])
+
+    project = lambda x, y: proj(x, y)
+
+    geom_proj = transform(project, geom)
+
+    area_m2 = geom_proj.area
+
+    return round(area_m2 / 1_000_000, 2)
+
+
+def rpc_call(method, params):
+    headers = {
+        'Authorization': f'Bearer {session.get("password")}'
+    }
+    payload = {
+        "jsonrpc": "2.0",
+        "method": method,
+        "params": params,
+        "id": 1
+    }
+    try:
+        response = requests.post(f"{API_BASE_URL}/rpc",
+                                 json=payload,
+                                 headers=headers,
+                                 timeout=20)
+        response.raise_for_status()
+        return response.json()
+    except requests.exceptions.Timeout:
+        app.logger.error(f"Timeout error in RPC call to {method}")
+        raise requests.exceptions.RequestException("Request timed out")
+    except requests.exceptions.RequestException as e:
+        app.logger.error(f"Network error in RPC call to {method}: {str(e)}")
+        raise
+    except Exception as e:
+        app.logger.error(f"Unexpected error in RPC call to {method}: {str(e)}")
+        raise
+
+
+def format_date(date_string):
+    if date_string:
+        try:
+            date = datetime.fromisoformat(date_string.replace('Z', '+00:00'))
+            return date.strftime('%Y-%m-%d %H:%M:%S UTC')
+        except ValueError:
+            return date_string
+    return 'N/A'
+
+
+def validate_non_negative_number(value, allowed_values=None):
+    if not isinstance(value, (int, float)) and not (isinstance(
+            value, str) and value.replace('.', '', 1).isdigit()):
+        return False, "Value must be a non-negative number"
+    try:
+        num = float(value)
+        return num >= 0, "Value must be a non-negative number"
+    except ValueError:
+        return False, "Value must be a number"
+
+
+def validate_non_negative_integer(value, allowed_values=None):
+    if not isinstance(value, int) and not (isinstance(value, str)
+                                           and value.isdigit()):
+        return False, "Value must be a non-negative integer"
+    try:
+        num = int(value)
+        return num >= 0, "Value must be a non-negative integer"
+    except ValueError:
+        return False, "Value must be an integer"
+
+
+def validate_date(value, allowed_values=None):
+    try:
+        datetime.strptime(value, '%Y-%m-%d')
+        return True, None
+    except ValueError:
+        return False, "Invalid date format. Please use YYYY-MM-DD"
+
+
+def validate_allowed_values(value, allowed_values):
+    if allowed_values and value.lower() in allowed_values:
+        return True, None
+    else:
+        return False, f"Invalid value. Please choose from {', '.join(allowed_values)}"
+
+
+def validate_geo_json(value):
+    try:
+        if isinstance(value, str):
+            geo_json = json.loads(value)
+        elif isinstance(value, dict):
+            geo_json = value
+        else:
+            return False, "Invalid GeoJSON: must be a JSON object or a valid JSON string"
+
+        if not isinstance(geo_json, dict):
+            return False, "Invalid GeoJSON: must be a JSON object"
+
+        try:
+            geom = shape(geo_json)
+            if geom.geom_type not in ['Polygon', 'MultiPolygon']:
+                return False, "Invalid GeoJSON: only valid Polygon and MultiPolygon types are accepted"
+
+            # Rewind the GeoJSON to ensure correct orientation
+            rewound = rewind(geo_json)
+            return True, {
+                "geo_json":
+                rewound  # Return the object directly, not stringified
+            }
+        except Exception as e:
+            return False, f"Invalid GeoJSON structure: {str(e)}"
+    except json.JSONDecodeError:
+        return False, "Invalid JSON format"
+    except Exception as e:
+        return False, f"Error validating GeoJSON: {str(e)}"
+
+
+def validate_general(value, allowed_values=None):
+    if allowed_values:
+        return validate_allowed_values(value, allowed_values)
+    return len(str(value).strip()) > 0, "Value cannot be empty"
+
+
+def validate_url(value, allowed_values=None):
+    try:
+        result = urlparse(value)
+        return all([result.scheme, result.netloc]), "Invalid URL format"
+    except:
+        return False, "Invalid URL"
+
+
+def validate_email(value, allowed_values=None):
+    email_regex = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+    return bool(re.match(email_regex, value)), "Invalid email format"
+
+
+def validate_phone(value, allowed_values=None):
+    phone_regex = r'^\+?1?\d{9,15}$'
+    return bool(re.match(phone_regex, value)), "Invalid phone number format"
+
+
+validation_functions = {
+    'number': [validate_non_negative_number],
+    'integer': [validate_non_negative_integer],
+    'date': [validate_date],
+    'select': [validate_allowed_values],
+    'geo_json': [validate_geo_json],
+    'text': [validate_general],
+    'url': [validate_url],
+    'email': [validate_email],
+    'tel': [validate_phone]
+}
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)

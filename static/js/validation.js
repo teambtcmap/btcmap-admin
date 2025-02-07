@@ -63,22 +63,3 @@ function validateValue(value, requirements) {
 
     return { isValid: true, value: value.trim() };
 }
-
-
-function validateImage(base64Str) {
-    return new Promise((resolve, reject) => {
-        const img = new Image();
-        img.onload = function() {
-            const width = this.width;
-            const height = this.height;
-            if (Math.abs(width - height) / Math.max(width, height) > 0.1) {
-                reject("Image must be square (width and height should be within 10% of each other)");
-            }
-            resolve(true);
-        };
-        img.onerror = function() {
-            reject("Invalid image file");
-        };
-        img.src = base64Str;
-    });
-}

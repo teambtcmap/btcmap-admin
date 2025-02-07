@@ -5,12 +5,12 @@
 {% block content %}
 <div class="container">
     <h1 class="mt-5">Add New Area</h1>
-
+    
     <!-- Map container with Edit GeoJSON button -->
     <div id="map" class="position-relative mb-3" style="height: 400px; width: 100%;">
         <button id="edit-geojson-btn" class="btn btn-primary btn-sm position-absolute" style="top: 10px; right: 10px; z-index: 1000;">Edit GeoJSON</button>
     </div>
-
+    
     <!-- GeoJSON editing section -->
     <div id="geojson-editor" class="mb-3">
         <textarea id="geojson-input" class="form-control mb-2" rows="5" style="display: none;"></textarea>
@@ -18,30 +18,8 @@
         <button id="save-locally-btn" class="btn btn-success" style="display: none;">Update</button>
         <button id="cancel-geojson-btn" class="btn btn-secondary" style="display: none;">Cancel</button>
     </div>
-
-    <!-- Image upload and cropping section -->
-<div class="card mt-3 mb-3">
-    <div class="card-body">
-        <h5 class="card-title">Area Icon</h5>
-        <div class="image-upload-container">
-            <input type="file" id="imageInput" accept="image/*" class="form-control mb-2">
-            <input type="file" id="imageInput" accept="image/*" class="form-control mb-3">
-<div id="cropContainer" style="display: none;">
-                <div id="imagePreview" style="width: 300px; height: 300px; overflow: hidden; position: relative;">
-                    <img id="previewImage" style="max-width: 100%; position: absolute;">
-                </div>
-                <div class="mt-2">
-                    <input type="range" id="zoomSlider" min="1" max="2" step="0.1" value="1" class="form-control">
-                    <label for="zoomSlider">Zoom</label>
-                </div>
-                <button type="button" id="cropButton" class="btn btn-primary mt-2">Crop Image</button>
-            </div>
-            <canvas id="croppedCanvas" style="display: none;"></canvas>
-        </div>
-    </div>
-</div>
-
-<div class="card mt-3">
+    
+    <div class="card mt-3">
         <div class="card-body">
             <form id="add-area-form" method="POST" novalidate>
                 <div class="form-group">
@@ -73,7 +51,7 @@
             </form>
         </div>
     </div>
-
+    
     <!-- Separate section for Add Area button -->
     <div class="mt-4 text-center">
         <button id="submit-area-btn" class="btn btn-primary btn-lg">Add Area</button>
@@ -154,7 +132,7 @@ document.addEventListener('DOMContentLoaded', function() {
     function createTagRow(key, value = '', isRequired = false, isCustom = false, allowedValues = null) {
         const row = document.createElement('tr');
         const isNumericField = key === 'population' || key === 'area_km2';
-
+        
         row.innerHTML = `
             <td>
                 ${isCustom ? 
@@ -193,7 +171,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
         if (isCustom) {
             const keyInput = row.querySelector('.custom-key');
-
+            
             keyInput.addEventListener('input', function() {
                 this.classList.remove('is-invalid');
                 const feedback = this.nextElementSibling;
@@ -216,7 +194,7 @@ document.addEventListener('DOMContentLoaded', function() {
             input.addEventListener('input', function() {
                 const validation = validateNumericValue(this.value, key === 'population' ? 'integer' : 'number');
                 const feedback = this.nextElementSibling;
-
+                
                 if (!validation.isValid) {
                     this.classList.add('is-invalid');
                     if (feedback) {
@@ -259,7 +237,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     function addOptionalField() {
         const selectedType = typeSelect.value;
-
+        
         if (!selectedType) {
             showToast('Error', 'Please select an area type first', 'error');
             return;
@@ -344,7 +322,7 @@ document.addEventListener('DOMContentLoaded', function() {
             const keyElement = row.querySelector('td:first-child');
             const keyInput = keyElement.querySelector('input');
             const key = keyInput ? keyInput.value.trim() : keyElement.textContent.trim();
-
+            
             // Validate key if it's a custom field
             if (keyInput) {
                 if (!validateCustomKey(keyInput)) {
@@ -480,7 +458,7 @@ document.addEventListener('DOMContentLoaded', function() {
     editGeoJsonBtn.addEventListener('click', function() {
         const editorControls = document.querySelectorAll('#geojson-editor button, #geojson-input');
         editorControls.forEach(control => control.style.display = 'inline-block');
-
+        
         if (currentGeoJson) {
             geojsonInput.value = JSON.stringify(currentGeoJson, null, 2);
             previouslySavedGeoJson = JSON.parse(JSON.stringify(currentGeoJson));
@@ -529,173 +507,6 @@ document.addEventListener('DOMContentLoaded', function() {
     addOptionalFieldBtn.addEventListener('click', addOptionalField);
     addCustomFieldBtn.addEventListener('click', addCustomField);
     updateFields();
-    setupImageHandling(); // Call setupImageHandling after DOM is loaded and other initializations.
 });
-
-function setupImageHandling() {
-    const imageInput = document.getElementById('imageInput');
-    const cropContainer = document.getElementById('cropContainer');
-    const imagePreview = document.getElementById('imagePreview');
-    const previewImage = document.getElementById('previewImage');
-    const cropButton = document.getElementById('cropButton');
-    const croppedCanvas = document.getElementById('croppedCanvas');
-    const zoomSlider = document.getElementById('zoomSlider');
-
-    imageInput.addEventListener('change', function(e) {
-        const file = e.target.files[0];
-        const reader = new FileReader();
-
-        reader.onload = function(e) {
-            previewImage.src = e.target.result;
-            imagePreview.style.display = 'block';
-            cropContainer.style.display = 'block';
-        };
-
-        reader.readAsDataURL(file);
-    });
-
-
-    let cropper;
-    previewImage.onload = function() {
-        cropper = new Cropper(previewImage, {
-            aspectRatio: 1 / 1,
-            viewMode: 1,
-            autoCropArea: 1,
-            minContainerWidth: 300,
-            minContainerHeight: 300,
-            zoomable: true,
-            scalable: true
-        });
-    };
-
-    zoomSlider.addEventListener('input', function() {
-        if (cropper) {
-            const zoomLevel = parseFloat(this.value);
-            cropper.scale(zoomLevel, zoomLevel);
-        }
-    });
-
-
-    let croppedImageData = null;
-
-    cropButton.addEventListener('click', function() {
-        const canvas = cropper.getCroppedCanvas({
-            width: 300,
-            height: 300,
-            minWidth: 300,
-            minHeight: 300,
-            maxWidth: 300,
-            maxHeight: 300
-        });
-        
-        if (!canvas) {
-            showToast('Error', 'Failed to crop image', 'error');
-            return;
-        }
-
-        croppedImageData = canvas.toDataURL('image/png').split(',')[1];
-        
-        // Update display
-        croppedCanvas.width = canvas.width;
-        croppedCanvas.height = canvas.height;
-        croppedCanvas.getContext('2d').drawImage(canvas, 0, 0);
-        croppedCanvas.style.display = 'block';
-        imagePreview.style.display = 'none';
-        cropContainer.style.display = 'none';
-        
-        showToast('Success', 'Image cropped successfully', 'success');
-    });
-
-    // Modify the submit area button event listener
-    submitAreaBtn.addEventListener('click', async function(e) {
-        e.preventDefault();
-
-        if (!validateForm()) {
-            return;
-        }
-
-        const tags = {};
-        tagsTable.querySelectorAll('tr').forEach(row => {
-            const keyElement = row.querySelector('td:first-child');
-            const keyInput = keyElement.querySelector('input');
-            const key = keyInput ? keyInput.value.trim() : keyElement.textContent.trim();
-
-            const valueInput = row.querySelector('td:nth-child(2) input, td:nth-child(2) select');
-            if (valueInput && valueInput.value.trim()) {
-                let value = valueInput.value.trim();
-                tags[key] = value;
-            }
-        });
-
-        tags['type'] = typeSelect.value;
-        if (currentGeoJson) {
-            tags['geo_json'] = currentGeoJson;
-        }
-
-        try {
-            // Create area
-            const areaResponse = await fetch('/add_area', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify(tags)
-            });
-
-            const areaData = await areaResponse.json();
-            if (areaData.error) {
-                throw new Error(areaData.error.message || 'Failed to add area');
-            }
-
-            const areaId = areaData.id;
-
-            // If we have a cropped image, upload it
-            if (croppedImageData) {
-                const iconResponse = await fetch('/api/set_area_icon', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        id: areaId,
-                        icon_base64: croppedImageData,
-                        icon_ext: 'png'
-                    })
-                });
-
-                const iconData = await iconResponse.json();
-                if (iconData.error) {
-                    throw new Error(iconData.error.message || 'Failed to set icon');
-                }
-
-                // Set icon:square tag
-                const tagResponse = await fetch('/api/set_area_tag', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        id: areaId,
-                        name: 'icon:square',
-                        value: `https://static.btcmap.org/images/areas/${areaId}.png`
-                    })
-                });
-
-                const tagData = await tagResponse.json();
-                if (tagData.error) {
-                    throw new Error(tagData.error.message || 'Failed to set icon tag');
-                }
-            }
-
-            showToast('Success', 'Area added successfully', 'success');
-            setTimeout(() => {
-                window.location.href = '/select_area';
-            }, 2000);
-        } catch (error) {
-            console.error('Error:', error);
-            showToast('Error', error.message || 'An unexpected error occurred', 'error');
-        }
-    });
-}
 </script>
 {% endblock %}
