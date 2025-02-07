@@ -439,24 +439,6 @@ def get_area(area_id):
         return result['result']
     return None
 
-
-def calculate_area(geo_json):
-    if isinstance(geo_json, str):
-        geo_json = json.loads(geo_json)
-
-    geom = shape(geo_json)
-
-    proj = pyproj.Proj(proj='aea', lat_1=geom.bounds[1], lat_2=geom.bounds[3])
-
-    project = lambda x, y: proj(x, y)
-
-    geom_proj = transform(project, geom)
-
-    area_m2 = geom_proj.area
-
-    return round(area_m2 / 1_000_000, 2)
-
-
 def rpc_call(method, params):
     headers = {
         'Authorization': f'Bearer {session.get("password")}'
@@ -487,6 +469,22 @@ def rpc_call(method, params):
         app.logger.error(error_msg)
         return {"error": {"message": error_msg}}
 
+def calculate_area(geo_json):
+    if isinstance(geo_json, str):
+        geo_json = json.loads(geo_json)
+
+    geom = shape(geo_json)
+
+    proj = pyproj.Proj(proj='aea', lat_1=geom.bounds[1], lat_2=geom.bounds[3])
+
+    def project(x, y):
+        return proj(x, y)
+
+    geom_proj = transform(project, geom)
+
+    area_m2 = geom_proj.area
+
+    return round(area_m2 / 1_000_000, 2)
 
 def format_date(date_string):
     if date_string:
