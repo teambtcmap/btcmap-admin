@@ -473,14 +473,17 @@ def rpc_call(method, params):
         response.raise_for_status()
         return response.json()
     except requests.exceptions.Timeout:
-        app.logger.error(f"Timeout error in RPC call to {method}")
-        raise requests.exceptions.RequestException("Request timed out")
+        error_msg = f"Timeout error in RPC call to {method}"
+        app.logger.error(error_msg)
+        return {"error": {"message": error_msg}}
     except requests.exceptions.RequestException as e:
-        app.logger.error(f"Network error in RPC call to {method}: {str(e)}")
-        raise
+        error_msg = f"Network error in RPC call to {method}: {str(e)}"
+        app.logger.error(error_msg)
+        return {"error": {"message": error_msg}}
     except Exception as e:
-        app.logger.error(f"Unexpected error in RPC call to {method}: {str(e)}")
-        raise
+        error_msg = f"Unexpected error in RPC call to {method}: {str(e)}"
+        app.logger.error(error_msg)
+        return {"error": {"message": error_msg}}
 
 
 def format_date(date_string):
