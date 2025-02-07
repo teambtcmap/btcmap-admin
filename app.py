@@ -4,11 +4,10 @@ from flask_session import Session
 import requests
 import json
 from datetime import datetime, timedelta
-from collections import Counter
 from geojson_rewind import rewind
 from urllib.parse import urlparse
 import re
-from shapely.geometry import shape, mapping
+from shapely.geometry import shape
 from shapely.ops import transform
 import pyproj
 
@@ -427,8 +426,7 @@ def search_areas():
         app.logger.error(f"Error in search_areas: {str(e)}")
         return jsonify({
             'error':
-            f"An unexpected error occurred. Please try again later."
-        }), 500
+            "An unexpected error occurred. Please try again later."}), 500
 
 
 def get_area(area_id):
