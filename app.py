@@ -407,6 +407,10 @@ def search_areas():
 
         result = rpc_call('search', {'query': query})
 
+        if result is None:
+            app.logger.error("RPC call returned None")
+            return jsonify({'error': 'Server communication error'}), 500
+            
         if 'error' in result:
             app.logger.error(f"Error in RPC call: {result['error']}")
             return jsonify({'error': result['error']}), 400
