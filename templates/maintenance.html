@@ -116,9 +116,10 @@
     </div>
 
     <!-- Results Table -->
-    <div class="card" id="resultsCard" style="display: none;">
-        <div class="card-header">
+    <div class="card mb-5" id="resultsCard" style="display: none;">
+        <div class="card-header d-flex justify-content-between align-items-center">
             <h5 class="mb-0">Areas Requiring Attention</h5>
+            <span id="resultsCount" class="badge bg-secondary">0 results</span>
         </div>
         <div class="card-body p-0">
             <div class="table-responsive">
@@ -136,6 +137,13 @@
                     </tbody>
                 </table>
             </div>
+        </div>
+        <div class="card-footer">
+            <nav aria-label="Results pagination">
+                <ul class="pagination justify-content-center mb-0" id="pagination">
+                    <!-- Pagination will be populated here -->
+                </ul>
+            </nav>
         </div>
     </div>
 
@@ -178,8 +186,13 @@ document.addEventListener('DOMContentLoaded', function() {
     const clearFiltersBtn = document.getElementById('clearFiltersBtn');
     const addTagFilterBtn = document.getElementById('addTagFilterBtn');
     const tagFiltersContainer = document.getElementById('tagFiltersContainer');
+    const pagination = document.getElementById('pagination');
+    const resultsCount = document.getElementById('resultsCount');
 
     let availableTags = [];
+    let allResults = [];  // Store all results for pagination
+    let currentPage = 1;
+    const pageSize = 25;
 
     function escapeHtml(text) {
         const div = document.createElement('div');
@@ -358,16 +371,105 @@ document.addEventListener('DOMContentLoaded', function() {
             }
 
             if (data.results && data.results.length > 0) {
-                renderResults(data.results);
+                allResults = data.results;
+                currentPage = 1;
+                renderCurrentPage();
                 resultsCard.style.display = 'block';
                 emptyState.style.display = 'none';
             } else {
+                allResults = [];
                 resultsCard.style.display = 'none';
                 emptyState.style.display = 'block';
             }
         } catch (error) {
             console.error('Error loading results:', error);
         }
+    }
+
+    function renderCurrentPage() {
+        const totalPages = Math.ceil(allResults.length / pageSize);
+        const startIdx = (currentPage - 1) * pageSize;
+        const endIdx = startIdx + pageSize;
+        const pageResults = allResults.slice(startIdx, endIdx);
+        
+        resultsCount.textContent = `${allResults.length} results`;
+        renderResults(pageResults);
+        renderPagination(totalPages);
+    }
+
+    function renderPagination(totalPages) {
+        pagination.innerHTML = '';
+        
+        if (totalPages <= 1) return;
+        
+        // Previous button
+        const prevLi = document.createElement('li');
+        prevLi.className = `page-item ${currentPage === 1 ? 'disabled' : ''}`;
+        prevLi.innerHTML = `<a class="page-link" href="#" data-page="${currentPage - 1}">Previous</a>`;
+        pagination.appendChild(prevLi);
+        
+        // Page numbers
+        const maxVisiblePages = 5;
+        let startPage = Math.max(1, currentPage - Math.floor(maxVisiblePages / 2));
+        let endPage = Math.min(totalPages, startPage + maxVisiblePages - 1);
+        
+        if (endPage - startPage < maxVisiblePages - 1) {
+            startPage = Math.max(1, endPage - maxVisiblePages + 1);
+        }
+        
+        if (startPage > 1) {
+            const firstLi = document.createElement('li');
+            firstLi.className = 'page-item';
+            firstLi.innerHTML = `<a class="page-link" href="#" data-page="1">1</a>`;
+            pagination.appendChild(firstLi);
+            
+            if (startPage > 2) {
+                const ellipsisLi = document.createElement('li');
+                ellipsisLi.className = 'page-item disabled';
+                ellipsisLi.innerHTML = `<span class="page-link">...</span>`;
+                pagination.appendChild(ellipsisLi);
+            }
+        }
+        
+        for (let i = startPage; i <= endPage; i++) {
+            const li = document.createElement('li');
+            li.className = `page-item ${i === currentPage ? 'active' : ''}`;
+            li.innerHTML = `<a class="page-link" href="#" data-page="${i}">${i}</a>`;
+            pagination.appendChild(li);
+        }
+        
+        if (endPage < totalPages) {
+            if (endPage < totalPages - 1) {
+                const ellipsisLi = document.createElement('li');
+                ellipsisLi.className = 'page-item disabled';
+                ellipsisLi.innerHTML = `<span class="page-link">...</span>`;
+                pagination.appendChild(ellipsisLi);
+            }
+            
+            const lastLi = document.createElement('li');
+            lastLi.className = 'page-item';
+            lastLi.innerHTML = `<a class="page-link" href="#" data-page="${totalPages}">${totalPages}</a>`;
+            pagination.appendChild(lastLi);
+        }
+        
+        // Next button
+        const nextLi = document.createElement('li');
+        nextLi.className = `page-item ${currentPage === totalPages ? 'disabled' : ''}`;
+        nextLi.innerHTML = `<a class="page-link" href="#" data-page="${currentPage + 1}">Next</a>`;
+        pagination.appendChild(nextLi);
+        
+        // Add click handlers
+        pagination.querySelectorAll('a.page-link').forEach(link => {
+            link.addEventListener('click', function(e) {
+                e.preventDefault();
+                const page = parseInt(this.dataset.page);
+                if (page >= 1 && page <= totalPages && page !== currentPage) {
+                    currentPage = page;
+                    renderCurrentPage();
+                    resultsCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }
+            });
+        });
     }
 
     function renderResults(results) {
