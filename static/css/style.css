@@ -31,3 +31,38 @@ body {
     border-top-left-radius: 0;
     border-top-right-radius: 0;
 }
+
+/* Area details table - prevent field value overflow */
+#tags-table {
+    table-layout: fixed;
+    width: 100%;
+}
+
+#tags-table th:first-child,
+#tags-table td:first-child {
+    width: 20%;
+}
+
+#tags-table th:nth-child(2),
+#tags-table td:nth-child(2) {
+    width: 55%;
+}
+
+#tags-table th:last-child,
+#tags-table td:last-child {
+    width: 25%;
+}
+
+#tags-table .tag-value-cell {
+    overflow-wrap: break-word;
+    word-wrap: break-word;
+    word-break: break-word;
+}
+
+#tags-table .tag-value-content {
+    display: block;
+    overflow-wrap: break-word;
+    word-wrap: break-word;
+    word-break: break-word;
+    white-space: normal;
+}
