@@ -1,6 +1,5 @@
 import os
 from flask import Flask, render_template, request, jsonify, session, redirect, url_for
-from flask_session import Session
 import requests
 import json
 from datetime import datetime, timedelta
@@ -12,11 +11,11 @@ from shapely.ops import transform
 import pyproj
 
 app = Flask(__name__)
-app.config['SECRET_KEY'] = os.urandom(24)
-app.config['SESSION_TYPE'] = 'filesystem'
-app.config['SESSION_PERMANENT'] = True
+app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev-secret-key-change-in-production')
 app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(minutes=30)
-Session(app)
+app.config['SESSION_COOKIE_SECURE'] = True
+app.config['SESSION_COOKIE_HTTPONLY'] = True
+app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
 
 API_BASE_URL = "https://api.btcmap.org"
 
@@ -151,12 +150,17 @@ AREA_TYPE_REQUIREMENTS = {
 @app.before_request
 def check_auth():
     if request.endpoint and request.endpoint not in [
-            'login', 'static'
+            'login', 'static', 'health'
     ] and 'password' not in session:
         return redirect(url_for('login', next=request.url))
 
 
 @app.route('/')
+def health():
+    return 'OK', 200
+
+
+@app.route('/home')
 def home():
     return redirect(url_for('select_area'))
 
@@ -661,4 +665,4 @@ validation_functions = {
 }
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000, debug=True)
+    app.run(host='0.0.0.0', port=5000, debug=False)

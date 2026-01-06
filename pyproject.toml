@@ -14,4 +14,5 @@ dependencies = [
     "geojson-rewind>=1.1.0",
     "shapely>=2.0.6",
     "pyproj>=3.7.0",
+    "gunicorn>=23.0.0",
 ]
