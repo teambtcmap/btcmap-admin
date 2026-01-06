@@ -15,7 +15,6 @@
             <button id="edit-geojson-btn" class="btn btn-primary btn-sm">Edit GeoJSON Text</button>
         </div>
     </div>
-    </div>
 
     <!-- GeoJSON editor with improved styling -->
     <div id="geojson-editor" class="mb-4" style="display: none;">
@@ -343,8 +342,9 @@ function initializeEventListeners() {
 
 function getExistingKeys() {
     const keys = [];
-    elements.tagsTable.querySelectorAll('tr').forEach(row => {
+    elements.tagsTable.querySelectorAll('tbody tr').forEach(row => {
         const keyElement = row.querySelector('td:first-child');
+        if (!keyElement) return;
         const keyInput = keyElement.querySelector('input');
         const key = keyInput ? keyInput.value.trim() : keyElement.textContent.trim();
         if (key) {
