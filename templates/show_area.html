@@ -32,8 +32,14 @@
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
                 <div class="modal-body">
+                    <!-- Current Icon Display -->
+                    <div id="currentIconContainer" class="mb-4 text-center" {% if not area.tags.get('icon:square') %}style="display: none;"{% endif %}>
+                        <label class="form-label d-block">Current Icon</label>
+                        <img id="currentIconDisplay" src="{{ area.tags.get('icon:square', '') }}" alt="Current icon" style="width: 128px; height: 128px; object-fit: contain; border: 1px solid #dee2e6; border-radius: 8px;">
+                    </div>
+
                     <div class="mb-3">
-                        <label for="iconFileInput" class="form-label">Upload Image</label>
+                        <label for="iconFileInput" class="form-label">{% if area.tags.get('icon:square') %}Upload New Image to Replace{% else %}Upload Image{% endif %}</label>
                         <input type="file" class="form-control" id="iconFileInput" accept="image/png,image/jpeg,image/webp">
                         <div class="form-text">Accepted formats: PNG, JPG, WebP. The image will be cropped to a square.</div>
                     </div>
@@ -57,7 +63,7 @@
 
                     <!-- Preview -->
                     <div id="previewContainer" class="mb-3" style="display: none;">
-                        <label class="form-label">Preview</label>
+                        <label class="form-label">New Icon Preview</label>
                         <div class="d-flex align-items-center gap-3">
                             <div>
                                 <img id="iconPreview" style="width: 80px; height: 80px; object-fit: cover; border: 1px solid #dee2e6;">
@@ -957,7 +963,9 @@ const iconElements = {
     dimensionText: null,
     iconError: null,
     saveIconBtn: null,
-    modal: null
+    modal: null,
+    currentIconContainer: null,
+    currentIconDisplay: null
 };
 
 function initializeIconEditor() {
@@ -972,6 +980,8 @@ function initializeIconEditor() {
     iconElements.iconError = document.getElementById('iconError');
     iconElements.saveIconBtn = document.getElementById('saveIconBtn');
     iconElements.modal = document.getElementById('editIconModal');
+    iconElements.currentIconContainer = document.getElementById('currentIconContainer');
+    iconElements.currentIconDisplay = document.getElementById('currentIconDisplay');
 
     if (!iconElements.fileInput) return;
 
@@ -994,6 +1004,11 @@ function resetIconEditor() {
     iconElements.dimensionInfo.style.display = 'none';
     iconElements.iconError.style.display = 'none';
     iconElements.saveIconBtn.disabled = true;
+    
+    // Restore current icon display if it has a source
+    if (iconElements.currentIconDisplay && iconElements.currentIconDisplay.src && iconElements.currentIconDisplay.src !== window.location.href) {
+        iconElements.currentIconContainer.style.display = 'block';
+    }
 }
 
 function showIconError(message) {
@@ -1020,6 +1035,11 @@ function handleFileSelect(e) {
     }
 
     currentFile = file;
+    
+    // Hide current icon when uploading a new one
+    if (iconElements.currentIconContainer) {
+        iconElements.currentIconContainer.style.display = 'none';
+    }
 
     const reader = new FileReader();
     reader.onload = function(event) {
@@ -1183,10 +1203,10 @@ async function saveIcon() {
         // Update the icon on the page
         const areaIcon = document.getElementById('area-icon');
         const iconPlaceholder = document.getElementById('area-icon-placeholder');
+        const newSrc = data.result?.tags?.['icon:square'] || (areaIcon?.src?.split('?')[0] + '?t=' + Date.now());
         
         if (areaIcon) {
             // Add cache-busting parameter
-            const newSrc = data.result?.tags?.['icon:square'] || (areaIcon.src.split('?')[0] + '?t=' + Date.now());
             areaIcon.src = newSrc;
         } else if (iconPlaceholder) {
             // Replace placeholder with actual image
@@ -1194,8 +1214,16 @@ async function saveIcon() {
             newImg.id = 'area-icon';
             newImg.alt = '{{ area.tags.get("name", "Area") }} logo';
             newImg.style.cssText = 'max-width: 80px; max-height: 80px; object-fit: contain;';
-            newImg.src = data.result?.tags?.['icon:square'] || '';
+            newImg.src = newSrc;
             iconPlaceholder.parentNode.replaceChild(newImg, iconPlaceholder);
+        }
+        
+        // Update the current icon display in the modal for next time
+        if (iconElements.currentIconDisplay) {
+            iconElements.currentIconDisplay.src = newSrc;
+        }
+        if (iconElements.currentIconContainer) {
+            iconElements.currentIconContainer.style.display = 'block';
         }
 
         showToast('Success', 'Icon updated successfully', 'success');
