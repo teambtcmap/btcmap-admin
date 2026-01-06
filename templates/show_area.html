@@ -9,9 +9,81 @@
             <h1 class="mb-1">Area Details</h1>
             <h2 class="mb-0">{{ area.tags.get('name', 'Unnamed Area') }} ({{ area.tags.get('type', 'Unknown Type') }})</h2>
         </div>
-        {% if area.tags.get('icon:square') %}
-        <img src="{{ area.tags.get('icon:square') }}" alt="{{ area.tags.get('name', 'Area') }} logo" style="max-width: 80px; max-height: 80px; object-fit: contain;">
-        {% endif %}
+        <div class="position-relative area-icon-container">
+            {% if area.tags.get('icon:square') %}
+            <img id="area-icon" src="{{ area.tags.get('icon:square') }}" alt="{{ area.tags.get('name', 'Area') }} logo" style="max-width: 80px; max-height: 80px; object-fit: contain;">
+            {% else %}
+            <div id="area-icon-placeholder" class="d-flex align-items-center justify-content-center bg-secondary text-white" style="width: 80px; height: 80px;">
+                <span>No Icon</span>
+            </div>
+            {% endif %}
+            <button type="button" class="btn btn-sm btn-primary position-absolute edit-icon-btn" style="bottom: -8px; right: -8px; padding: 2px 6px; font-size: 0.7rem;" data-bs-toggle="modal" data-bs-target="#editIconModal">
+                Edit
+            </button>
+        </div>
+    </div>
+
+    <!-- Edit Icon Modal -->
+    <div class="modal fade" id="editIconModal" tabindex="-1" aria-labelledby="editIconModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="editIconModalLabel">Edit Area Icon</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="iconFileInput" class="form-label">Upload Image</label>
+                        <input type="file" class="form-control" id="iconFileInput" accept="image/png,image/jpeg,image/webp">
+                        <div class="form-text">Accepted formats: PNG, JPG, WebP. The image will be cropped to a square.</div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Resolution Requirements</label>
+                        <div class="form-text">
+                            <strong>Minimum:</strong> 128 x 128 pixels<br>
+                            <strong>Maximum:</strong> 1024 x 1024 pixels<br>
+                            <strong>Output:</strong> Square image (1:1 aspect ratio)
+                        </div>
+                    </div>
+
+                    <!-- Cropper Container -->
+                    <div id="cropperContainer" class="mb-3" style="display: none;">
+                        <label class="form-label">Crop Image (drag to pan, scroll to zoom)</label>
+                        <div style="max-height: 400px; overflow: hidden;">
+                            <img id="cropperImage" style="max-width: 100%;">
+                        </div>
+                    </div>
+
+                    <!-- Preview -->
+                    <div id="previewContainer" class="mb-3" style="display: none;">
+                        <label class="form-label">Preview</label>
+                        <div class="d-flex align-items-center gap-3">
+                            <div>
+                                <img id="iconPreview" style="width: 80px; height: 80px; object-fit: cover; border: 1px solid #dee2e6;">
+                                <div class="form-text text-center">80px</div>
+                            </div>
+                            <div>
+                                <img id="iconPreviewLarge" style="width: 128px; height: 128px; object-fit: cover; border: 1px solid #dee2e6;">
+                                <div class="form-text text-center">128px</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Dimension Info -->
+                    <div id="dimensionInfo" class="alert alert-info" style="display: none;">
+                        <span id="dimensionText"></span>
+                    </div>
+
+                    <!-- Error Message -->
+                    <div id="iconError" class="alert alert-danger" style="display: none;"></div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-primary" id="saveIconBtn" disabled>Save Icon</button>
+                </div>
+            </div>
+        </div>
     </div>
 
     <!-- Map container with consistent styling -->
@@ -820,5 +892,282 @@ window.addEventListener('beforeunload', () => {
         mapInitialized = false;
     }
 });
+
+// ============================================
+// Icon Editor Functionality
+// ============================================
+
+const ICON_MIN_SIZE = 128;
+const ICON_MAX_SIZE = 1024;
+const ICON_OUTPUT_SIZE = 256; // Output size for the cropped image
+
+let cropper = null;
+let currentFile = null;
+
+const iconElements = {
+    fileInput: null,
+    cropperContainer: null,
+    cropperImage: null,
+    previewContainer: null,
+    iconPreview: null,
+    iconPreviewLarge: null,
+    dimensionInfo: null,
+    dimensionText: null,
+    iconError: null,
+    saveIconBtn: null,
+    modal: null
+};
+
+function initializeIconEditor() {
+    iconElements.fileInput = document.getElementById('iconFileInput');
+    iconElements.cropperContainer = document.getElementById('cropperContainer');
+    iconElements.cropperImage = document.getElementById('cropperImage');
+    iconElements.previewContainer = document.getElementById('previewContainer');
+    iconElements.iconPreview = document.getElementById('iconPreview');
+    iconElements.iconPreviewLarge = document.getElementById('iconPreviewLarge');
+    iconElements.dimensionInfo = document.getElementById('dimensionInfo');
+    iconElements.dimensionText = document.getElementById('dimensionText');
+    iconElements.iconError = document.getElementById('iconError');
+    iconElements.saveIconBtn = document.getElementById('saveIconBtn');
+    iconElements.modal = document.getElementById('editIconModal');
+
+    if (!iconElements.fileInput) return;
+
+    iconElements.fileInput.addEventListener('change', handleFileSelect);
+    iconElements.saveIconBtn.addEventListener('click', saveIcon);
+
+    // Reset modal state when closed
+    iconElements.modal.addEventListener('hidden.bs.modal', resetIconEditor);
+}
+
+function resetIconEditor() {
+    if (cropper) {
+        cropper.destroy();
+        cropper = null;
+    }
+    currentFile = null;
+    iconElements.fileInput.value = '';
+    iconElements.cropperContainer.style.display = 'none';
+    iconElements.previewContainer.style.display = 'none';
+    iconElements.dimensionInfo.style.display = 'none';
+    iconElements.iconError.style.display = 'none';
+    iconElements.saveIconBtn.disabled = true;
+}
+
+function showIconError(message) {
+    iconElements.iconError.textContent = message;
+    iconElements.iconError.style.display = 'block';
+    iconElements.saveIconBtn.disabled = true;
+}
+
+function hideIconError() {
+    iconElements.iconError.style.display = 'none';
+}
+
+function handleFileSelect(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    hideIconError();
+
+    // Validate file type
+    const validTypes = ['image/png', 'image/jpeg', 'image/webp'];
+    if (!validTypes.includes(file.type)) {
+        showIconError('Invalid file type. Please upload a PNG, JPG, or WebP image.');
+        return;
+    }
+
+    currentFile = file;
+
+    const reader = new FileReader();
+    reader.onload = function(event) {
+        const img = new Image();
+        img.onload = function() {
+            // Check minimum dimensions
+            if (img.width < ICON_MIN_SIZE || img.height < ICON_MIN_SIZE) {
+                showIconError(`Image is too small. Minimum size is ${ICON_MIN_SIZE}x${ICON_MIN_SIZE} pixels. Your image is ${img.width}x${img.height} pixels.`);
+                return;
+            }
+
+            // Check maximum dimensions
+            if (img.width > 4096 || img.height > 4096) {
+                showIconError(`Image is too large. Maximum size is 4096x4096 pixels. Your image is ${img.width}x${img.height} pixels.`);
+                return;
+            }
+
+            // Show dimension info
+            iconElements.dimensionText.textContent = `Original size: ${img.width} x ${img.height} pixels`;
+            iconElements.dimensionInfo.style.display = 'block';
+
+            // Initialize cropper
+            initializeCropper(event.target.result);
+        };
+        img.src = event.target.result;
+    };
+    reader.readAsDataURL(file);
+}
+
+function initializeCropper(imageSrc) {
+    // Destroy existing cropper
+    if (cropper) {
+        cropper.destroy();
+    }
+
+    iconElements.cropperImage.src = imageSrc;
+    iconElements.cropperContainer.style.display = 'block';
+
+    cropper = new Cropper(iconElements.cropperImage, {
+        aspectRatio: 1, // Force square
+        viewMode: 1,
+        dragMode: 'move',
+        autoCropArea: 1,
+        restore: false,
+        guides: true,
+        center: true,
+        highlight: false,
+        cropBoxMovable: true,
+        cropBoxResizable: true,
+        toggleDragModeOnDblclick: false,
+        minCropBoxWidth: ICON_MIN_SIZE,
+        minCropBoxHeight: ICON_MIN_SIZE,
+        ready: function() {
+            updatePreview();
+            iconElements.saveIconBtn.disabled = false;
+        },
+        crop: function() {
+            updatePreview();
+        }
+    });
+}
+
+function updatePreview() {
+    if (!cropper) return;
+
+    const canvas = cropper.getCroppedCanvas({
+        width: ICON_OUTPUT_SIZE,
+        height: ICON_OUTPUT_SIZE,
+        imageSmoothingEnabled: true,
+        imageSmoothingQuality: 'high'
+    });
+
+    if (canvas) {
+        const dataUrl = canvas.toDataURL('image/png');
+        iconElements.iconPreview.src = dataUrl;
+        iconElements.iconPreviewLarge.src = dataUrl;
+        iconElements.previewContainer.style.display = 'block';
+    }
+}
+
+function getFileExtension(file) {
+    const type = file.type;
+    switch (type) {
+        case 'image/png': return 'png';
+        case 'image/jpeg': return 'jpg';
+        case 'image/webp': return 'webp';
+        default: return 'png';
+    }
+}
+
+async function saveIcon() {
+    if (!cropper || !currentFile) {
+        showIconError('No image selected');
+        return;
+    }
+
+    hideIconError();
+    iconElements.saveIconBtn.disabled = true;
+    iconElements.saveIconBtn.textContent = 'Saving...';
+
+    try {
+        // Get cropped canvas at output size
+        const canvas = cropper.getCroppedCanvas({
+            width: ICON_OUTPUT_SIZE,
+            height: ICON_OUTPUT_SIZE,
+            imageSmoothingEnabled: true,
+            imageSmoothingQuality: 'high'
+        });
+
+        if (!canvas) {
+            throw new Error('Failed to crop image');
+        }
+
+        // Validate final dimensions
+        if (canvas.width < ICON_MIN_SIZE || canvas.height < ICON_MIN_SIZE) {
+            throw new Error(`Cropped area is too small. Please select a larger area (minimum ${ICON_MIN_SIZE}x${ICON_MIN_SIZE} pixels).`);
+        }
+
+        // Convert to blob then base64
+        const blob = await new Promise((resolve, reject) => {
+            canvas.toBlob(
+                (b) => b ? resolve(b) : reject(new Error('Failed to create image blob')),
+                'image/png',
+                1.0
+            );
+        });
+
+        // Convert blob to base64
+        const base64 = await new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onloadend = () => {
+                // Remove the data URL prefix to get just the base64 data
+                const base64Data = reader.result.split(',')[1];
+                resolve(base64Data);
+            };
+            reader.onerror = reject;
+            reader.readAsDataURL(blob);
+        });
+
+        // Send to API
+        const response = await fetch('/api/set_area_icon', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                id: '{{ area.id }}',
+                icon_base64: base64,
+                icon_ext: 'png'
+            })
+        });
+
+        const data = await response.json();
+
+        if (!response.ok || data.error) {
+            throw new Error(data.error || 'Failed to update icon');
+        }
+
+        // Success - close modal and update the displayed icon
+        const modal = bootstrap.Modal.getInstance(iconElements.modal);
+        modal.hide();
+
+        // Update the icon on the page
+        const areaIcon = document.getElementById('area-icon');
+        const iconPlaceholder = document.getElementById('area-icon-placeholder');
+        
+        if (areaIcon) {
+            // Add cache-busting parameter
+            const newSrc = data.result?.tags?.['icon:square'] || (areaIcon.src.split('?')[0] + '?t=' + Date.now());
+            areaIcon.src = newSrc;
+        } else if (iconPlaceholder) {
+            // Replace placeholder with actual image
+            const newImg = document.createElement('img');
+            newImg.id = 'area-icon';
+            newImg.alt = '{{ area.tags.get("name", "Area") }} logo';
+            newImg.style.cssText = 'max-width: 80px; max-height: 80px; object-fit: contain;';
+            newImg.src = data.result?.tags?.['icon:square'] || '';
+            iconPlaceholder.parentNode.replaceChild(newImg, iconPlaceholder);
+        }
+
+        showToast('Success', 'Icon updated successfully', 'success');
+
+    } catch (error) {
+        console.error('Error saving icon:', error);
+        showIconError(error.message || 'Failed to save icon');
+    } finally {
+        iconElements.saveIconBtn.disabled = false;
+        iconElements.saveIconBtn.textContent = 'Save Icon';
+    }
+}
+
+// Initialize icon editor when DOM is ready
+document.addEventListener('DOMContentLoaded', initializeIconEditor);
 </script>
 {% endblock %}

@@ -356,6 +356,42 @@ def set_area_tag():
     return jsonify({'success': True})
 
 
+@app.route('/api/set_area_icon', methods=['POST'])
+def set_area_icon():
+    data = request.json
+    if not data:
+        return jsonify({'error': 'Invalid request data'}), 400
+
+    area_id = data.get('id')
+    icon_base64 = data.get('icon_base64')
+    icon_ext = data.get('icon_ext')
+
+    if not area_id or not icon_base64 or not icon_ext:
+        return jsonify({'error': 'Missing required fields: id, icon_base64, icon_ext'}), 400
+
+    # Validate extension
+    allowed_extensions = ['png', 'jpg', 'jpeg', 'webp']
+    if icon_ext.lower() not in allowed_extensions:
+        return jsonify({'error': f'Invalid file extension. Allowed: {", ".join(allowed_extensions)}'}), 400
+
+    area = get_area(area_id)
+    if not area:
+        return jsonify({'error': 'Area not found'}), 404
+
+    result = rpc_call('set_area_icon', {
+        'id': area_id,
+        'icon_base64': icon_base64,
+        'icon_ext': icon_ext.lower()
+    })
+    
+    if isinstance(result, tuple):
+        return result
+    if 'error' in result:
+        return jsonify({'error': result['error'].get('message', 'Failed to update icon')}), 400
+    
+    return jsonify({'success': True, 'result': result.get('result')})
+
+
 @app.route('/api/remove_area_tag', methods=['POST'])
 def remove_area_tag():
     data = request.json
