@@ -1,5 +1,6 @@
 import os
 from flask import Flask, render_template, request, jsonify, session, redirect, url_for
+from flask_session import Session
 import requests
 import json
 from datetime import datetime, timedelta
@@ -9,6 +10,7 @@ import re
 from shapely.geometry import shape
 from shapely.ops import transform
 import pyproj
+from linting import lint_area_dict, lint_cache, LINT_RULES, FIX_ACTIONS, fix_migrate_icon, fix_bump_verified
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev-secret-key-change-in-production')
@@ -209,10 +211,14 @@ def show_area(area_id):
                     f"Invalid JSON string for geo_json in area {area_id}")
                 geo_json = None
 
+        # Run lint checks on the area
+        lint_issues = lint_area_dict(area)
+
         return render_template('show_area.html',
                                area=area,
                                area_type_requirements=type_requirements,
-                               geo_json=geo_json)
+                               geo_json=geo_json,
+                               lint_issues=lint_issues)
     return render_template('error.html', error="Area not found"), 404
 
 
@@ -469,6 +475,237 @@ def search_areas():
         return jsonify({
             'error':
             "An unexpected error occurred. Please try again later."}), 500
+
+
+# ============================================
+# Linting Routes
+# ============================================
+
+@app.route('/maintenance')
+def maintenance():
+    """Render the global linting dashboard."""
+    return render_template('maintenance.html')
+
+
+@app.route('/api/lint/area/<string:area_id>')
+def lint_single_area(area_id):
+    """Get lint results for a single area."""
+    area = get_area(area_id)
+    if not area:
+        return jsonify({'error': 'Area not found'}), 404
+    
+    issues = lint_area_dict(area)
+    return jsonify({
+        'area_id': area_id,
+        'issues': issues
+    })
+
+
+@app.route('/api/lint/sync', methods=['POST'])
+def lint_sync():
+    """Sync areas from API and run lint checks.
+    
+    Fetches areas in batches using updated_since cursor.
+    Continues until no new areas are returned.
+    """
+    import time
+    
+    INITIAL_SYNC_DATE = '2022-09-01T00:00:00.000Z'
+    
+    if lint_cache.is_syncing:
+        return jsonify({
+            'error': 'Sync already in progress',
+            'progress': lint_cache.sync_progress
+        }), 409
+    
+    try:
+        lint_cache.is_syncing = True
+        lint_cache.sync_progress = {'current': 0, 'total': 0}
+        
+        # Determine sync start point
+        is_incremental = lint_cache.last_sync is not None and len(lint_cache.results) > 0
+        
+        if is_incremental and lint_cache.last_sync_cursor:
+            updated_since = lint_cache.last_sync_cursor
+            app.logger.info(f"Incremental sync from {updated_since}")
+        else:
+            updated_since = INITIAL_SYNC_DATE
+            lint_cache.results = []
+            app.logger.info(f"Full sync from {updated_since}")
+        
+        batch_size = 100
+        total_processed = 0
+        total_fetched = 0
+        newest_update = None
+        seen_ids = set(r['area_id'] for r in lint_cache.results)
+        batch_count = 0
+        
+        while True:
+            batch_count += 1
+            api_url = f"{API_BASE_URL}/v3/areas?updated_since={updated_since}&limit={batch_size}"
+            app.logger.info(f"Batch {batch_count}: {api_url}")
+            
+            try:
+                response = requests.get(api_url, timeout=30)
+                response.raise_for_status()
+                areas = response.json()
+            except requests.exceptions.RequestException as e:
+                app.logger.error(f"Error fetching areas: {str(e)}")
+                break
+            
+            # No more areas - we're done
+            if not areas:
+                app.logger.info("No areas returned, sync complete")
+                break
+            
+            total_fetched += len(areas)
+            new_in_batch = 0
+            
+            for area in areas:
+                area_id = str(area.get('id', ''))
+                area_updated = area.get('updated_at', '')
+                
+                # Track newest timestamp for cursor and final sync cursor
+                if area_updated:
+                    if newest_update is None or area_updated > newest_update:
+                        newest_update = area_updated
+                
+                # Skip already seen areas
+                if area_id in seen_ids:
+                    continue
+                
+                seen_ids.add(area_id)
+                new_in_batch += 1
+                
+                # Cache all areas (including deleted)
+                lint_cache.update_area(area_id, area)
+                total_processed += 1
+            
+            lint_cache.sync_progress = {'current': total_processed, 'total': total_processed}
+            app.logger.info(f"Batch {batch_count}: {len(areas)} fetched, {new_in_batch} new, {total_processed} communities total")
+            
+            # If we got fewer than batch_size, no more results available
+            if len(areas) < batch_size:
+                app.logger.info(f"Received {len(areas)} < {batch_size}, sync complete")
+                break
+            
+            # If no new areas in batch, we've seen them all - advance cursor
+            if new_in_batch == 0:
+                # Advance cursor by 1ms to move past current batch
+                try:
+                    dt = datetime.fromisoformat(updated_since.replace('Z', '+00:00'))
+                    dt = dt + timedelta(milliseconds=1)
+                    new_cursor = dt.strftime('%Y-%m-%dT%H:%M:%S.') + f'{dt.microsecond // 1000:03d}Z'
+                    if new_cursor == updated_since:
+                        app.logger.info("Cannot advance cursor, sync complete")
+                        break
+                    updated_since = new_cursor
+                    app.logger.info(f"No new areas, advancing cursor to {updated_since}")
+                except Exception as e:
+                    app.logger.error(f"Error advancing cursor: {e}")
+                    break
+            else:
+                # Use the newest timestamp from this batch as cursor
+                if newest_update:
+                    updated_since = newest_update
+            
+            # Pause between batches
+            time.sleep(0.3)
+        
+        # Update cache metadata
+        lint_cache.last_sync = datetime.now()
+        if newest_update:
+            lint_cache.last_sync_cursor = newest_update
+        
+        app.logger.info(f"Sync complete: {batch_count} batches, {total_fetched} fetched, {len(seen_ids)} unique, {total_processed} communities")
+        
+        return jsonify({
+            'success': True,
+            'processed': total_processed,
+            'total_fetched': total_fetched,
+            'batches': batch_count,
+            'is_incremental': is_incremental,
+            'summary': lint_cache.get_summary()
+        })
+    
+    except Exception as e:
+        app.logger.error(f"Error in lint sync: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+    
+    finally:
+        lint_cache.is_syncing = False
+
+
+@app.route('/api/lint/results')
+def lint_results():
+    """Get cached lint results with optional filters."""
+    rule_filter = request.args.get('rule')
+    severity_filter = request.args.get('severity')
+    type_filter = request.args.get('type')
+    include_deleted = request.args.get('include_deleted', 'false').lower() == 'true'
+    issues_only = request.args.get('issues_only', 'true').lower() == 'true'
+    
+    results = lint_cache.get_results(
+        rule_filter=rule_filter,
+        severity_filter=severity_filter,
+        type_filter=type_filter,
+        include_deleted=include_deleted,
+        issues_only=issues_only
+    )
+    
+    return jsonify({
+        'results': results,
+        'summary': lint_cache.get_summary(type_filter=type_filter, include_deleted=include_deleted)
+    })
+
+
+@app.route('/api/lint/summary')
+def lint_summary():
+    """Get lint summary statistics."""
+    type_filter = request.args.get('type')
+    include_deleted = request.args.get('include_deleted', 'false').lower() == 'true'
+    return jsonify(lint_cache.get_summary(type_filter=type_filter, include_deleted=include_deleted))
+
+
+@app.route('/api/lint/fix', methods=['POST'])
+def lint_fix():
+    """Execute an auto-fix action for a lint issue."""
+    data = request.json
+    if not data:
+        return jsonify({'error': 'Invalid request data'}), 400
+    
+    area_id = data.get('area_id')
+    fix_action = data.get('fix_action')
+    
+    if not area_id or not fix_action:
+        return jsonify({'error': 'Missing area_id or fix_action'}), 400
+    
+    if fix_action not in FIX_ACTIONS:
+        return jsonify({'error': f'Unknown fix action: {fix_action}'}), 400
+    
+    # Execute the fix
+    if fix_action == 'migrate_icon':
+        result = fix_migrate_icon(area_id, rpc_call, get_area)
+    elif fix_action == 'bump_verified':
+        result = fix_bump_verified(area_id, rpc_call)
+    else:
+        return jsonify({'error': f'Fix action not implemented: {fix_action}'}), 400
+    
+    if result.get('success'):
+        # Re-lint the area and update cache
+        area = get_area(area_id)
+        if area:
+            lint_cache.update_area(area_id, area)
+        return jsonify(result)
+    else:
+        return jsonify(result), 400
+
+
+@app.route('/api/lint/rules')
+def lint_rules():
+    """Get available lint rules."""
+    rules = [rule.to_dict() for rule in LINT_RULES.values()]
+    return jsonify({'rules': rules})
 
 
 def get_area(area_id):

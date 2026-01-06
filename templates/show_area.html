@@ -86,6 +86,48 @@
         </div>
     </div>
 
+    <!-- Lint Status Panel -->
+    {% if lint_issues %}
+    <div class="card mb-4 border-warning">
+        <div class="card-header bg-warning bg-opacity-10">
+            <h5 class="mb-0">
+                <span class="text-warning">Maintenance Required</span>
+                <span class="badge bg-warning text-dark ms-2">{{ lint_issues|length }}</span>
+            </h5>
+        </div>
+        <div class="card-body">
+            <ul class="list-group list-group-flush">
+                {% for issue in lint_issues %}
+                <li class="list-group-item d-flex justify-content-between align-items-center">
+                    <div>
+                        <span class="badge {% if issue.severity == 'error' %}bg-danger{% elif issue.severity == 'warning' %}bg-warning text-dark{% else %}bg-info{% endif %} me-2">
+                            {{ issue.severity|upper }}
+                        </span>
+                        <strong>{{ issue.rule_name }}</strong>
+                        <br>
+                        <small class="text-muted">{{ issue.message }}</small>
+                        {% if issue.current_value %}
+                        <br><small class="text-muted font-monospace">Current: {{ issue.current_value|truncate(60) }}</small>
+                        {% endif %}
+                    </div>
+                    {% if issue.auto_fixable %}
+                    <button class="btn btn-sm btn-outline-success lint-fix-btn" 
+                            data-fix-action="{{ issue.fix_action }}"
+                            data-area-id="{{ area.id }}">
+                        {% if issue.fix_action == 'migrate_icon' %}Migrate Icon{% elif issue.fix_action == 'bump_verified' %}Bump Verified{% else %}Fix{% endif %}
+                    </button>
+                    {% endif %}
+                </li>
+                {% endfor %}
+            </ul>
+        </div>
+    </div>
+    {% else %}
+    <div class="alert alert-success mb-4">
+        <strong>All checks passed</strong> - No maintenance required for this area.
+    </div>
+    {% endif %}
+
     <!-- Map container with consistent styling -->
     <div id="map-container" class="position-relative mb-4">
         <div id="map" style="height: 400px; width: 100%;"></div>
@@ -1169,5 +1211,47 @@ async function saveIcon() {
 
 // Initialize icon editor when DOM is ready
 document.addEventListener('DOMContentLoaded', initializeIconEditor);
+
+// ============================================
+// Lint Fix Handlers
+// ============================================
+
+document.addEventListener('DOMContentLoaded', function() {
+    document.querySelectorAll('.lint-fix-btn').forEach(btn => {
+        btn.addEventListener('click', async function() {
+            const areaId = this.dataset.areaId;
+            const fixAction = this.dataset.fixAction;
+            const originalText = this.textContent;
+            
+            this.disabled = true;
+            this.textContent = 'Fixing...';
+
+            try {
+                const response = await fetch('/api/lint/fix', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ area_id: areaId, fix_action: fixAction })
+                });
+
+                const data = await response.json();
+
+                if (response.ok && data.success) {
+                    showToast('Success', data.message || 'Fixed successfully', 'success');
+                    // Reload page to show updated lint status
+                    setTimeout(() => window.location.reload(), 1500);
+                } else {
+                    showToast('Error', data.error || 'Fix failed', 'error');
+                    this.disabled = false;
+                    this.textContent = originalText;
+                }
+            } catch (error) {
+                console.error('Error fixing:', error);
+                showToast('Error', 'Failed to apply fix', 'error');
+                this.disabled = false;
+                this.textContent = originalText;
+            }
+        });
+    });
+});
 </script>
 {% endblock %}

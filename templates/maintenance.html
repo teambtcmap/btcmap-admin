@@ -1,0 +1,382 @@
+{% extends "base.html" %}
+
+{% block title %}Maintenance{% endblock %}
+
+{% block content %}
+<div class="container">
+    <h1 class="mt-5 mb-4">Maintenance</h1>
+
+    <!-- Sync Controls -->
+    <div class="card mb-4">
+        <div class="card-body">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <h5 class="card-title mb-1">Area Lint Status</h5>
+                    <p class="text-muted mb-0" id="lastSyncText">Last sync: Never</p>
+                </div>
+                <button id="syncBtn" class="btn btn-primary">
+                    <span id="syncBtnText">Sync Areas</span>
+                    <span id="syncSpinner" class="spinner-border spinner-border-sm ms-2 d-none" role="status"></span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Summary Stats -->
+    <div class="row mb-4" id="summaryStats" style="display: none;">
+        <div class="col-md-3">
+            <div class="card text-center">
+                <div class="card-body">
+                    <h3 class="mb-0" id="statTotalAreas">0</h3>
+                    <small class="text-muted">Total Areas</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card text-center">
+                <div class="card-body">
+                    <h3 class="mb-0" id="statAreasWithIssues">0</h3>
+                    <small class="text-muted">Areas with Issues</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card text-center border-danger">
+                <div class="card-body">
+                    <h3 class="mb-0 text-danger" id="statErrors">0</h3>
+                    <small class="text-muted">Errors</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card text-center border-warning">
+                <div class="card-body">
+                    <h3 class="mb-0 text-warning" id="statWarnings">0</h3>
+                    <small class="text-muted">Warnings</small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Filters -->
+    <div class="card mb-4" id="filtersCard" style="display: none;">
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-3">
+                    <label for="typeFilter" class="form-label">Area Type</label>
+                    <select id="typeFilter" class="form-select">
+                        <option value="">All Types</option>
+                        <option value="community" selected>Community</option>
+                        <option value="country">Country</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label for="ruleFilter" class="form-label">Filter by Rule</label>
+                    <select id="ruleFilter" class="form-select">
+                        <option value="">All Rules</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label for="severityFilter" class="form-label">Filter by Severity</label>
+                    <select id="severityFilter" class="form-select">
+                        <option value="">All Severities</option>
+                        <option value="error">Errors</option>
+                        <option value="warning">Warnings</option>
+                        <option value="info">Info</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <div class="form-check mt-4">
+                        <input class="form-check-input" type="checkbox" id="includeDeleted">
+                        <label class="form-check-label" for="includeDeleted">Include Deleted</label>
+                    </div>
+                </div>
+            </div>
+            <div class="row mt-3">
+                <div class="col-12">
+                    <button id="applyFiltersBtn" class="btn btn-secondary">Apply Filters</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Results Table -->
+    <div class="card" id="resultsCard" style="display: none;">
+        <div class="card-header">
+            <h5 class="mb-0">Areas Requiring Attention</h5>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-striped table-hover mb-0">
+                    <thead>
+                        <tr>
+                            <th>Area</th>
+                            <th>Type</th>
+                            <th>Issues</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="resultsTableBody">
+                        <!-- Results will be populated here -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Empty State -->
+    <div class="card" id="emptyState" style="display: none;">
+        <div class="card-body text-center py-5">
+            <h5 class="text-muted">No lint issues found</h5>
+            <p class="text-muted mb-0">All areas are passing lint checks.</p>
+        </div>
+    </div>
+
+    <!-- Initial State -->
+    <div class="card" id="initialState">
+        <div class="card-body text-center py-5">
+            <h5 class="text-muted">No data synced yet</h5>
+            <p class="text-muted mb-3">Click "Sync Areas" to fetch and lint all areas.</p>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const syncBtn = document.getElementById('syncBtn');
+    const syncBtnText = document.getElementById('syncBtnText');
+    const syncSpinner = document.getElementById('syncSpinner');
+    const lastSyncText = document.getElementById('lastSyncText');
+    const summaryStats = document.getElementById('summaryStats');
+    const filtersCard = document.getElementById('filtersCard');
+    const resultsCard = document.getElementById('resultsCard');
+    const resultsTableBody = document.getElementById('resultsTableBody');
+    const emptyState = document.getElementById('emptyState');
+    const initialState = document.getElementById('initialState');
+    const typeFilter = document.getElementById('typeFilter');
+    const ruleFilter = document.getElementById('ruleFilter');
+    const severityFilter = document.getElementById('severityFilter');
+    const includeDeleted = document.getElementById('includeDeleted');
+    const applyFiltersBtn = document.getElementById('applyFiltersBtn');
+
+    // Load initial state
+    loadSummary();
+    loadRules();
+
+    // Event listeners
+    syncBtn.addEventListener('click', syncAreas);
+    applyFiltersBtn.addEventListener('click', loadResults);
+
+    function getFilterParams() {
+        let params = new URLSearchParams();
+        if (typeFilter.value) params.append('type', typeFilter.value);
+        if (ruleFilter.value) params.append('rule', ruleFilter.value);
+        if (severityFilter.value) params.append('severity', severityFilter.value);
+        if (includeDeleted.checked) params.append('include_deleted', 'true');
+        return params.toString();
+    }
+
+    async function loadSummary() {
+        try {
+            const params = getFilterParams();
+            const response = await fetch(`/api/lint/summary?${params}`);
+            const data = await response.json();
+            
+            if (data.last_sync) {
+                updateUI(data);
+            }
+        } catch (error) {
+            console.error('Error loading summary:', error);
+        }
+    }
+
+    async function loadRules() {
+        try {
+            const response = await fetch('/api/lint/rules');
+            const data = await response.json();
+            
+            data.rules.forEach(rule => {
+                const option = document.createElement('option');
+                option.value = rule.id;
+                option.textContent = rule.name;
+                ruleFilter.appendChild(option);
+            });
+        } catch (error) {
+            console.error('Error loading rules:', error);
+        }
+    }
+
+    async function syncAreas() {
+        syncBtn.disabled = true;
+        syncBtnText.textContent = 'Syncing...';
+        syncSpinner.classList.remove('d-none');
+
+        try {
+            const response = await fetch('/api/lint/sync', { method: 'POST' });
+            const data = await response.json();
+
+            if (response.ok) {
+                showToast('Success', `Synced ${data.processed} areas`, 'success');
+                updateUI(data.summary);
+                loadResults();
+            } else {
+                showToast('Error', data.error || 'Sync failed', 'error');
+            }
+        } catch (error) {
+            console.error('Error syncing:', error);
+            showToast('Error', 'Failed to sync areas', 'error');
+        } finally {
+            syncBtn.disabled = false;
+            syncBtnText.textContent = 'Sync Areas';
+            syncSpinner.classList.add('d-none');
+        }
+    }
+
+    function updateUI(summary) {
+        // Update last sync time
+        if (summary.last_sync) {
+            const date = new Date(summary.last_sync);
+            lastSyncText.textContent = `Last sync: ${date.toLocaleString()}`;
+        }
+
+        // Update stats
+        document.getElementById('statTotalAreas').textContent = summary.total_areas || 0;
+        document.getElementById('statAreasWithIssues').textContent = summary.areas_with_issues || 0;
+        document.getElementById('statErrors').textContent = summary.issues_by_severity?.error || 0;
+        document.getElementById('statWarnings').textContent = summary.issues_by_severity?.warning || 0;
+
+        // Show/hide sections
+        initialState.style.display = 'none';
+        summaryStats.style.display = 'flex';
+        filtersCard.style.display = 'block';
+
+        if (summary.areas_with_issues > 0) {
+            loadResults();
+        } else {
+            resultsCard.style.display = 'none';
+            emptyState.style.display = 'block';
+        }
+    }
+
+    async function loadResults() {
+        const params = getFilterParams();
+        const url = `/api/lint/results?issues_only=true&${params}`;
+
+        try {
+            const response = await fetch(url);
+            const data = await response.json();
+
+            // Update summary stats with filtered data
+            if (data.summary) {
+                document.getElementById('statTotalAreas').textContent = data.summary.total_areas || 0;
+                document.getElementById('statAreasWithIssues').textContent = data.summary.areas_with_issues || 0;
+                document.getElementById('statErrors').textContent = data.summary.issues_by_severity?.error || 0;
+                document.getElementById('statWarnings').textContent = data.summary.issues_by_severity?.warning || 0;
+            }
+
+            if (data.results && data.results.length > 0) {
+                renderResults(data.results);
+                resultsCard.style.display = 'block';
+                emptyState.style.display = 'none';
+            } else {
+                resultsCard.style.display = 'none';
+                emptyState.style.display = 'block';
+            }
+        } catch (error) {
+            console.error('Error loading results:', error);
+        }
+    }
+
+    function renderResults(results) {
+        resultsTableBody.innerHTML = '';
+
+        results.forEach(area => {
+            const row = document.createElement('tr');
+            
+            // Issues badges
+            const issuesBadges = area.issues.map(issue => {
+                const badgeClass = issue.severity === 'error' ? 'bg-danger' : 
+                                   issue.severity === 'warning' ? 'bg-warning text-dark' : 'bg-info';
+                return `<span class="badge ${badgeClass} me-1" title="${issue.message}">${issue.rule_name}</span>`;
+            }).join('');
+
+            // Action buttons
+            const actionButtons = [];
+            actionButtons.push(`<a href="/show_area/${area.area_id}" class="btn btn-sm btn-outline-primary">View</a>`);
+            
+            // Add fix buttons for auto-fixable issues
+            const autoFixableIssues = area.issues.filter(i => i.auto_fixable);
+            autoFixableIssues.forEach(issue => {
+                const btnText = issue.fix_action === 'migrate_icon' ? 'Migrate Icon' : 
+                               issue.fix_action === 'bump_verified' ? 'Bump Verified' : 'Fix';
+                actionButtons.push(`<button class="btn btn-sm btn-outline-success fix-btn" data-area-id="${area.area_id}" data-fix-action="${issue.fix_action}">${btnText}</button>`);
+            });
+
+            const deletedBadge = area.is_deleted ? '<span class="badge bg-secondary ms-1">Deleted</span>' : '';
+            const typeDisplay = area.area_type.charAt(0).toUpperCase() + area.area_type.slice(1);
+
+            row.innerHTML = `
+                <td>
+                    <strong>${escapeHtml(area.area_name)}</strong>${deletedBadge}
+                    <br><small class="text-muted">${area.area_id}</small>
+                </td>
+                <td>${escapeHtml(typeDisplay)}</td>
+                <td>${issuesBadges || '<span class="text-muted">None</span>'}</td>
+                <td>
+                    <div class="btn-group btn-group-sm">
+                        ${actionButtons.join('')}
+                    </div>
+                </td>
+            `;
+
+            resultsTableBody.appendChild(row);
+        });
+
+        // Attach fix button handlers
+        document.querySelectorAll('.fix-btn').forEach(btn => {
+            btn.addEventListener('click', async function() {
+                const areaId = this.dataset.areaId;
+                const fixAction = this.dataset.fixAction;
+                
+                this.disabled = true;
+                this.textContent = 'Fixing...';
+
+                try {
+                    const response = await fetch('/api/lint/fix', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ area_id: areaId, fix_action: fixAction })
+                    });
+
+                    const data = await response.json();
+
+                    if (response.ok && data.success) {
+                        showToast('Success', data.message || 'Fixed successfully', 'success');
+                        // Reload results to reflect changes
+                        loadResults();
+                        loadSummary();
+                    } else {
+                        showToast('Error', data.error || 'Fix failed', 'error');
+                        this.disabled = false;
+                        this.textContent = 'Retry';
+                    }
+                } catch (error) {
+                    console.error('Error fixing:', error);
+                    showToast('Error', 'Failed to apply fix', 'error');
+                    this.disabled = false;
+                    this.textContent = 'Retry';
+                }
+            });
+        });
+    }
+
+    function escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+});
+</script>
+{% endblock %}

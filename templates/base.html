@@ -26,6 +26,9 @@
                     <li class="nav-item">
                         <a class="nav-link" href="{{ url_for('add_area') }}">Add Area</a>
                     </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('maintenance') }}">Maintenance</a>
+                    </li>
                 </ul>
                 <ul class="navbar-nav">
                     {% if session.get('password') %}
