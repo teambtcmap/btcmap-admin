@@ -4,8 +4,15 @@
 
 {% block content %}
 <div class="container">
-    <h1 class="mt-5">Area Details</h1>
-    <h2 class="mb-4">{{ area.tags.get('name', 'Unnamed Area') }} ({{ area.tags.get('type', 'Unknown Type') }})</h2>
+    <div class="d-flex justify-content-between align-items-start mt-5 mb-4">
+        <div>
+            <h1 class="mb-1">Area Details</h1>
+            <h2 class="mb-0">{{ area.tags.get('name', 'Unnamed Area') }} ({{ area.tags.get('type', 'Unknown Type') }})</h2>
+        </div>
+        {% if area.tags.get('icon:square') %}
+        <img src="{{ area.tags.get('icon:square') }}" alt="{{ area.tags.get('name', 'Area') }} logo" style="max-width: 80px; max-height: 80px; object-fit: contain;">
+        {% endif %}
+    </div>
 
     <!-- Map container with consistent styling -->
     <div id="map-container" class="position-relative mb-4">
