@@ -322,19 +322,30 @@ def set_area_tag():
             return jsonify({'error': f'{key}: {error_message}'}), 400
 
     if key == 'geo_json':
+        app.logger.info("=== SERVER: set_area_tag for geo_json ===")
+
         is_valid, result = validate_geo_json(value)
         if not is_valid:
             return jsonify({'error': result}), 400
 
-        geo_result = rpc_call('set_area_tag', {'id': area_id, 'name': 'geo_json', 'value': value})
+        app.logger.info(f"SERVER: Sending geo_json to RPC: {result['geo_json']}")
+
+        geo_result = rpc_call('set_area_tag', {'id': area_id, 'name': 'geo_json', 'value': result['geo_json']})
+        app.logger.info(f"SERVER: RPC response for geo_json: {geo_result}")
+
         if isinstance(geo_result, tuple):
             return geo_result
 
-        area_km2 = calculate_area(value)
+        area_km2 = calculate_area(result['geo_json'])
+        app.logger.info(f"SERVER: Calculated area: {area_km2}")
+
         area_result = rpc_call('set_area_tag', {'id': area_id, 'name': 'area_km2', 'value': area_km2})
+        app.logger.info(f"SERVER: RPC response for area_km2: {area_result}")
+
         if isinstance(area_result, tuple):
             return area_result
 
+        app.logger.info("=== SERVER: GeoJSON update complete ===")
         return jsonify({'success': True, 'message': 'GeoJSON and area updated successfully'})
 
     result = rpc_call('set_area_tag', {'id': area_id, 'name': key, 'value': value})
@@ -517,6 +528,8 @@ def validate_allowed_values(value, allowed_values):
 
 def validate_geo_json(value):
     try:
+        app.logger.info("=== SERVER: validate_geo_json called ===")
+
         if isinstance(value, str):
             geo_json = json.loads(value)
         elif isinstance(value, dict):
@@ -524,8 +537,24 @@ def validate_geo_json(value):
         else:
             return False, "Invalid GeoJSON: must be a JSON object or a valid JSON string"
 
+        app.logger.info(f"SERVER: Input type: {type(value)}")
+        app.logger.info(f"SERVER: Input value: {value}")
+        app.logger.info(f"SERVER: geo_json type: {geo_json.get('type')}")
+        app.logger.info(f"SERVER: geo_json keys: {list(geo_json.keys()) if isinstance(geo_json, dict) else 'N/A'}")
+
         if not isinstance(geo_json, dict):
             return False, "Invalid GeoJSON: must be a JSON object"
+
+        # Extract geometry if it's wrapped in a Feature
+        if geo_json.get('type') == 'Feature':
+            app.logger.info("SERVER: Extracting geometry from Feature")
+            geo_json = geo_json.get('geometry', geo_json)
+        elif geo_json.get('type') == 'FeatureCollection' and 'features' in geo_json:
+            app.logger.info("SERVER: Extracting geometry from FeatureCollection")
+            geo_json = geo_json['features'][0].get('geometry', geo_json)
+
+        app.logger.info(f"SERVER: After extraction, type: {geo_json.get('type')}")
+        app.logger.info(f"SERVER: After extraction, keys: {list(geo_json.keys())}")
 
         try:
             geom = shape(geo_json)
@@ -534,15 +563,23 @@ def validate_geo_json(value):
 
             # Rewind the GeoJSON to ensure correct orientation
             rewound = rewind(geo_json)
+
+            app.logger.info(f"SERVER: Rewound type: {rewound.get('type')}")
+            app.logger.info(f"SERVER: Rewound keys: {list(rewound.keys())}")
+            app.logger.info(f"SERVER: Rewound value: {rewound}")
+
             return True, {
                 "geo_json":
                 rewound  # Return the object directly, not stringified
             }
         except Exception as e:
+            app.logger.error(f"SERVER ERROR: {str(e)}")
             return False, f"Invalid GeoJSON structure: {str(e)}"
-    except json.JSONDecodeError:
+    except json.JSONDecodeError as e:
+        app.logger.error(f"SERVER JSON ERROR: {str(e)}")
         return False, "Invalid JSON format"
     except Exception as e:
+        app.logger.error(f"SERVER EXCEPTION ERROR: {str(e)}")
         return False, f"Error validating GeoJSON: {str(e)}"
 
 

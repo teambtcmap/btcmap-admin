@@ -10,7 +10,11 @@
     <!-- Map container with consistent styling -->
     <div id="map-container" class="position-relative mb-4">
         <div id="map" style="height: 400px; width: 100%;"></div>
-        <button id="edit-geojson-btn" class="btn btn-primary position-absolute" style="top: 10px; right: 10px; z-index: 1000;">Edit GeoJSON</button>
+        <div class="position-absolute d-flex gap-2" style="top: 10px; right: 10px; z-index: 1000;">
+            <button id="update-polygon-btn" class="btn btn-success btn-sm">Update</button>
+            <button id="edit-geojson-btn" class="btn btn-primary btn-sm">Edit GeoJSON Text</button>
+        </div>
+    </div>
     </div>
 
     <!-- GeoJSON editor with improved styling -->
@@ -89,6 +93,7 @@
 
 {% block scripts %}
 <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
+<script src="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.js"></script>
 <script src="{{ url_for('static', filename='js/validation.js') }}"></script>
 <script>
 // Global variables
@@ -98,6 +103,7 @@ let mapInitialized = false;
 const elements = {
     mapContainer: document.getElementById('map'),
     editGeoJsonBtn: document.getElementById('edit-geojson-btn'),
+    updatePolygonBtn: document.getElementById('update-polygon-btn'),
     geoJsonEditor: document.getElementById('geojson-editor'),
     geoJsonInput: document.getElementById('geojson-input'),
     showBtn: document.getElementById('show-btn'),
@@ -127,9 +133,78 @@ function initializeMap() {
             attribution: '© OpenStreetMap contributors'
         }).addTo(map);
 
+        // Initialize draw control
+        window.drawnItems = new L.FeatureGroup();
+        map.addLayer(window.drawnItems);
+
+        var drawControl = new L.Control.Draw({
+            draw: {
+                polygon: {
+                    allowIntersection: false,
+                    showArea: true,
+                    shapeOptions: {
+                        color: '#3388ff',
+                        weight: 3
+                    }
+                },
+                rectangle: {
+                    shapeOptions: {
+                        color: '#3388ff',
+                        weight: 3
+                    }
+                },
+                circle: false,
+                circlemarker: false,
+                marker: false,
+                polyline: false
+            },
+            edit: {
+                featureGroup: window.drawnItems,
+                remove: true,
+                edit: true
+            }
+        });
+        map.addControl(drawControl);
+
+        // Handle draw created
+        map.on(L.Draw.Event.CREATED, function(e) {
+            var layer = e.layer;
+            window.drawnItems.addLayer(layer);
+            window.drawnItems.eachLayer(function(l) {
+                window.drawnItems.removeLayer(l);
+            });
+            window.drawnItems.addLayer(layer);
+            updateGeoJsonFromDrawnItems();
+            showToast('Success', 'New polygon created', 'success');
+        });
+
+// Handle draw edited
+map.on(L.Draw.Event.EDITED, function(e) {
+    updateGeoJsonFromDrawnItems();
+});
+
+// Handle draw deleted
+map.on(L.Draw.Event.DELETED, function(e) {
+    currentGeoJson = null;
+    if (geoJsonLayer) {
+        map.removeLayer(geoJsonLayer);
+        geoJsonLayer = null;
+    }
+});
+
         const geoJson = {{ geo_json | tojson | safe if geo_json else 'null' }};
+        console.log('GeoJSON loaded from backend:', geoJson);
+
         if (geoJson) {
             updateMapWithGeoJson(geoJson);
+            // Also add to drawnItems to make it editable
+            setTimeout(() => {
+                if (geoJsonLayer && geoJsonLayer.getLayers().length > 0) {
+                    window.drawnItems.addLayer(geoJsonLayer.getLayers()[0]);
+                    console.log('Added existing polygon to drawnItems for editing');
+                    console.log('drawnItems layers count:', window.drawnItems.getLayers().length);
+                }
+            }, 100);
         }
 
         mapInitialized = true;
@@ -138,6 +213,23 @@ function initializeMap() {
         logDebug('Failed to initialize map', error);
         showToast('Error', 'Failed to initialize map: ' + error.message, 'error');
     }
+}
+
+function updateGeoJsonFromDrawnItems() {
+    if (window.drawnItems.getLayers().length === 0) {
+        currentGeoJson = null;
+        elements.geoJsonInput.value = '';
+        return;
+    }
+
+    var layer = window.drawnItems.getLayers()[0];
+    var geoJson = layer.toGeoJSON();
+    currentGeoJson = geoJson.geometry;
+
+    // Always update geojson input to keep text and graphical in sync
+    elements.geoJsonInput.value = JSON.stringify(currentGeoJson, null, 2);
+
+    map.fitBounds(window.drawnItems.getBounds());
 }
 
 // Update map with GeoJSON
@@ -150,14 +242,48 @@ function updateMapWithGeoJson(geoJson) {
             map.removeLayer(geoJsonLayer);
         }
 
+        // Clear drawn items
+        if (window.drawnItems) {
+            window.drawnItems.clearLayers();
+        }
+
         // Handle string input
         if (typeof geoJson === 'string') {
             geoJson = JSON.parse(geoJson);
         }
 
+        // Extract geometry if wrapped in Feature
+        let geometry = geoJson;
+        if (geoJson.type === 'Feature') {
+            geometry = geoJson.geometry;
+        } else if (geoJson.type === 'FeatureCollection' && geoJson.features && geoJson.features.length > 0) {
+            geometry = geoJson.features[0].geometry;
+        }
+
+        // Store just the geometry
+        currentGeoJson = geometry;
+
         logDebug('Adding GeoJSON to map:', geoJson);
-        geoJsonLayer = L.geoJSON(geoJson).addTo(map);
+
+        // Wrap as Feature for display in Leaflet
+        const featureCollection = {
+            "type": "Feature",
+            "geometry": geometry
+        };
+
+        geoJsonLayer = L.geoJSON(featureCollection).addTo(map);
         map.fitBounds(geoJsonLayer.getBounds());
+
+        // Also add to drawnItems for editing
+        if (window.drawnItems && geoJsonLayer.getLayers().length > 0) {
+            const layer = geoJsonLayer.getLayers()[0];
+            window.drawnItems.addLayer(layer);
+            console.log('Layer added to drawnItems for editing:', layer);
+        }
+
+        // Update textarea with current GeoJSON (keep them in sync)
+        elements.geoJsonInput.value = JSON.stringify(currentGeoJson, null, 2);
+
         logDebug('GeoJSON updated successfully');
         return true;
     } catch (error) {
@@ -173,6 +299,12 @@ function initializeEventListeners() {
         logDebug('Initializing event listeners');
 
         // GeoJSON editor buttons
+        if (elements.updatePolygonBtn) {
+            elements.updatePolygonBtn.addEventListener('click', function() {
+                updateGeoJsonFromDrawnItems();
+                updateGeoJson();
+            });
+        }
         if (elements.editGeoJsonBtn) {
             elements.editGeoJsonBtn.addEventListener('click', startGeoJsonEditing);
         }
@@ -372,13 +504,23 @@ function validateCustomKey(keyInput) {
 function startGeoJsonEditing() {
     logDebug('Starting GeoJSON editing');
     elements.geoJsonEditor.style.display = 'block';
-    const geoJson = geoJsonLayer.toGeoJSON();
-    const geometry = geoJson.type === 'FeatureCollection'
-        ? geoJson.features[0].geometry
-        : geoJson.type === 'Feature'
-            ? geoJson.geometry
-            : geoJson;
-    elements.geoJsonInput.value = JSON.stringify(geometry, null, 2);
+
+    // Try to get GeoJSON from drawnItems first, otherwise from geoJsonLayer
+    let geoJson;
+    if (window.drawnItems && window.drawnItems.getLayers().length > 0) {
+        geoJson = window.drawnItems.getLayers()[0].toGeoJSON();
+    } else if (geoJsonLayer) {
+        geoJson = geoJsonLayer.toGeoJSON();
+    }
+
+    if (geoJson) {
+        const geometry = geoJson.type === 'FeatureCollection'
+            ? geoJson.features[0].geometry
+            : geoJson.type === 'Feature'
+                ? geoJson.geometry
+                : geoJson;
+        elements.geoJsonInput.value = JSON.stringify(geometry, null, 2);
+    }
 }
 
 function showGeoJson() {
@@ -398,31 +540,57 @@ function updateGeoJson() {
         logDebug('Starting GeoJSON update');
         const rawInput = elements.geoJsonInput.value;
 
+        console.log('=== CLIENT: Textarea value before send ===');
+        console.log('Raw textarea:', rawInput);
+
         // Parse the input to get a clean object
-        const geoJson = JSON.parse(rawInput);
+        let geoJson = JSON.parse(rawInput);
 
-        console.log("GeoJSON to be sent:", geoJson); //Added console log
+        console.log('=== CLIENT: Parsed JSON ===');
+        console.log('Type:', geoJson.type);
+        console.log('Keys:', Object.keys(geoJson));
+        console.log('Full object:', geoJson);
 
-        logDebug('Clean GeoJSON:', geoJson);
+        // ALWAYS extract just the geometry (ignore any Feature wrappers)
+        // This ensures only "type" and "coordinates" are sent to server
+        let geometry = geoJson;
+        if (geoJson.type === 'Feature' && geoJson.geometry) {
+            console.log('=== CLIENT: Extracting geometry from Feature ===');
+            geometry = geoJson.geometry;
+        } else if (geoJson.type === 'FeatureCollection' && geoJson.features && geoJson.features.length > 0 && geoJson.features[0].geometry) {
+            console.log('=== CLIENT: Extracting geometry from FeatureCollection ===');
+            geometry = geoJson.features[0].geometry;
+        }
+
+        console.log('=== CLIENT: Geometry being sent ===');
+        console.log('Type:', geometry.type);
+        console.log('Keys:', Object.keys(geometry));
+        console.log('Value:', JSON.stringify(geometry, null, 2));
+        logDebug('Extracted geometry:', geometry);
+
+        const payload = {
+            id: '{{ area.id }}',
+            name: 'geo_json',
+            value: geometry  // Send ONLY the geometry (type + coordinates)
+        };
+
+        console.log('=== CLIENT: Full payload being sent ===');
+        console.log(JSON.stringify(payload, null, 2));
 
         fetch('/api/set_area_tag', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                id: '{{ area.id }}',
-                name: 'geo_json',
-                value: geoJson  // Send the parsed object directly, not stringified again
-            })
+            body: JSON.stringify(payload)
         })
             .then(response => {
-                if (!response.ok) {
-                    return response.json().then(data => {
-                        throw new Error(data.error || `HTTP error! status: ${response.status}`);
-                    });
-                }
+                console.log('=== CLIENT: Response received ===');
+                console.log('Status:', response.status);
                 return response.json();
             })
             .then(data => {
+                console.log('=== CLIENT: Response data ===');
+                console.log(data);
+
                 if (data.error) {
                     throw new Error(data.error || 'Failed to update GeoJSON');
                 }
@@ -430,13 +598,17 @@ function updateGeoJson() {
                 showToast('Success', 'GeoJSON updated successfully', 'success');
                 elements.geoJsonEditor.style.display = 'none';
                 // Refresh the map with the updated GeoJSON
-                updateMapWithGeoJson(geoJson);
+                updateMapWithGeoJson(geometry);
             })
             .catch(error => {
+                console.log('=== CLIENT: Error ===');
+                console.error(error);
                 logDebug('Failed to update GeoJSON on server', error);
                 showToast('Error', error.message || 'Failed to update GeoJSON', 'error');
             });
     } catch (error) {
+        console.log('=== CLIENT: Exception ===');
+        console.error(error);
         logDebug('Failed to process GeoJSON input', error);
         showToast('Error', 'Invalid GeoJSON: ' + error.message, 'error');
     }

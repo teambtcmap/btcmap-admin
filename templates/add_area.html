@@ -8,7 +8,10 @@
     
     <!-- Map container with Edit GeoJSON button -->
     <div id="map" class="position-relative mb-3" style="height: 400px; width: 100%;">
-        <button id="edit-geojson-btn" class="btn btn-primary btn-sm position-absolute" style="top: 10px; right: 10px; z-index: 1000;">Edit GeoJSON</button>
+        <div class="position-absolute d-flex gap-2" style="top: 10px; right: 10px; z-index: 1000;">
+            <button id="update-polygon-btn" class="btn btn-success btn-sm">Update</button>
+            <button id="edit-geojson-btn" class="btn btn-primary btn-sm">Edit GeoJSON Text</button>
+        </div>
     </div>
     
     <!-- GeoJSON editing section -->
@@ -60,6 +63,7 @@
 {% endblock %}
 
 {% block scripts %}
+<script src="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Turf.js/6.5.0/turf.min.js"></script>
 <script src="{{ url_for('static', filename='js/validation.js') }}"></script>
 <script>
@@ -78,20 +82,157 @@ document.addEventListener('DOMContentLoaded', function() {
         attribution: '© OpenStreetMap contributors'
     }).addTo(map);
 
+    // Initialize draw control
+    var drawnItems = new L.FeatureGroup();
+    map.addLayer(drawnItems);
+
+    var drawControl = new L.Control.Draw({
+        draw: {
+            polygon: {
+                allowIntersection: false,
+                showArea: true,
+                shapeOptions: {
+                    color: '#3388ff',
+                    weight: 3
+                }
+            },
+            rectangle: {
+                shapeOptions: {
+                    color: '#3388ff',
+                    weight: 3
+                }
+            },
+            circle: false,
+            circlemarker: false,
+            marker: false,
+            polyline: false
+        },
+        edit: {
+            featureGroup: drawnItems,
+            remove: true,
+            edit: true
+        }
+    });
+    map.addControl(drawControl);
+
     var geoJsonLayer;
     var currentGeoJson;
     var previouslySavedGeoJson;
 
+    // Handle draw created
+    map.on(L.Draw.Event.CREATED, function(e) {
+        var layer = e.layer;
+        drawnItems.addLayer(layer);
+        drawnItems.eachLayer(function(l) {
+            drawnItems.removeLayer(l);
+        });
+        drawnItems.addLayer(layer);
+        updateGeoJsonFromDrawnItems();
+    });
+
+    // Handle draw edited
+    map.on(L.Draw.Event.EDITED, function(e) {
+        updateGeoJsonFromDrawnItems();
+    });
+
+    // Handle draw deleted
+    map.on(L.Draw.Event.DELETED, function(e) {
+        currentGeoJson = null;
+        if (geoJsonLayer) {
+            map.removeLayer(geoJsonLayer);
+            geoJsonLayer = null;
+        }
+    });
+
+    function updateGeoJsonFromDrawnItems() {
+        if (drawnItems.getLayers().length === 0) {
+            currentGeoJson = null;
+            geojsonInput.value = '';
+            return;
+        }
+
+        var layer = drawnItems.getLayers()[0];
+        var geoJson = layer.toGeoJSON();
+        currentGeoJson = geoJson.geometry;
+
+        // Always update geojson input to keep text and graphical in sync
+        geojsonInput.value = JSON.stringify(currentGeoJson, null, 2);
+
+        map.fitBounds(drawnItems.getBounds());
+    }
+
     function updateMap(geoJson) {
+        // Remove existing geoJsonLayer
         if (geoJsonLayer) {
             map.removeLayer(geoJsonLayer);
         }
 
+        // Clear drawn items
+        drawnItems.clearLayers();
+
         try {
-            geoJsonLayer = L.geoJSON(geoJson).addTo(map);
+            // Extract geometry if wrapped in Feature
+            let geometry = geoJson;
+            if (geoJson.type === 'Feature') {
+                geometry = geoJson.geometry;
+            } else if (geoJson.type === 'FeatureCollection' && geoJson.features && geoJson.features.length > 0) {
+                geometry = geoJson.features[0].geometry;
+            }
+
+            // Store just the geometry
+            currentGeoJson = geometry;
+
+            // Wrap back as Feature for display in Leaflet
+            const featureCollection = {
+                "type": "Feature",
+                "geometry": geometry
+            };
+
+            // Create GeoJSON feature and add to map
+            geoJsonLayer = L.geoJSON(featureCollection).addTo(map);
+            map.fitBounds(geoJsonLayer.getBounds());
+
+            // Also add to drawnItems for editing
+            if (geoJsonLayer.getLayers().length > 0) {
+                const layer = geoJsonLayer.getLayers()[0];
+                drawnItems.addLayer(layer);
+                console.log('Layer added to drawnItems for editing:', layer);
+            }
+
+            // Update textarea with current GeoJSON (keep them in sync)
+            geojsonInput.value = JSON.stringify(currentGeoJson, null, 2);
+
+        } catch (error) {
+            console.error("Error adding GeoJSON to map:", error);
+            showToast('Error', `Invalid GeoJSON: ${error.message}`, 'error');
+        }
+    }
+
+        // Clear drawn items
+        drawnItems.clearLayers();
+
+        try {
+            // Convert to Feature if it's just geometry
+            let featureCollection = geoJson;
+            if (!geoJson.type || (geoJson.type !== 'Feature' && geoJson.type !== 'FeatureCollection')) {
+                featureCollection = {
+                    "type": "Feature",
+                    "geometry": geoJson
+                };
+            }
+
+            // Create GeoJSON feature and add to map
+            geoJsonLayer = L.geoJSON(featureCollection).addTo(map);
             map.fitBounds(geoJsonLayer.getBounds());
             currentGeoJson = geoJson;
-            showToast('Success', 'GeoJSON updated successfully', 'success');
+
+            // Also add to drawnItems for editing
+            if (geoJsonLayer.getLayers().length > 0) {
+                const layer = geoJsonLayer.getLayers()[0];
+                drawnItems.addLayer(layer);
+                console.log('Layer added to drawnItems for editing:', layer);
+            }
+
         } catch (error) {
             console.error("Error adding GeoJSON to map:", error);
             showToast('Error', `Invalid GeoJSON: ${error.message}`, 'error');
@@ -454,6 +595,12 @@ document.addEventListener('DOMContentLoaded', function() {
     const showBtn = document.getElementById('show-btn');
     const saveLocallyBtn = document.getElementById('save-locally-btn');
     const cancelGeoJsonBtn = document.getElementById('cancel-geojson-btn');
+    const updatePolygonBtn = document.getElementById('update-polygon-btn');
+
+    // Update polygon button
+    updatePolygonBtn.addEventListener('click', function() {
+        updateGeoJsonFromDrawnItems();
+    });
 
     editGeoJsonBtn.addEventListener('click', function() {
         const editorControls = document.querySelectorAll('#geojson-editor button, #geojson-input');
