@@ -4,7 +4,87 @@
 
 {% block content %}
 <div class="container">
-    <h1 class="mt-5">Add New Area</h1>
+    <div class="d-flex justify-content-between align-items-start mt-5 mb-4">
+        <h1 class="mb-0">Add New Area</h1>
+        <div class="position-relative area-icon-container">
+            <div id="icon-placeholder" class="d-flex align-items-center justify-content-center bg-light border" style="width: 80px; height: 80px; cursor: pointer;" data-bs-toggle="modal" data-bs-target="#editIconModal">
+                <span id="icon-placeholder-text" class="text-muted text-center" style="font-size: 0.7rem;">Click to<br>add icon</span>
+                <img id="icon-preview-display" style="display: none; width: 100%; height: 100%; object-fit: contain;">
+            </div>
+            <button type="button" class="btn btn-sm btn-primary position-absolute edit-icon-btn" style="bottom: -8px; right: -8px; padding: 2px 6px; font-size: 0.7rem;" data-bs-toggle="modal" data-bs-target="#editIconModal">
+                Edit
+            </button>
+        </div>
+    </div>
+
+    <!-- Edit Icon Modal -->
+    <div class="modal fade" id="editIconModal" tabindex="-1" aria-labelledby="editIconModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="editIconModalLabel">Set Area Icon</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="iconFileInput" class="form-label">Upload Image</label>
+                        <input type="file" class="form-control" id="iconFileInput" accept="image/png,image/jpeg,image/webp">
+                        <div class="form-text">Accepted formats: PNG, JPG, WebP. The image will be cropped to a square.</div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Resolution Requirements</label>
+                        <div class="form-text">
+                            <strong>Minimum:</strong> 128 x 128 pixels<br>
+                            <strong>Maximum:</strong> 1024 x 1024 pixels<br>
+                            <strong>Output:</strong> Square image (1:1 aspect ratio)
+                        </div>
+                    </div>
+
+                    <!-- Cropper Container -->
+                    <div id="cropperContainer" class="mb-3" style="display: none;">
+                        <label class="form-label">Crop Image (drag to pan, scroll to zoom)</label>
+                        <div style="max-height: 400px; overflow: hidden;">
+                            <img id="cropperImage" style="max-width: 100%;">
+                        </div>
+                    </div>
+
+                    <!-- Preview -->
+                    <div id="previewContainer" class="mb-3" style="display: none;">
+                        <label class="form-label">Preview</label>
+                        <div class="d-flex align-items-center gap-3">
+                            <div>
+                                <img id="iconPreview" style="width: 80px; height: 80px; object-fit: cover; border: 1px solid #dee2e6;">
+                                <div class="form-text text-center">80px</div>
+                            </div>
+                            <div>
+                                <img id="iconPreviewLarge" style="width: 128px; height: 128px; object-fit: cover; border: 1px solid #dee2e6;">
+                                <div class="form-text text-center">128px</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Dimension Info -->
+                    <div id="dimensionInfo" class="alert alert-info" style="display: none;">
+                        <span id="dimensionText"></span>
+                    </div>
+
+                    <!-- Error Message -->
+                    <div id="iconError" class="alert alert-danger" style="display: none;"></div>
+
+                    <!-- Note about upload timing -->
+                    <div class="alert alert-warning">
+                        <strong>Note:</strong> The icon will be uploaded after the area is created.
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-danger" id="removeIconBtn" style="display: none;">Remove Icon</button>
+                    <button type="button" class="btn btn-primary" id="confirmIconBtn" disabled>Confirm Icon</button>
+                </div>
+            </div>
+        </div>
+    </div>
     
     <!-- Map container with Edit GeoJSON button -->
     <div id="map-container" class="position-relative mb-3">
@@ -69,7 +149,8 @@
 <script src="{{ url_for('static', filename='js/validation.js') }}"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    const areaTypeRequirements = {{ area_type_requirements | tojson | safe }};
+    window.areaTypeRequirements = {{ area_type_requirements | tojson | safe }};
+    const areaTypeRequirements = window.areaTypeRequirements;
     const typeSelect = document.getElementById('type');
     const tagsTable = document.getElementById('tags-table').querySelector('tbody');
     const addOptionalFieldBtn = document.getElementById('add-optional-field-btn');
@@ -117,7 +198,7 @@ document.addEventListener('DOMContentLoaded', function() {
     map.addControl(drawControl);
 
     var geoJsonLayer;
-    var currentGeoJson;
+    window.currentGeoJson = null;
     var previouslySavedGeoJson;
 
     // Handle draw created
@@ -138,7 +219,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Handle draw deleted
     map.on(L.Draw.Event.DELETED, function(e) {
-        currentGeoJson = null;
+        window.currentGeoJson = null;
         if (geoJsonLayer) {
             map.removeLayer(geoJsonLayer);
             geoJsonLayer = null;
@@ -147,17 +228,17 @@ document.addEventListener('DOMContentLoaded', function() {
 
     function updateGeoJsonFromDrawnItems() {
         if (drawnItems.getLayers().length === 0) {
-            currentGeoJson = null;
+            window.currentGeoJson = null;
             geojsonInput.value = '';
             return;
         }
 
         var layer = drawnItems.getLayers()[0];
         var geoJson = layer.toGeoJSON();
-        currentGeoJson = geoJson.geometry;
+        window.currentGeoJson = geoJson.geometry;
 
         // Always update geojson input to keep text and graphical in sync
-        geojsonInput.value = JSON.stringify(currentGeoJson, null, 2);
+        geojsonInput.value = JSON.stringify(window.currentGeoJson, null, 2);
 
         map.fitBounds(drawnItems.getBounds());
     }
@@ -181,7 +262,7 @@ document.addEventListener('DOMContentLoaded', function() {
             }
 
             // Store just the geometry
-            currentGeoJson = geometry;
+            window.currentGeoJson = geometry;
 
             // Wrap back as Feature for display in Leaflet
             const featureCollection = {
@@ -201,7 +282,7 @@ document.addEventListener('DOMContentLoaded', function() {
             }
 
             // Update textarea with current GeoJSON (keep them in sync)
-            geojsonInput.value = JSON.stringify(currentGeoJson, null, 2);
+            geojsonInput.value = JSON.stringify(window.currentGeoJson, null, 2);
 
         } catch (error) {
             console.error("Error adding GeoJSON to map:", error);
@@ -413,7 +494,7 @@ document.addEventListener('DOMContentLoaded', function() {
         tagsTable.appendChild(newRow);
     }
 
-    function validateForm() {
+    window.validateAreaForm = function() {
         let isValid = true;
         let errorMessages = [];
 
@@ -478,88 +559,6 @@ document.addEventListener('DOMContentLoaded', function() {
         return isValid;
     }
 
-    submitAreaBtn.addEventListener('click', function(e) {
-        e.preventDefault();
-
-        if (!validateForm()) {
-            return;
-        }
-
-        const tags = {};
-
-        // Collect all valid tags
-        tagsTable.querySelectorAll('tr').forEach(row => {
-            const keyElement = row.querySelector('td:first-child');
-            const keyInput = keyElement.querySelector('input');
-            const key = keyInput ? keyInput.value.trim() : keyElement.textContent.trim();
-
-            const valueInput = row.querySelector('td:nth-child(2) input, td:nth-child(2) select');
-            if (valueInput && valueInput.value.trim()) {
-                let value = valueInput.value.trim();
-                const requirements = areaTypeRequirements[typeSelect.value]?.[key] || { type: 'text' };
-
-                // Convert numeric types
-                if (requirements.type === 'number' || requirements.type === 'integer') {
-                    const validation = validateNumericValue(value, requirements.type);
-                    if (validation.isValid) {
-                        value = validation.value;  // Raw number
-                    }
-                }
-                tags[key] = value;  // Keys are escaped strings
-            }
-        });
-
-        // Add type and GeoJSON
-        tags['type'] = typeSelect.value;  // String value
-        if (currentGeoJson) {
-            // Send the GeoJSON as a raw object
-            tags['geo_json'] = currentGeoJson;  // Raw object
-        }
-
-        // Submit the form
-        fetch('/add_area', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify(Object.fromEntries(
-                Object.entries(tags).map(([key, value]) => {
-                    if (key === 'geo_json' && typeof value === 'object') {
-                        // Keep GeoJSON as raw object
-                        return [key, value];
-                    } else if (typeof value === 'number') {
-                        // Keep numbers as raw values
-                        return [key, value];
-                    } else {
-                        // Convert all other values to strings with proper escaping
-                        return [key, String(value)];
-                    }
-                })
-            ))
-        })
-        .then(response => {
-            if (!response.ok) {
-                return response.json().then(data => {
-                    throw new Error(data.error?.message || `HTTP error! status: ${response.status}`);
-                });
-            }
-            return response.json();
-        })
-        .then(data => {
-            if (data.error) {
-                throw new Error(data.error.message || 'Failed to add area');
-            }
-            showToast('Success', 'Area added successfully', 'success');
-            setTimeout(() => {
-                window.location.href = '/select_area';
-            }, 2000);
-        })
-        .catch(error => {
-            console.error('Error adding area:', error);
-            showToast('Error', error.message || 'An unexpected error occurred', 'error');
-        });
-    });
-
     // Map editing functionality
     const editGeoJsonBtn = document.getElementById('edit-geojson-btn');
     const geojsonInput = document.getElementById('geojson-input');
@@ -577,9 +576,9 @@ document.addEventListener('DOMContentLoaded', function() {
         const editorControls = document.querySelectorAll('#geojson-editor button, #geojson-input');
         editorControls.forEach(control => control.style.display = 'inline-block');
         
-        if (currentGeoJson) {
-            geojsonInput.value = JSON.stringify(currentGeoJson, null, 2);
-            previouslySavedGeoJson = JSON.parse(JSON.stringify(currentGeoJson));
+        if (window.currentGeoJson) {
+            geojsonInput.value = JSON.stringify(window.currentGeoJson, null, 2);
+            previouslySavedGeoJson = JSON.parse(JSON.stringify(window.currentGeoJson));
         }
     });
 
@@ -625,6 +624,390 @@ document.addEventListener('DOMContentLoaded', function() {
     addOptionalFieldBtn.addEventListener('click', addOptionalField);
     addCustomFieldBtn.addEventListener('click', addCustomField);
     updateFields();
+});
+
+// ============================================
+// Icon Editor Functionality
+// ============================================
+
+const ICON_MIN_SIZE = 128;
+const ICON_MAX_SIZE = 1024;
+const ICON_OUTPUT_SIZE = 256;
+
+let iconCropper = null;
+let iconCurrentFile = null;
+let pendingIconBase64 = null;
+
+const iconElements = {
+    fileInput: null,
+    cropperContainer: null,
+    cropperImage: null,
+    previewContainer: null,
+    iconPreview: null,
+    iconPreviewLarge: null,
+    dimensionInfo: null,
+    dimensionText: null,
+    iconError: null,
+    confirmIconBtn: null,
+    removeIconBtn: null,
+    modal: null,
+    iconPlaceholder: null,
+    iconPlaceholderText: null,
+    iconPreviewDisplay: null
+};
+
+function initializeIconEditor() {
+    iconElements.fileInput = document.getElementById('iconFileInput');
+    iconElements.cropperContainer = document.getElementById('cropperContainer');
+    iconElements.cropperImage = document.getElementById('cropperImage');
+    iconElements.previewContainer = document.getElementById('previewContainer');
+    iconElements.iconPreview = document.getElementById('iconPreview');
+    iconElements.iconPreviewLarge = document.getElementById('iconPreviewLarge');
+    iconElements.dimensionInfo = document.getElementById('dimensionInfo');
+    iconElements.dimensionText = document.getElementById('dimensionText');
+    iconElements.iconError = document.getElementById('iconError');
+    iconElements.confirmIconBtn = document.getElementById('confirmIconBtn');
+    iconElements.removeIconBtn = document.getElementById('removeIconBtn');
+    iconElements.modal = document.getElementById('editIconModal');
+    iconElements.iconPlaceholder = document.getElementById('icon-placeholder');
+    iconElements.iconPlaceholderText = document.getElementById('icon-placeholder-text');
+    iconElements.iconPreviewDisplay = document.getElementById('icon-preview-display');
+
+    if (!iconElements.fileInput) return;
+
+    iconElements.fileInput.addEventListener('change', handleIconFileSelect);
+    iconElements.confirmIconBtn.addEventListener('click', confirmIcon);
+    iconElements.removeIconBtn.addEventListener('click', removeIcon);
+
+    // Reset cropper state when modal is closed (but keep pending icon)
+    iconElements.modal.addEventListener('hidden.bs.modal', resetCropperState);
+}
+
+function resetCropperState() {
+    if (iconCropper) {
+        iconCropper.destroy();
+        iconCropper = null;
+    }
+    iconCurrentFile = null;
+    iconElements.fileInput.value = '';
+    iconElements.cropperContainer.style.display = 'none';
+    iconElements.previewContainer.style.display = 'none';
+    iconElements.dimensionInfo.style.display = 'none';
+    iconElements.iconError.style.display = 'none';
+    iconElements.confirmIconBtn.disabled = true;
+}
+
+function resetIconEditor() {
+    resetCropperState();
+    pendingIconBase64 = null;
+    iconElements.iconPreviewDisplay.style.display = 'none';
+    iconElements.iconPlaceholderText.style.display = 'block';
+    iconElements.removeIconBtn.style.display = 'none';
+}
+
+function showIconError(message) {
+    iconElements.iconError.textContent = message;
+    iconElements.iconError.style.display = 'block';
+    iconElements.confirmIconBtn.disabled = true;
+}
+
+function hideIconError() {
+    iconElements.iconError.style.display = 'none';
+}
+
+function handleIconFileSelect(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    hideIconError();
+
+    const validTypes = ['image/png', 'image/jpeg', 'image/webp'];
+    if (!validTypes.includes(file.type)) {
+        showIconError('Invalid file type. Please upload a PNG, JPG, or WebP image.');
+        return;
+    }
+
+    iconCurrentFile = file;
+
+    const reader = new FileReader();
+    reader.onload = function(event) {
+        const img = new Image();
+        img.onload = function() {
+            if (img.width < ICON_MIN_SIZE || img.height < ICON_MIN_SIZE) {
+                showIconError(`Image is too small. Minimum size is ${ICON_MIN_SIZE}x${ICON_MIN_SIZE} pixels. Your image is ${img.width}x${img.height} pixels.`);
+                return;
+            }
+
+            if (img.width > 4096 || img.height > 4096) {
+                showIconError(`Image is too large. Maximum size is 4096x4096 pixels. Your image is ${img.width}x${img.height} pixels.`);
+                return;
+            }
+
+            iconElements.dimensionText.textContent = `Original size: ${img.width} x ${img.height} pixels`;
+            iconElements.dimensionInfo.style.display = 'block';
+
+            initializeIconCropper(event.target.result);
+        };
+        img.src = event.target.result;
+    };
+    reader.readAsDataURL(file);
+}
+
+function initializeIconCropper(imageSrc) {
+    if (iconCropper) {
+        iconCropper.destroy();
+    }
+
+    iconElements.cropperImage.src = imageSrc;
+    iconElements.cropperContainer.style.display = 'block';
+
+    iconCropper = new Cropper(iconElements.cropperImage, {
+        aspectRatio: 1,
+        viewMode: 1,
+        dragMode: 'move',
+        autoCropArea: 1,
+        restore: false,
+        guides: true,
+        center: true,
+        highlight: false,
+        cropBoxMovable: true,
+        cropBoxResizable: true,
+        toggleDragModeOnDblclick: false,
+        minCropBoxWidth: ICON_MIN_SIZE,
+        minCropBoxHeight: ICON_MIN_SIZE,
+        ready: function() {
+            updateIconPreview();
+            iconElements.confirmIconBtn.disabled = false;
+        },
+        crop: function() {
+            updateIconPreview();
+        }
+    });
+}
+
+function updateIconPreview() {
+    if (!iconCropper) return;
+
+    const canvas = iconCropper.getCroppedCanvas({
+        width: ICON_OUTPUT_SIZE,
+        height: ICON_OUTPUT_SIZE,
+        imageSmoothingEnabled: true,
+        imageSmoothingQuality: 'high'
+    });
+
+    if (canvas) {
+        const dataUrl = canvas.toDataURL('image/png');
+        iconElements.iconPreview.src = dataUrl;
+        iconElements.iconPreviewLarge.src = dataUrl;
+        iconElements.previewContainer.style.display = 'block';
+    }
+}
+
+function confirmIcon() {
+    if (!iconCropper) {
+        showIconError('No image selected');
+        return;
+    }
+
+    hideIconError();
+
+    try {
+        const canvas = iconCropper.getCroppedCanvas({
+            width: ICON_OUTPUT_SIZE,
+            height: ICON_OUTPUT_SIZE,
+            imageSmoothingEnabled: true,
+            imageSmoothingQuality: 'high'
+        });
+
+        if (!canvas) {
+            throw new Error('Failed to crop image');
+        }
+
+        if (canvas.width < ICON_MIN_SIZE || canvas.height < ICON_MIN_SIZE) {
+            throw new Error(`Cropped area is too small. Please select a larger area (minimum ${ICON_MIN_SIZE}x${ICON_MIN_SIZE} pixels).`);
+        }
+
+        // Get base64 data
+        const dataUrl = canvas.toDataURL('image/png');
+        pendingIconBase64 = dataUrl.split(',')[1];
+
+        // Update the placeholder to show the selected image
+        iconElements.iconPreviewDisplay.src = dataUrl;
+        iconElements.iconPreviewDisplay.style.display = 'block';
+        iconElements.iconPlaceholderText.style.display = 'none';
+        iconElements.removeIconBtn.style.display = 'inline-block';
+
+        // Close modal
+        const modal = bootstrap.Modal.getOrCreateInstance(iconElements.modal);
+        modal.hide();
+
+        showToast('Success', 'Icon selected. It will be uploaded when you add the area.', 'success');
+
+    } catch (error) {
+        console.error('Error confirming icon:', error);
+        showIconError(error.message || 'Failed to process icon');
+    }
+}
+
+function removeIcon() {
+    pendingIconBase64 = null;
+    iconElements.iconPreviewDisplay.style.display = 'none';
+    iconElements.iconPlaceholderText.style.display = 'block';
+    iconElements.removeIconBtn.style.display = 'none';
+    
+    const modal = bootstrap.Modal.getOrCreateInstance(iconElements.modal);
+    modal.hide();
+
+    showToast('Info', 'Icon removed', 'info');
+}
+
+async function uploadIcon(areaId) {
+    if (!pendingIconBase64) {
+        return { success: true };
+    }
+
+    try {
+        const response = await fetch('/api/set_area_icon', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                id: areaId,
+                icon_base64: pendingIconBase64,
+                icon_ext: 'png'
+            })
+        });
+
+        const data = await response.json();
+
+        if (!response.ok || data.error) {
+            throw new Error(data.error || 'Failed to upload icon');
+        }
+
+        return { success: true };
+    } catch (error) {
+        console.error('Error uploading icon:', error);
+        return { success: false, error: error.message };
+    }
+}
+
+// Initialize icon editor when DOM is ready
+document.addEventListener('DOMContentLoaded', function() {
+    initializeIconEditor();
+    
+    // Set up submit handler for area creation with icon upload
+    const submitAreaBtn = document.getElementById('submit-area-btn');
+    if (!submitAreaBtn) return;
+    
+    submitAreaBtn.addEventListener('click', async function(e) {
+        e.preventDefault();
+
+        // Use the validation function from the main form handler
+        if (window.validateAreaForm && !window.validateAreaForm()) {
+            return;
+        }
+
+        const typeSelect = document.getElementById('type');
+        const tagsTable = document.getElementById('tags-table').querySelector('tbody');
+
+        // Get areaTypeRequirements from the page
+        const areaTypeRequirements = window.areaTypeRequirements || {};
+
+        const tags = {};
+
+        // Collect all valid tags
+        tagsTable.querySelectorAll('tr').forEach(row => {
+            const keyElement = row.querySelector('td:first-child');
+            const keyInput = keyElement.querySelector('input');
+            const key = keyInput ? keyInput.value.trim() : keyElement.textContent.trim();
+
+            const valueInput = row.querySelector('td:nth-child(2) input, td:nth-child(2) select');
+            if (valueInput && valueInput.value.trim()) {
+                let value = valueInput.value.trim();
+                const requirements = areaTypeRequirements[typeSelect.value]?.[key] || { type: 'text' };
+
+                if (requirements.type === 'number' || requirements.type === 'integer') {
+                    const numVal = requirements.type === 'integer' ? parseInt(value, 10) : parseFloat(value);
+                    if (!isNaN(numVal)) {
+                        value = numVal;
+                    }
+                }
+                tags[key] = value;
+            }
+        });
+
+        // Add type and GeoJSON
+        tags['type'] = typeSelect.value;
+        if (window.currentGeoJson) {
+            tags['geo_json'] = window.currentGeoJson;
+        }
+
+        // If we have a pending icon, provide a placeholder for icon:square
+        if (pendingIconBase64 && !tags['icon:square']) {
+            tags['icon:square'] = 'pending-upload';
+        }
+
+        submitAreaBtn.disabled = true;
+        submitAreaBtn.textContent = 'Creating Area...';
+
+        try {
+            const response = await fetch('/add_area', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(Object.fromEntries(
+                    Object.entries(tags).map(([key, value]) => {
+                        if (key === 'geo_json' && typeof value === 'object') {
+                            return [key, value];
+                        } else if (typeof value === 'number') {
+                            return [key, value];
+                        } else {
+                            return [key, String(value)];
+                        }
+                    })
+                ))
+            });
+
+            const data = await response.json();
+
+            if (!response.ok || data.error) {
+                throw new Error(data.error?.message || data.error || 'Failed to add area');
+            }
+
+            const areaId = data.area_id;
+
+            // Upload the icon if we have one
+            if (pendingIconBase64 && areaId) {
+                submitAreaBtn.textContent = 'Uploading Icon...';
+                
+                const iconResult = await uploadIcon(areaId);
+                
+                if (!iconResult.success) {
+                    showToast('Warning', `Area created but icon upload failed: ${iconResult.error}. You can update the icon later.`, 'warning');
+                    setTimeout(() => {
+                        window.location.href = `/show_area/${areaId}`;
+                    }, 3000);
+                    return;
+                }
+            }
+
+            showToast('Success', 'Area added successfully', 'success');
+            setTimeout(() => {
+                if (areaId) {
+                    window.location.href = `/show_area/${areaId}`;
+                } else {
+                    window.location.href = '/select_area';
+                }
+            }, 2000);
+
+        } catch (error) {
+            console.error('Error adding area:', error);
+            showToast('Error', error.message || 'An unexpected error occurred', 'error');
+        } finally {
+            submitAreaBtn.disabled = false;
+            submitAreaBtn.textContent = 'Add Area';
+        }
+    });
 });
 </script>
 {% endblock %}

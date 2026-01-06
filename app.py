@@ -287,7 +287,10 @@ def add_area():
         app.logger.info(f"RPC response: {result}")
 
         if 'error' not in result:
-            return jsonify({'success': True})
+            # Return the area ID so client can upload icon
+            area_result = result.get('result', {})
+            area_id = area_result.get('id') or area_result.get('tags', {}).get('url_alias')
+            return jsonify({'success': True, 'area_id': area_id})
         app.logger.error(f"Error from RPC call: {result['error']}")
         return jsonify({'error': result['error']}), 400
 
