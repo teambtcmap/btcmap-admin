@@ -92,9 +92,24 @@
                     </div>
                 </div>
             </div>
+            
+            <!-- Tag Search -->
             <div class="row mt-3">
                 <div class="col-12">
-                    <button id="applyFiltersBtn" class="btn btn-secondary">Apply Filters</button>
+                    <label class="form-label">Tag Search</label>
+                    <div id="tagFiltersContainer">
+                        <!-- Tag filter rows will be added here -->
+                    </div>
+                    <button type="button" id="addTagFilterBtn" class="btn btn-sm btn-outline-secondary mt-2">
+                        + Add Tag Filter
+                    </button>
+                </div>
+            </div>
+            
+            <div class="row mt-3">
+                <div class="col-12">
+                    <button id="applyFiltersBtn" class="btn btn-primary">Apply Filters</button>
+                    <button id="clearFiltersBtn" class="btn btn-outline-secondary ms-2">Clear All</button>
                 </div>
             </div>
         </div>
@@ -160,14 +175,28 @@ document.addEventListener('DOMContentLoaded', function() {
     const severityFilter = document.getElementById('severityFilter');
     const includeDeleted = document.getElementById('includeDeleted');
     const applyFiltersBtn = document.getElementById('applyFiltersBtn');
+    const clearFiltersBtn = document.getElementById('clearFiltersBtn');
+    const addTagFilterBtn = document.getElementById('addTagFilterBtn');
+    const tagFiltersContainer = document.getElementById('tagFiltersContainer');
+
+    let availableTags = [];
+
+    function escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
 
     // Load initial state
     loadSummary();
     loadRules();
+    loadTags();
 
     // Event listeners
     syncBtn.addEventListener('click', syncAreas);
     applyFiltersBtn.addEventListener('click', loadResults);
+    clearFiltersBtn.addEventListener('click', clearAllFilters);
+    addTagFilterBtn.addEventListener('click', addTagFilterRow);
 
     function getFilterParams() {
         let params = new URLSearchParams();
@@ -175,7 +204,48 @@ document.addEventListener('DOMContentLoaded', function() {
         if (ruleFilter.value) params.append('rule', ruleFilter.value);
         if (severityFilter.value) params.append('severity', severityFilter.value);
         if (includeDeleted.checked) params.append('include_deleted', 'true');
+        
+        // Add tag filters
+        const tagRows = tagFiltersContainer.querySelectorAll('.tag-filter-row');
+        tagRows.forEach(row => {
+            const tagName = row.querySelector('.tag-name-select').value;
+            const tagValue = row.querySelector('.tag-value-input').value;
+            if (tagName) {
+                params.append(`tag.${tagName}`, tagValue);
+            }
+        });
+        
         return params.toString();
+    }
+
+    function clearAllFilters() {
+        typeFilter.value = 'community';
+        ruleFilter.value = '';
+        severityFilter.value = '';
+        includeDeleted.checked = false;
+        tagFiltersContainer.innerHTML = '';
+        loadResults();
+    }
+
+    function addTagFilterRow() {
+        const row = document.createElement('div');
+        row.className = 'tag-filter-row d-flex gap-2 mb-2 align-items-center';
+        
+        const tagOptions = availableTags.map(tag => 
+            `<option value="${escapeHtml(tag)}">${escapeHtml(tag)}</option>`
+        ).join('');
+        
+        row.innerHTML = `
+            <select class="form-select form-select-sm tag-name-select" style="width: 200px;">
+                <option value="">Select tag...</option>
+                ${tagOptions}
+            </select>
+            <input type="text" class="form-control form-control-sm tag-value-input" placeholder="Value (empty = any)" style="width: 200px;">
+            <button type="button" class="btn btn-sm btn-outline-danger remove-tag-filter">Remove</button>
+        `;
+        
+        row.querySelector('.remove-tag-filter').addEventListener('click', () => row.remove());
+        tagFiltersContainer.appendChild(row);
     }
 
     async function loadSummary() {
@@ -208,6 +278,16 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
+    async function loadTags() {
+        try {
+            const response = await fetch('/api/lint/tags');
+            const data = await response.json();
+            availableTags = data.tags || [];
+        } catch (error) {
+            console.error('Error loading tags:', error);
+        }
+    }
+
     async function syncAreas() {
         syncBtn.disabled = true;
         syncBtnText.textContent = 'Syncing...';
@@ -220,6 +300,7 @@ document.addEventListener('DOMContentLoaded', function() {
             if (response.ok) {
                 showToast('Success', `Synced ${data.processed} areas`, 'success');
                 updateUI(data.summary);
+                loadTags();  // Reload available tags after sync
                 loadResults();
             } else {
                 showToast('Error', data.error || 'Sync failed', 'error');
@@ -372,11 +453,6 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    function escapeHtml(text) {
-        const div = document.createElement('div');
-        div.textContent = text;
-        return div.innerHTML;
-    }
 });
 </script>
 {% endblock %}

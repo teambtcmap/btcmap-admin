@@ -647,12 +647,21 @@ def lint_results():
     include_deleted = request.args.get('include_deleted', 'false').lower() == 'true'
     issues_only = request.args.get('issues_only', 'true').lower() == 'true'
     
+    # Parse tag filters from query params (format: tag.name=value)
+    tag_filters = {}
+    for key, value in request.args.items():
+        if key.startswith('tag.'):
+            tag_name = key[4:]  # Remove 'tag.' prefix
+            # Empty value means "tag exists" (any value)
+            tag_filters[tag_name] = value if value else None
+    
     results = lint_cache.get_results(
         rule_filter=rule_filter,
         severity_filter=severity_filter,
         type_filter=type_filter,
         include_deleted=include_deleted,
-        issues_only=issues_only
+        issues_only=issues_only,
+        tag_filters=tag_filters if tag_filters else None
     )
     
     return jsonify({
@@ -667,6 +676,12 @@ def lint_summary():
     type_filter = request.args.get('type')
     include_deleted = request.args.get('include_deleted', 'false').lower() == 'true'
     return jsonify(lint_cache.get_summary(type_filter=type_filter, include_deleted=include_deleted))
+
+
+@app.route('/api/lint/tags')
+def lint_tags():
+    """Get list of available tags across all cached areas."""
+    return jsonify({'tags': lint_cache.get_available_tags()})
 
 
 @app.route('/api/lint/fix', methods=['POST'])

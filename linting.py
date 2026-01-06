@@ -366,8 +366,14 @@ class LintCache:
     
     def get_results(self, rule_filter: str = None, severity_filter: str = None, 
                     type_filter: str = None, include_deleted: bool = False,
-                    issues_only: bool = True) -> list[dict]:
-        """Get filtered results."""
+                    issues_only: bool = True, tag_filters: dict = None) -> list[dict]:
+        """Get filtered results.
+        
+        Args:
+            tag_filters: Dict of {tag_name: tag_value} to filter by. 
+                         Value can be None to match any value (tag exists),
+                         or a string to match exact value.
+        """
         filtered = []
         
         for area_result in self.results:
@@ -378,6 +384,25 @@ class LintCache:
             # Filter by area type
             if type_filter and area_result.get('area_type') != type_filter:
                 continue
+            
+            # Filter by tags
+            if tag_filters:
+                tags = area_result.get('tags', {})
+                match = True
+                for tag_name, tag_value in tag_filters.items():
+                    area_tag_value = tags.get(tag_name)
+                    if tag_value is None:
+                        # Tag must exist (any value)
+                        if area_tag_value is None:
+                            match = False
+                            break
+                    else:
+                        # Tag must match exact value
+                        if str(area_tag_value) != str(tag_value):
+                            match = False
+                            break
+                if not match:
+                    continue
             
             issues = area_result['issues']
             
@@ -396,10 +421,24 @@ class LintCache:
                 'area_name': area_result['area_name'],
                 'area_type': area_result['area_type'],
                 'is_deleted': area_result.get('is_deleted', False),
+                'tags': area_result.get('tags', {}),
                 'issues': issues
             })
         
         return filtered
+    
+    def get_available_tags(self) -> list[str]:
+        """Get list of all unique tag names across all areas."""
+        # Tags to exclude from the list (system/internal tags)
+        excluded_tags = {'geo_json'}
+        
+        all_tags = set()
+        for area_result in self.results:
+            tags = area_result.get('tags', {})
+            for key in tags.keys():
+                if key not in excluded_tags:
+                    all_tags.add(key)
+        return sorted(list(all_tags))
     
     def update_area(self, area_id: str, area: dict):
         """Update lint results for a single area."""
@@ -416,6 +455,7 @@ class LintCache:
             'area_name': area.get('tags', {}).get('name', 'Unknown'),
             'area_type': area.get('tags', {}).get('type', 'unknown'),
             'is_deleted': is_deleted,
+            'tags': area.get('tags', {}),  # Store full tags for search
             'issues': issues
         }
         
