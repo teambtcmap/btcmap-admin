@@ -159,20 +159,20 @@
                     </tr>
                 </thead>
                 <tbody>
-                    {% for key in area.tags.keys() %}
-                        {% if key in area_type_requirements %}
+                    {% for key, value in area.tags.items() %}
+                        {% if key != 'geo_json' %}
                         <tr data-key="{{ key }}">
                             <td>{{ key }}</td>
                             <td class="tag-value-cell">
-                                <span class="tag-value-content">{{ area.tags.get(key, '') }}</span>
-                                {% if area_type_requirements[key].get('allowed_values') %}
+                                <span class="tag-value-content">{% if value is mapping %}[Object]{% else %}{{ value }}{% endif %}</span>
+                                {% if key in area_type_requirements and area_type_requirements[key].get('allowed_values') %}
                                 <select class="form-control tag-select d-none">
-                                    {% for value in area_type_requirements[key].allowed_values %}
-                                    <option value="{{ value }}" {% if value == area.tags.get(key) %}selected{% endif %}>{{ value }}</option>
+                                    {% for allowed_value in area_type_requirements[key].allowed_values %}
+                                    <option value="{{ allowed_value }}" {% if allowed_value == value %}selected{% endif %}>{{ allowed_value }}</option>
                                     {% endfor %}
                                 </select>
                                 {% else %}
-                                <input type="text" class="form-control tag-input d-none" value="{{ area.tags.get(key, '') }}">
+                                <input type="text" class="form-control tag-input d-none" value="{{ value if value is not mapping else '' }}">
                                 {% endif %}
                                 <div class="invalid-feedback"></div>
                             </td>
@@ -181,7 +181,7 @@
                                     <button class="btn btn-primary btn-sm edit-tag">Edit</button>
                                     <button class="btn btn-success btn-sm update-tag d-none">Update</button>
                                     <button class="btn btn-secondary btn-sm cancel-edit d-none">Cancel</button>
-                                    {% if not area_type_requirements[key].get('required', False) %}
+                                    {% if key not in area_type_requirements or not area_type_requirements[key].get('required', False) %}
                                     <button class="btn btn-danger btn-sm delete-tag">Remove</button>
                                     {% endif %}
                                 </div>
