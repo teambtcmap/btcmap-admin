@@ -322,30 +322,32 @@ def set_area_tag():
             return jsonify({'error': f'{key}: {error_message}'}), 400
 
     if key == 'geo_json':
-        app.logger.info("=== SERVER: set_area_tag for geo_json ===")
-
         is_valid, result = validate_geo_json(value)
         if not is_valid:
             return jsonify({'error': result}), 400
 
-        app.logger.info(f"SERVER: Sending geo_json to RPC: {result['geo_json']}")
+        geo_json = result['geo_json']
 
-        geo_result = rpc_call('set_area_tag', {'id': area_id, 'name': 'geo_json', 'value': result['geo_json']})
-        app.logger.info(f"SERVER: RPC response for geo_json: {geo_result}")
+        # The API uses json_patch() which merges objects (RFC 7396).
+        # To fully replace geo_json, we null out old keys to remove them.
+        geo_json_with_nulls = {
+            'features': None,  # Remove old FeatureCollection remnants
+            'properties': None,  # Remove old Feature remnants
+            'geometry': None,  # Remove old Feature remnants
+            **geo_json  # Add our actual geometry (type, coordinates)
+        }
+
+        geo_result = rpc_call('set_area_tag', {'id': area_id, 'name': 'geo_json', 'value': geo_json_with_nulls})
 
         if isinstance(geo_result, tuple):
             return geo_result
 
-        area_km2 = calculate_area(result['geo_json'])
-        app.logger.info(f"SERVER: Calculated area: {area_km2}")
-
+        area_km2 = calculate_area(geo_json)
         area_result = rpc_call('set_area_tag', {'id': area_id, 'name': 'area_km2', 'value': area_km2})
-        app.logger.info(f"SERVER: RPC response for area_km2: {area_result}")
 
         if isinstance(area_result, tuple):
             return area_result
 
-        app.logger.info("=== SERVER: GeoJSON update complete ===")
         return jsonify({'success': True, 'message': 'GeoJSON and area updated successfully'})
 
     result = rpc_call('set_area_tag', {'id': area_id, 'name': key, 'value': value})
