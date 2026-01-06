@@ -7,7 +7,8 @@
     <h1 class="mt-5">Add New Area</h1>
     
     <!-- Map container with Edit GeoJSON button -->
-    <div id="map" class="position-relative mb-3" style="height: 400px; width: 100%;">
+    <div id="map-container" class="position-relative mb-3">
+        <div id="map" style="height: 400px; width: 100%;"></div>
         <div class="position-absolute d-flex gap-2" style="top: 10px; right: 10px; z-index: 1000;">
             <button id="update-polygon-btn" class="btn btn-success btn-sm">Update</button>
             <button id="edit-geojson-btn" class="btn btn-primary btn-sm">Edit Raw GeoJSON</button>
@@ -208,41 +209,11 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
-        // Clear drawn items
-        drawnItems.clearLayers();
-
-        try {
-            // Convert to Feature if it's just geometry
-            let featureCollection = geoJson;
-            if (!geoJson.type || (geoJson.type !== 'Feature' && geoJson.type !== 'FeatureCollection')) {
-                featureCollection = {
-                    "type": "Feature",
-                    "geometry": geoJson
-                };
-            }
-
-            // Create GeoJSON feature and add to map
-            geoJsonLayer = L.geoJSON(featureCollection).addTo(map);
-            map.fitBounds(geoJsonLayer.getBounds());
-            currentGeoJson = geoJson;
-
-            // Also add to drawnItems for editing
-            if (geoJsonLayer.getLayers().length > 0) {
-                const layer = geoJsonLayer.getLayers()[0];
-                drawnItems.addLayer(layer);
-                console.log('Layer added to drawnItems for editing:', layer);
-            }
-
-        } catch (error) {
-            console.error("Error adding GeoJSON to map:", error);
-            showToast('Error', `Invalid GeoJSON: ${error.message}`, 'error');
-        }
-    }
-
     function getExistingKeys() {
         const keys = [];
         tagsTable.querySelectorAll('tr').forEach(row => {
             const keyElement = row.querySelector('td:first-child');
+            if (!keyElement) return;
             const keyInput = keyElement.querySelector('input');
             const key = keyInput ? keyInput.value.trim() : keyElement.textContent.trim();
             if (key) {
