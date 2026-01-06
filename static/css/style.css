@@ -40,17 +40,29 @@ body {
 
 #tags-table th:first-child,
 #tags-table td:first-child {
-    width: 20%;
+    width: 15%;
 }
 
 #tags-table th:nth-child(2),
 #tags-table td:nth-child(2) {
-    width: 55%;
+    width: 65%;
 }
 
 #tags-table th:last-child,
 #tags-table td:last-child {
-    width: 25%;
+    width: 20%;
+    white-space: nowrap;
+}
+
+/* Action buttons - standalone with spacing */
+#tags-table .btn-group {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem;
+}
+
+#tags-table .btn-group .btn {
+    border-radius: 0.25rem !important;
 }
 
 #tags-table .tag-value-cell {
