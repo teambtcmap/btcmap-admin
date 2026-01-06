@@ -49,8 +49,8 @@
                     </tbody>
                 </table>
                 <div class="mt-3 text-center">
-                    <button type="button" id="add-optional-field-btn" class="btn btn-secondary">Add Optional Field</button>
-                    <button type="button" id="add-custom-field-btn" class="btn btn-secondary">Add Custom Field</button>
+                    <button type="button" id="add-optional-field-btn" class="btn btn-secondary">Add Optional Tag</button>
+                    <button type="button" id="add-custom-field-btn" class="btn btn-secondary">Add Custom Tag</button>
                 </div>
             </form>
         </div>
@@ -248,7 +248,7 @@ document.addEventListener('DOMContentLoaded', function() {
         row.innerHTML = `
             <td>
                 ${isCustom ? 
-                    `<input type="text" class="form-control custom-key" placeholder="Custom Key" required>
+                    `<input type="text" class="form-control custom-key" placeholder="Tag Name" required>
                      <div class="invalid-feedback">Please enter a valid key</div>` 
                     : key}
             </td>
@@ -369,7 +369,7 @@ document.addEventListener('DOMContentLoaded', function() {
         newRow.innerHTML = `
             <td>
                 <select class="form-control optional-field-select" required>
-                    <option value="">Select Optional Field</option>
+                    <option value="">Select Tag</option>
                     ${optionalFields.map(field => `<option value="${field}">${field}</option>`).join('')}
                 </select>
                 <div class="invalid-feedback">Please select a field</div>
