@@ -156,8 +156,10 @@ def check_auth():
 
 
 @app.route('/')
-def health():
-    return 'OK', 200
+def index():
+    if 'password' in session:
+        return redirect(url_for('select_area'))
+    return redirect(url_for('login'))
 
 
 @app.route('/home')
