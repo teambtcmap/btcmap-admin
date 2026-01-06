@@ -23,6 +23,18 @@
         </div>
     </div>
 
+    <!-- External Links -->
+    <div class="mb-4">
+        {% if area.tags.get('url_alias') %}
+        <a href="https://btcmap.org/community/{{ area.tags.get('url_alias') }}" target="_blank" rel="noopener noreferrer" class="btn btn-outline-primary btn-sm me-2">
+            View on BTC Map
+        </a>
+        {% endif %}
+        <a href="https://api.btcmap.org/v3/areas/{{ area.id }}" target="_blank" rel="noopener noreferrer" class="btn btn-outline-secondary btn-sm">
+            View on API
+        </a>
+    </div>
+
     <!-- Edit Icon Modal -->
     <div class="modal fade" id="editIconModal" tabindex="-1" aria-labelledby="editIconModalLabel" aria-hidden="true">
         <div class="modal-dialog modal-lg">
