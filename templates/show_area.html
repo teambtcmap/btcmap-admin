@@ -1399,7 +1399,8 @@ async function saveIcon() {
         // Update the icon on the page
         const areaIcon = document.getElementById('area-icon');
         const iconPlaceholder = document.getElementById('area-icon-placeholder');
-        const newSrc = data.result?.tags?.['icon:square'] || (areaIcon?.src?.split('?')[0] + '?t=' + Date.now());
+        const newIconUrl = data.result?.tags?.['icon:square'];
+        const newSrc = newIconUrl || (areaIcon?.src?.split('?')[0] + '?t=' + Date.now());
         
         if (areaIcon) {
             // Add cache-busting parameter
@@ -1420,6 +1421,64 @@ async function saveIcon() {
         }
         if (iconElements.currentIconContainer) {
             iconElements.currentIconContainer.style.display = 'block';
+        }
+        
+        // Update the icon:square value in the tags table
+        if (newIconUrl) {
+            const iconSquareRow = document.querySelector('tr[data-key="icon:square"]');
+            if (iconSquareRow) {
+                const valueContent = iconSquareRow.querySelector('.tag-value-content');
+                const valueInput = iconSquareRow.querySelector('.tag-input');
+                if (valueContent) {
+                    valueContent.textContent = newIconUrl;
+                }
+                if (valueInput) {
+                    valueInput.value = newIconUrl;
+                }
+            }
+            
+            // Update the url_alias value in the tags table if it was returned
+            const newUrlAlias = data.result?.tags?.['url_alias'];
+            if (newUrlAlias) {
+                const urlAliasRow = document.querySelector('tr[data-key="url_alias"]');
+                if (urlAliasRow) {
+                    const valueContent = urlAliasRow.querySelector('.tag-value-content');
+                    const valueInput = urlAliasRow.querySelector('.tag-input');
+                    if (valueContent) {
+                        valueContent.textContent = newUrlAlias;
+                    }
+                    if (valueInput) {
+                        valueInput.value = newUrlAlias;
+                    }
+                }
+            }
+        }
+        
+        // Remove the legacy icon lint warning if it exists (icon was migrated)
+        const lintPanel = document.querySelector('.card.border-warning');
+        if (lintPanel && newIconUrl && newIconUrl.includes('static.btcmap.org')) {
+            const migrateIconBtn = lintPanel.querySelector('.migrate-icon-btn');
+            if (migrateIconBtn) {
+                const listItem = migrateIconBtn.closest('li');
+                if (listItem) {
+                    listItem.remove();
+                    // Update the badge count
+                    const badge = lintPanel.querySelector('.badge');
+                    if (badge) {
+                        const currentCount = parseInt(badge.textContent) - 1;
+                        if (currentCount <= 0) {
+                            // No more issues, replace with success message
+                            lintPanel.outerHTML = `
+                                <div class="alert alert-success mb-4">
+                                    <strong>All checks passed</strong> - No maintenance required for this area.
+                                </div>
+                            `;
+                        } else {
+                            badge.textContent = currentCount;
+                        }
+                    }
+                }
+            }
         }
 
         showToast('Success', 'Icon updated successfully', 'success');
