@@ -567,9 +567,11 @@ function initializeEventListeners() {
     }
 }
 
-function getExistingKeys() {
+function getExistingKeys(excludeRow = null) {
     const keys = [];
     elements.tagsTable.querySelectorAll('tbody tr').forEach(row => {
+        // Skip the row we're currently editing
+        if (excludeRow && row === excludeRow) return;
         const keyElement = row.querySelector('td:first-child');
         if (!keyElement) return;
         const keyInput = keyElement.querySelector('input');
@@ -712,7 +714,9 @@ function addCustomField() {
 
 function validateCustomKey(keyInput) {
     const key = keyInput.value.trim();
-    const validation = validateKey(key, getExistingKeys());
+    // Get the row this input belongs to, so we can exclude it from duplicate check
+    const currentRow = keyInput.closest('tr');
+    const validation = validateKey(key, getExistingKeys(currentRow));
     const feedback = keyInput.nextElementSibling;
 
     keyInput.classList.toggle('is-invalid', !validation.isValid);
