@@ -91,11 +91,78 @@
         </div>
     </div>
     
+    <!-- GeoJSON Generator Section -->
+    <div class="card mb-3">
+        <div class="card-header">
+            <h6 class="mb-0">Generate GeoJSON from OpenStreetMap</h6>
+        </div>
+        <div class="card-body">
+            <div class="input-group mb-3">
+                <input type="text" id="osm-search-input" class="form-control" 
+                       placeholder="Search for a place (e.g., 'Berlin, Germany')">
+                <button id="osm-search-btn" class="btn btn-outline-primary">Search</button>
+            </div>
+            
+            <div id="search-results-container" style="display: none;">
+                <label class="form-label">Select a place:</label>
+                <select id="search-results" class="form-select mb-3"></select>
+            </div>
+            
+            <div id="geojson-controls" style="display: none;">
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <label for="simplify-slider" class="form-label">
+                            Simplification: <span id="simplify-value">0.0001</span>
+                        </label>
+                        <input type="range" class="form-range" id="simplify-slider" 
+                               min="0" max="10" step="1" value="5">
+                        <div class="d-flex justify-content-between">
+                            <small class="text-muted">More detail</small>
+                            <small class="text-muted">Less detail</small>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <label for="buffer-slider" class="form-label">
+                            Buffer (expand): <span id="buffer-value">0.1</span> km
+                        </label>
+                        <input type="range" class="form-range" id="buffer-slider" 
+                               min="0" max="1" step="0.1" value="0.1">
+                        <div class="d-flex justify-content-between">
+                            <small class="text-muted">Exact</small>
+                            <small class="text-muted">Expanded</small>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <span id="points-count" class="badge bg-secondary me-2">Points: 0</span>
+                        <div class="form-check form-check-inline">
+                            <input class="form-check-input" type="checkbox" id="show-original-boundary" checked>
+                            <label class="form-check-label" for="show-original-boundary">
+                                Show original boundary
+                            </label>
+                        </div>
+                    </div>
+                    <button id="apply-geojson-btn" class="btn btn-success btn-sm">Use this GeoJSON</button>
+                </div>
+            </div>
+            
+            <div id="geojson-loading" style="display: none;">
+                <div class="spinner-border spinner-border-sm" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+                <span class="ms-2">Searching...</span>
+            </div>
+            
+            <div id="geojson-error" class="alert alert-warning mt-2 mb-0" style="display: none;"></div>
+        </div>
+    </div>
+
     <!-- Map container with Edit GeoJSON button -->
     <div id="map-container" class="position-relative mb-3">
         <div id="map" style="height: 400px; width: 100%;"></div>
-        <div class="position-absolute d-flex gap-2" style="top: 10px; right: 10px; z-index: 1000;">
-            <button id="update-polygon-btn" class="btn btn-success btn-sm">Update</button>
+        <div class="position-absolute" style="top: 10px; right: 10px; z-index: 1000;">
             <button id="edit-geojson-btn" class="btn btn-primary btn-sm">Edit Raw GeoJSON</button>
         </div>
     </div>
@@ -297,6 +364,327 @@ document.addEventListener('DOMContentLoaded', function() {
             showToast('Error', `Invalid GeoJSON: ${error.message}`, 'error');
         }
     }
+
+    // ============================================
+    // GeoJSON Generator (OSM Search + Turf.js)
+    // ============================================
+    
+    const osmSearchInput = document.getElementById('osm-search-input');
+    const osmSearchBtn = document.getElementById('osm-search-btn');
+    const searchResultsContainer = document.getElementById('search-results-container');
+    const searchResultsSelect = document.getElementById('search-results');
+    const geojsonControls = document.getElementById('geojson-controls');
+    const simplifySlider = document.getElementById('simplify-slider');
+    const simplifyValue = document.getElementById('simplify-value');
+    const bufferSlider = document.getElementById('buffer-slider');
+    const bufferValue = document.getElementById('buffer-value');
+    const pointsCount = document.getElementById('points-count');
+    const showOriginalBoundary = document.getElementById('show-original-boundary');
+    const applyGeojsonBtn = document.getElementById('apply-geojson-btn');
+    const geojsonLoading = document.getElementById('geojson-loading');
+    const geojsonError = document.getElementById('geojson-error');
+    
+    // State for OSM GeoJSON generator
+    let originalOsmGeojson = null;      // Full-detail from Nominatim
+    let processedGeojson = null;        // After simplification/buffer
+    let originalBoundaryLayer = null;   // Reference layer showing original
+    let previewLayer = null;            // Preview layer for processed result
+    let osmSearchResults = [];          // Store search results
+    
+    function showGeojsonError(message) {
+        geojsonError.textContent = message;
+        geojsonError.style.display = 'block';
+    }
+    
+    function hideGeojsonError() {
+        geojsonError.style.display = 'none';
+    }
+    
+    function showGeojsonLoading(show) {
+        geojsonLoading.style.display = show ? 'block' : 'none';
+    }
+    
+    function countGeojsonPoints(geojson) {
+        let count = 0;
+        
+        function countCoords(coords) {
+            if (typeof coords[0] === 'number') {
+                count++;
+            } else {
+                coords.forEach(c => countCoords(c));
+            }
+        }
+        
+        const geometry = geojson.geometry || geojson;
+        if (geometry.coordinates) {
+            countCoords(geometry.coordinates);
+        }
+        
+        return count;
+    }
+    
+    // Search OSM via Nominatim
+    async function searchOSM() {
+        const query = osmSearchInput.value.trim();
+        if (!query) {
+            showToast('Warning', 'Please enter a search term', 'warning');
+            return;
+        }
+        
+        hideGeojsonError();
+        searchResultsContainer.style.display = 'none';
+        geojsonControls.style.display = 'none';
+        showGeojsonLoading(true);
+        
+        try {
+            const response = await apiFetch(`/api/search_osm?q=${encodeURIComponent(query)}`);
+            const results = await response.json();
+            
+            if (results.error) {
+                throw new Error(results.error);
+            }
+            
+            if (results.length === 0) {
+                showGeojsonError('No administrative areas found. Try a different search term.');
+                return;
+            }
+            
+            // Store results and populate dropdown
+            osmSearchResults = results;
+            searchResultsSelect.innerHTML = '<option value="">Select a place...</option>';
+            results.forEach((r, index) => {
+                const option = document.createElement('option');
+                option.value = index;
+                option.textContent = r.display_name;
+                searchResultsSelect.appendChild(option);
+            });
+            
+            searchResultsContainer.style.display = 'block';
+            
+        } catch (error) {
+            console.error('OSM search error:', error);
+            showGeojsonError(error.message || 'Search failed');
+        } finally {
+            showGeojsonLoading(false);
+        }
+    }
+    
+    // Handle search result selection
+    async function onSearchResultSelect() {
+        const index = searchResultsSelect.value;
+        if (index === '') return;
+        
+        const result = osmSearchResults[parseInt(index)];
+        if (!result || !result.geojson) {
+            showGeojsonError('Selected place has no boundary data');
+            return;
+        }
+        
+        // Check if there's already a polygon, confirm before replacing
+        if (window.currentGeoJson && drawnItems.getLayers().length > 0) {
+            const confirmed = await confirmPolygonReplacement();
+            if (!confirmed) {
+                searchResultsSelect.value = '';
+                return;
+            }
+        }
+        
+        // Store the original GeoJSON
+        originalOsmGeojson = result.geojson;
+        
+        // Reset sliders to defaults
+        simplifySlider.value = 5;  // Maps to ~0.001 tolerance
+        simplifyValue.textContent = formatTolerance(sliderToTolerance(5));
+        bufferSlider.value = 0.1;
+        bufferValue.textContent = '0.1';
+        
+        // Show controls and process
+        geojsonControls.style.display = 'block';
+        
+        // Show original boundary and process
+        updateOriginalBoundaryLayer();
+        processAndPreviewGeojson();
+    }
+    
+    // Confirmation dialog for replacing existing polygon
+    function confirmPolygonReplacement() {
+        return new Promise((resolve) => {
+            const result = confirm('Replace existing polygon with the selected OSM boundary?');
+            resolve(result);
+        });
+    }
+    
+    // Show/hide original boundary reference layer
+    function updateOriginalBoundaryLayer() {
+        // Remove existing layer
+        if (originalBoundaryLayer) {
+            map.removeLayer(originalBoundaryLayer);
+            originalBoundaryLayer = null;
+        }
+        
+        if (!originalOsmGeojson || !showOriginalBoundary.checked) {
+            return;
+        }
+        
+        // Wrap as Feature if needed
+        let feature = originalOsmGeojson;
+        if (originalOsmGeojson.type !== 'Feature' && originalOsmGeojson.type !== 'FeatureCollection') {
+            feature = { type: 'Feature', geometry: originalOsmGeojson, properties: {} };
+        }
+        
+        // Create dashed line style for reference
+        originalBoundaryLayer = L.geoJSON(feature, {
+            style: {
+                color: '#ff6600',
+                weight: 2,
+                dashArray: '5, 5',
+                fillOpacity: 0,
+                interactive: false
+            }
+        }).addTo(map);
+    }
+    
+    // Process GeoJSON with Turf.js and preview
+    function processAndPreviewGeojson() {
+        if (!originalOsmGeojson) return;
+        
+        try {
+            // Wrap as Feature if needed
+            let feature = originalOsmGeojson;
+            if (originalOsmGeojson.type !== 'Feature' && originalOsmGeojson.type !== 'FeatureCollection') {
+                feature = { type: 'Feature', geometry: originalOsmGeojson, properties: {} };
+            }
+            
+            const tolerance = sliderToTolerance(parseFloat(simplifySlider.value));
+            const buffer = parseFloat(bufferSlider.value);
+            
+            let processed = feature;
+            
+            // Apply buffer if > 0
+            if (buffer > 0) {
+                processed = turf.buffer(processed, buffer, { units: 'kilometers' });
+            }
+            
+            // Apply simplification if > 0
+            if (tolerance > 0) {
+                processed = turf.simplify(processed, {
+                    tolerance: tolerance,
+                    highQuality: true
+                });
+            }
+            
+            processedGeojson = processed;
+            
+            // Remove existing preview layer
+            if (previewLayer) {
+                map.removeLayer(previewLayer);
+            }
+            
+            // Add preview layer
+            previewLayer = L.geoJSON(processed, {
+                style: {
+                    color: '#3388ff',
+                    weight: 3,
+                    fillColor: '#3388ff',
+                    fillOpacity: 0.2
+                }
+            }).addTo(map);
+            
+            // Fit bounds
+            map.fitBounds(previewLayer.getBounds());
+            
+            // Update point count
+            const count = countGeojsonPoints(processed);
+            pointsCount.textContent = `Points: ${count}`;
+            
+        } catch (error) {
+            console.error('Error processing GeoJSON:', error);
+            showGeojsonError(`Error processing: ${error.message}`);
+        }
+    }
+    
+    // Apply the processed GeoJSON to the map for editing
+    function applyProcessedGeojson() {
+        if (!processedGeojson) {
+            showToast('Warning', 'No processed GeoJSON to apply', 'warning');
+            return;
+        }
+        
+        // Extract geometry
+        const geometry = processedGeojson.geometry || processedGeojson;
+        
+        // Remove preview layer
+        if (previewLayer) {
+            map.removeLayer(previewLayer);
+            previewLayer = null;
+        }
+        
+        // Remove original boundary layer
+        if (originalBoundaryLayer) {
+            map.removeLayer(originalBoundaryLayer);
+            originalBoundaryLayer = null;
+        }
+        
+        // Update the main map with editable polygon
+        updateMap(geometry);
+        
+        // Hide controls and reset state
+        geojsonControls.style.display = 'none';
+        searchResultsContainer.style.display = 'none';
+        osmSearchInput.value = '';
+        searchResultsSelect.innerHTML = '<option value="">Select a place...</option>';
+        originalOsmGeojson = null;
+        processedGeojson = null;
+        osmSearchResults = [];
+        
+        showToast('Success', 'GeoJSON applied. You can now edit the polygon on the map.', 'success');
+    }
+    
+    // Event listeners for GeoJSON generator
+    osmSearchBtn.addEventListener('click', searchOSM);
+    osmSearchInput.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            searchOSM();
+        }
+    });
+    
+    searchResultsSelect.addEventListener('change', onSearchResultSelect);
+    
+    // Convert linear slider (0-10) to logarithmic tolerance
+    // 0 = 0 (no simplification), 1 = 0.000001, 5 = 0.0001, 10 = 0.01
+    function sliderToTolerance(sliderVal) {
+        if (sliderVal === 0) return 0;
+        // Map 1-10 to 0.000001-0.01 logarithmically (6 orders of magnitude)
+        const minLog = Math.log10(0.000001);  // -6
+        const maxLog = Math.log10(0.01);      // -2
+        const logVal = minLog + (sliderVal / 10) * (maxLog - minLog);
+        return Math.pow(10, logVal);
+    }
+    
+    function formatTolerance(val) {
+        if (val === 0) return '0';
+        if (val < 0.00001) return val.toExponential(1);
+        if (val < 0.0001) return val.toFixed(6);
+        if (val < 0.001) return val.toFixed(5);
+        if (val < 0.01) return val.toFixed(4);
+        return val.toFixed(3);
+    }
+    
+    simplifySlider.addEventListener('input', function() {
+        const tolerance = sliderToTolerance(parseFloat(this.value));
+        simplifyValue.textContent = formatTolerance(tolerance);
+        processAndPreviewGeojson();
+    });
+    
+    bufferSlider.addEventListener('input', function() {
+        bufferValue.textContent = this.value;
+        processAndPreviewGeojson();
+    });
+    
+    showOriginalBoundary.addEventListener('change', updateOriginalBoundaryLayer);
+    
+    applyGeojsonBtn.addEventListener('click', applyProcessedGeojson);
 
     function getExistingKeys() {
         const keys = [];
@@ -573,12 +961,6 @@ document.addEventListener('DOMContentLoaded', function() {
     const showBtn = document.getElementById('show-btn');
     const saveLocallyBtn = document.getElementById('save-locally-btn');
     const cancelGeoJsonBtn = document.getElementById('cancel-geojson-btn');
-    const updatePolygonBtn = document.getElementById('update-polygon-btn');
-
-    // Update polygon button
-    updatePolygonBtn.addEventListener('click', function() {
-        updateGeoJsonFromDrawnItems();
-    });
 
     editGeoJsonBtn.addEventListener('click', function() {
         const editorControls = document.querySelectorAll('#geojson-editor button, #geojson-input');

@@ -448,6 +448,46 @@ def set_area_icon():
     return jsonify({'success': True, 'result': result.get('result')})
 
 
+@app.route('/api/search_osm')
+def search_osm():
+    """Search OpenStreetMap via Nominatim and return places with GeoJSON polygons."""
+    query = request.args.get('q', '')
+    if not query:
+        return jsonify({'error': 'Query parameter required'}), 400
+    
+    try:
+        response = requests.get(
+            'https://nominatim.openstreetmap.org/search',
+            params={
+                'q': query,
+                'format': 'json',
+                'polygon_geojson': 1,
+                'limit': 20
+            },
+            headers={
+                'User-Agent': 'BTCMapAdmin/1.0 (btcmap.org admin tool)'
+            },
+            timeout=15
+        )
+        response.raise_for_status()
+        
+        results = response.json()
+        
+        # Filter to only relations (have proper administrative boundaries)
+        # and only include results that have geojson
+        relations = [
+            r for r in results 
+            if r.get('osm_type') == 'relation' and r.get('geojson')
+        ]
+        
+        return jsonify(relations)
+    except requests.exceptions.Timeout:
+        return jsonify({'error': 'Search request timed out'}), 408
+    except requests.exceptions.RequestException as e:
+        app.logger.error(f"Error searching OSM: {str(e)}")
+        return jsonify({'error': f'Search failed: {str(e)}'}), 500
+
+
 @app.route('/api/proxy_image', methods=['POST'])
 def proxy_image():
     """Proxy endpoint to fetch images from URLs (avoids CORS issues)."""
