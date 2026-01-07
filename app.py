@@ -407,6 +407,58 @@ def set_area_icon():
     return jsonify({'success': True, 'result': result.get('result')})
 
 
+@app.route('/api/proxy_image', methods=['POST'])
+def proxy_image():
+    """Proxy endpoint to fetch images from URLs (avoids CORS issues)."""
+    data = request.json
+    if not data:
+        return jsonify({'error': 'Invalid request data'}), 400
+    
+    url = data.get('url')
+    if not url:
+        return jsonify({'error': 'Missing URL parameter'}), 400
+    
+    try:
+        # Validate URL
+        parsed = urlparse(url)
+        if not parsed.scheme or not parsed.netloc:
+            return jsonify({'error': 'Invalid URL format'}), 400
+        
+        # Fetch the image
+        response = requests.get(url, timeout=30, stream=True)
+        response.raise_for_status()
+        
+        # Validate content type
+        content_type = response.headers.get('Content-Type', '')
+        if not content_type.startswith('image/'):
+            return jsonify({'error': f'URL does not point to an image (got {content_type})'}), 400
+        
+        # Check file size (max 10MB)
+        content_length = response.headers.get('Content-Length')
+        if content_length and int(content_length) > 10 * 1024 * 1024:
+            return jsonify({'error': 'Image too large (max 10MB)'}), 400
+        
+        # Read and encode as base64
+        import base64
+        image_data = response.content
+        image_base64 = base64.b64encode(image_data).decode('utf-8')
+        
+        return jsonify({
+            'success': True,
+            'image_base64': image_base64,
+            'content_type': content_type.split(';')[0].strip()
+        })
+    
+    except requests.exceptions.Timeout:
+        return jsonify({'error': 'Request timed out'}), 408
+    except requests.exceptions.RequestException as e:
+        app.logger.error(f"Error fetching image: {str(e)}")
+        return jsonify({'error': f'Failed to fetch image: {str(e)}'}), 400
+    except Exception as e:
+        app.logger.error(f"Error proxying image: {str(e)}")
+        return jsonify({'error': f'Error: {str(e)}'}), 500
+
+
 @app.route('/api/remove_area_tag', methods=['POST'])
 def remove_area_tag():
     data = request.json

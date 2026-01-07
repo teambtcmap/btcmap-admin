@@ -55,6 +55,16 @@
                         <input type="file" class="form-control" id="iconFileInput" accept="image/png,image/jpeg,image/webp">
                         <div class="form-text">Accepted formats: PNG, JPG, WebP. The image will be cropped to a square.</div>
                     </div>
+
+                    <!-- Load from URL option -->
+                    <div class="mb-3">
+                        <label for="iconUrlInput" class="form-label">Or Load from URL</label>
+                        <div class="input-group">
+                            <input type="url" class="form-control" id="iconUrlInput" placeholder="https://example.com/image.png">
+                            <button type="button" class="btn btn-outline-secondary" id="loadIconUrlBtn">Load</button>
+                        </div>
+                        <div class="form-text">Enter an image URL to load and edit.</div>
+                    </div>
                     
                     <div class="mb-3">
                         <label class="form-label">Resolution Requirements</label>
@@ -129,11 +139,20 @@
                         {% endif %}
                     </div>
                     {% if issue.auto_fixable %}
+                    {% if issue.fix_action == 'migrate_icon' %}
+                    <button class="btn btn-sm btn-outline-success migrate-icon-btn" 
+                            data-icon-url="{{ issue.current_value }}"
+                            data-bs-toggle="modal" 
+                            data-bs-target="#editIconModal">
+                        Migrate Icon
+                    </button>
+                    {% else %}
                     <button class="btn btn-sm btn-outline-success lint-fix-btn" 
                             data-fix-action="{{ issue.fix_action }}"
                             data-area-id="{{ area.id }}">
-                        {% if issue.fix_action == 'migrate_icon' %}Migrate Icon{% elif issue.fix_action == 'bump_verified' %}Bump Verified{% else %}Fix{% endif %}
+                        {% if issue.fix_action == 'bump_verified' %}Bump Verified{% else %}Fix{% endif %}
                     </button>
+                    {% endif %}
                     {% endif %}
                 </li>
                 {% endfor %}
@@ -977,8 +996,13 @@ const iconElements = {
     saveIconBtn: null,
     modal: null,
     currentIconContainer: null,
-    currentIconDisplay: null
+    currentIconDisplay: null,
+    urlInput: null,
+    loadUrlBtn: null
 };
+
+// URL to pre-load when modal opens (set by migrate icon button)
+let pendingIconUrl = null;
 
 function initializeIconEditor() {
     iconElements.fileInput = document.getElementById('iconFileInput');
@@ -994,14 +1018,50 @@ function initializeIconEditor() {
     iconElements.modal = document.getElementById('editIconModal');
     iconElements.currentIconContainer = document.getElementById('currentIconContainer');
     iconElements.currentIconDisplay = document.getElementById('currentIconDisplay');
+    iconElements.urlInput = document.getElementById('iconUrlInput');
+    iconElements.loadUrlBtn = document.getElementById('loadIconUrlBtn');
 
     if (!iconElements.fileInput) return;
 
     iconElements.fileInput.addEventListener('change', handleFileSelect);
     iconElements.saveIconBtn.addEventListener('click', saveIcon);
+    iconElements.loadUrlBtn.addEventListener('click', () => loadImageFromUrl(iconElements.urlInput.value));
 
     // Reset modal state when closed
     iconElements.modal.addEventListener('hidden.bs.modal', resetIconEditor);
+    
+    // Handle modal show - check if we need to pre-load a URL
+    iconElements.modal.addEventListener('shown.bs.modal', function() {
+        if (pendingIconUrl) {
+            iconElements.urlInput.value = pendingIconUrl;
+            loadImageFromUrl(pendingIconUrl);
+            pendingIconUrl = null;
+        }
+    });
+    
+    // Set up migrate icon button handlers
+    document.querySelectorAll('.migrate-icon-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+            const iconUrl = this.dataset.iconUrl;
+            if (iconUrl) {
+                pendingIconUrl = iconUrl;
+            }
+        });
+    });
+    
+    // Check for #migrate-icon hash (from maintenance page link)
+    if (window.location.hash === '#migrate-icon') {
+        // Get the current icon URL from the legacy icon lint issue
+        const currentIconUrl = '{{ area.tags.get("icon:square", "") }}';
+        if (currentIconUrl) {
+            pendingIconUrl = currentIconUrl;
+            // Open the modal
+            const modal = new bootstrap.Modal(iconElements.modal);
+            modal.show();
+        }
+        // Clear the hash
+        history.replaceState(null, '', window.location.pathname);
+    }
 }
 
 function resetIconEditor() {
@@ -1079,6 +1139,76 @@ function handleFileSelect(e) {
         img.src = event.target.result;
     };
     reader.readAsDataURL(file);
+}
+
+async function loadImageFromUrl(url) {
+    if (!url) {
+        showIconError('Please enter a valid URL');
+        return;
+    }
+
+    hideIconError();
+    iconElements.loadUrlBtn.disabled = true;
+    iconElements.loadUrlBtn.textContent = 'Loading...';
+
+    try {
+        // Use a proxy endpoint to fetch the image (avoids CORS issues)
+        const response = await fetch('/api/proxy_image', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ url: url })
+        });
+
+        if (!response.ok) {
+            const data = await response.json();
+            throw new Error(data.error || 'Failed to load image');
+        }
+
+        const data = await response.json();
+        const imageSrc = `data:${data.content_type};base64,${data.image_base64}`;
+
+        // Hide current icon when loading a new one
+        if (iconElements.currentIconContainer) {
+            iconElements.currentIconContainer.style.display = 'none';
+        }
+
+        // Create an image to check dimensions
+        const img = new Image();
+        img.onload = function() {
+            // Check minimum dimensions
+            if (img.width < ICON_MIN_SIZE || img.height < ICON_MIN_SIZE) {
+                showIconError(`Image is too small. Minimum size is ${ICON_MIN_SIZE}x${ICON_MIN_SIZE} pixels. The image is ${img.width}x${img.height} pixels.`);
+                return;
+            }
+
+            // Check maximum dimensions
+            if (img.width > 4096 || img.height > 4096) {
+                showIconError(`Image is too large. Maximum size is 4096x4096 pixels. The image is ${img.width}x${img.height} pixels.`);
+                return;
+            }
+
+            // Show dimension info
+            iconElements.dimensionText.textContent = `Original size: ${img.width} x ${img.height} pixels`;
+            iconElements.dimensionInfo.style.display = 'block';
+
+            // Set a dummy file for the save function
+            currentFile = { type: 'image/png' };
+
+            // Initialize cropper
+            initializeCropper(imageSrc);
+        };
+        img.onerror = function() {
+            showIconError('Failed to load image from the provided data');
+        };
+        img.src = imageSrc;
+
+    } catch (error) {
+        console.error('Error loading image from URL:', error);
+        showIconError(error.message || 'Failed to load image from URL');
+    } finally {
+        iconElements.loadUrlBtn.disabled = false;
+        iconElements.loadUrlBtn.textContent = 'Load';
+    }
 }
 
 function initializeCropper(imageSrc) {

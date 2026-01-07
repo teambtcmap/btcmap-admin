@@ -492,9 +492,13 @@ document.addEventListener('DOMContentLoaded', function() {
             // Add fix buttons for auto-fixable issues
             const autoFixableIssues = area.issues.filter(i => i.auto_fixable);
             autoFixableIssues.forEach(issue => {
-                const btnText = issue.fix_action === 'migrate_icon' ? 'Migrate Icon' : 
-                               issue.fix_action === 'bump_verified' ? 'Bump Verified' : 'Fix';
-                actionButtons.push(`<button class="btn btn-sm btn-outline-success fix-btn" data-area-id="${area.area_id}" data-fix-action="${issue.fix_action}">${btnText}</button>`);
+                if (issue.fix_action === 'migrate_icon') {
+                    // Link to show_area page with hash to trigger icon modal
+                    actionButtons.push(`<a href="/show_area/${area.area_id}#migrate-icon" class="btn btn-sm btn-outline-success">Migrate Icon</a>`);
+                } else {
+                    const btnText = issue.fix_action === 'bump_verified' ? 'Bump Verified' : 'Fix';
+                    actionButtons.push(`<button class="btn btn-sm btn-outline-success fix-btn" data-area-id="${area.area_id}" data-fix-action="${issue.fix_action}">${btnText}</button>`);
+                }
             });
 
             const deletedBadge = area.is_deleted ? '<span class="badge bg-secondary ms-1">Deleted</span>' : '';
