@@ -161,6 +161,12 @@ def check_auth():
         return redirect(url_for('login', next=request.url))
 
 
+@app.route('/health')
+def health():
+    """Health check endpoint for Railway/container orchestration."""
+    return jsonify({'status': 'healthy'}), 200
+
+
 @app.route('/')
 def index():
     if 'password' in session:

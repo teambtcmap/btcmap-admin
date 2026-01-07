@@ -3,13 +3,70 @@
 
 ## Overview
 
-This Flask application is designed to run on Replit and communicate with the BTC Map API for area management functionality.
+This Flask application communicates with the BTC Map API for area management functionality. It can be deployed to various platforms including Railway, Render, Fly.io, and others.
 
-## Configuration
+## Railway Deployment (Recommended)
 
-### Environment Setup
+### Quick Start
 
-The application is configured to run on Replit with the following settings:
+1. **Push to GitHub** - Ensure your code is in a GitHub repository
+
+2. **Create Railway Project**
+   - Go to [railway.app](https://railway.app)
+   - Click "New Project" → "Deploy from GitHub repo"
+   - Select your repository
+
+3. **Configure Environment Variables**
+   In Railway dashboard → Variables, add:
+   ```
+   SECRET_KEY=<generate-a-random-32-char-string>
+   ```
+
+4. **Deploy** - Railway will automatically:
+   - Detect Python project via `pyproject.toml`
+   - Install dependencies
+   - Run the app using the `railway.toml` configuration
+
+5. **Get Your URL** - Railway provides a public URL like `your-app.up.railway.app`
+
+### Configuration Files
+
+- `railway.toml` - Railway-specific configuration (start command, health checks)
+- `Procfile` - Generic Python web app start command (also works for Heroku/Render)
+
+### Health Check
+
+The app exposes a `/health` endpoint that returns `{"status": "healthy"}` for container orchestration.
+
+---
+
+## Alternative Platforms
+
+### Render
+1. Connect GitHub repo
+2. Set build command: `pip install -r requirements.txt` (or let it detect pyproject.toml)
+3. Set start command: `gunicorn app:app`
+4. Add `SECRET_KEY` environment variable
+
+### Fly.io
+```bash
+fly launch
+fly secrets set SECRET_KEY=your-secret-key
+fly deploy
+```
+
+### Heroku
+```bash
+heroku create
+heroku config:set SECRET_KEY=your-secret-key
+git push heroku main
+```
+
+---
+
+## Legacy: Replit Configuration
+
+The application can also run on Replit with the following settings:
 
 - **Python Version**: 3.11
 - **Host**: 0.0.0.0 (accessible to external connections)
