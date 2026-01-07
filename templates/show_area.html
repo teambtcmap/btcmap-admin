@@ -142,6 +142,15 @@
                         {% if issue.current_value %}
                         <br><small class="text-muted font-monospace">Current: {{ issue.current_value|truncate(60) }}</small>
                         {% endif %}
+                        {% if issue.clashing_area_ids %}
+                        <br>
+                        <small class="text-muted">
+                            Also used by:
+                            {% for idx in range(issue.clashing_area_ids|length) %}
+                            <a href="/show_area/{{ issue.clashing_area_ids[idx] }}" class="text-decoration-underline">{{ issue.clashing_area_names[idx] }}</a>{% if not loop.last %}, {% endif %}
+                            {% endfor %}
+                        </small>
+                        {% endif %}
                     </div>
                     {% if issue.auto_fixable %}
                     {% if issue.fix_action == 'migrate_icon' %}

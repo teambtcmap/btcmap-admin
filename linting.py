@@ -41,9 +41,10 @@ class LintResult:
     rule: LintRule
     message: str
     current_value: Optional[str] = None
+    extra_data: Optional[dict] = None
 
     def to_dict(self):
-        return {
+        result = {
             'rule_id': self.rule.id,
             'rule_name': self.rule.name,
             'description': self.rule.description,
@@ -53,6 +54,9 @@ class LintResult:
             'message': self.message,
             'current_value': self.current_value
         }
+        if self.extra_data:
+            result.update(self.extra_data)
+        return result
 
 
 # Define lint rules
@@ -79,6 +83,13 @@ LINT_RULES = {
         severity=Severity.WARNING,
         auto_fixable=True,
         fix_action='bump_verified'
+    ),
+    'url-alias-clash': LintRule(
+        id='url-alias-clash',
+        name='URL Alias Clash',
+        description='Multiple areas share the same url_alias',
+        severity=Severity.ERROR,
+        auto_fixable=False
     ),
 }
 
@@ -645,6 +656,59 @@ class LintCache:
                 countries_found += 1
         
         print(f"Country derivation: {countries_found}/{communities_processed} communities matched to countries")
+    
+    def detect_url_alias_clashes(self):
+        """Detect areas with duplicate url_aliases and add lint issues."""
+        # First, remove any existing url-alias-clash issues
+        for area_result in self.results:
+            area_result['issues'] = [
+                issue for issue in area_result['issues']
+                if issue['rule_id'] != 'url-alias-clash'
+            ]
+        
+        url_alias_map = {}
+        
+        for area_result in self.results:
+            if area_result.get('is_deleted', False):
+                continue
+            
+            url_alias = area_result.get('tags', {}).get('url_alias')
+            if url_alias:
+                if url_alias not in url_alias_map:
+                    url_alias_map[url_alias] = []
+                url_alias_map[url_alias].append(area_result['area_id'])
+        
+        clashing_count = 0
+        for url_alias, area_ids in url_alias_map.items():
+            if len(area_ids) > 1:
+                clashing_count += 1
+                
+                for current_area_id in area_ids:
+                    clashing_area_ids = [aid for aid in area_ids if aid != current_area_id]
+                    clashing_area_names = []
+                    
+                    for aid in clashing_area_ids:
+                        for area_result in self.results:
+                            if area_result['area_id'] == aid:
+                                clashing_area_names.append(area_result['area_name'])
+                                break
+                    
+                    clashing_issue = LintResult(
+                        rule=LINT_RULES['url-alias-clash'],
+                        message=f'Duplicate url_alias shared by {len(area_ids)} areas',
+                        current_value=url_alias,
+                        extra_data={
+                            'clashing_area_ids': clashing_area_ids,
+                            'clashing_area_names': clashing_area_names
+                        }
+                    ).to_dict()
+                    
+                    for area_result in self.results:
+                        if area_result['area_id'] == current_area_id:
+                            area_result['issues'].append(clashing_issue)
+                            break
+        
+        print(f"URL alias clash detection: {clashing_count} clashes found")
     
     def update_area(self, area_id: str, area: dict):
         """Update lint results for a single area."""

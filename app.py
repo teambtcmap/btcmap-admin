@@ -229,6 +229,14 @@ def show_area(area_id):
 
         # Run lint checks on the area
         lint_issues = lint_area_dict(area)
+        
+        # Include cached url-alias-clash issues from global lint cache
+        for cached_result in lint_cache.results:
+            if cached_result['area_id'] == area_id:
+                for issue in cached_result['issues']:
+                    if issue['rule_id'] == 'url-alias-clash':
+                        lint_issues.append(issue)
+                break
 
         return render_template('show_area.html',
                                area=area,
@@ -729,6 +737,11 @@ def lint_sync():
         app.logger.info("Deriving countries for communities...")
         lint_cache.derive_countries_for_all_communities()
         app.logger.info("Country derivation complete")
+        
+        # Detect URL alias clashes
+        app.logger.info("Detecting URL alias clashes...")
+        lint_cache.detect_url_alias_clashes()
+        app.logger.info("URL alias clash detection complete")
         
         app.logger.info(f"Sync complete: {batch_count} batches, {total_fetched} fetched, {len(seen_ids)} unique, {total_processed} communities")
         

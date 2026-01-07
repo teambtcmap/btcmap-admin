@@ -525,7 +525,11 @@ document.addEventListener('DOMContentLoaded', function() {
             const issuesBadges = area.issues.map(issue => {
                 const badgeClass = issue.severity === 'error' ? 'bg-danger' : 
                                    issue.severity === 'warning' ? 'bg-warning text-dark' : 'bg-info';
-                return `<span class="badge ${badgeClass} me-1" title="${issue.message}">${issue.rule_name}</span>`;
+                let title = issue.message;
+                if (issue.clashing_area_names && issue.clashing_area_names.length > 0) {
+                    title += '\nAlso used by: ' + issue.clashing_area_names.join(', ');
+                }
+                return `<span class="badge ${badgeClass} me-1" title="${title}">${issue.rule_name}</span>`;
             }).join('');
 
             // Action buttons
