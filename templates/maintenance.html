@@ -135,9 +135,8 @@
 
     <!-- Results Table -->
     <div class="card mb-5" id="resultsCard" style="display: none;">
-        <div class="card-header d-flex justify-content-between align-items-center">
+        <div class="card-header">
             <h5 class="mb-0">Areas Requiring Attention</h5>
-            <span id="resultsCount" class="badge bg-secondary">0 results</span>
         </div>
         <div class="card-body p-0">
             <div class="table-responsive">
@@ -207,7 +206,6 @@ document.addEventListener('DOMContentLoaded', function() {
     const addTagFilterBtn = document.getElementById('addTagFilterBtn');
     const tagFiltersContainer = document.getElementById('tagFiltersContainer');
     const pagination = document.getElementById('pagination');
-    const resultsCount = document.getElementById('resultsCount');
 
     let availableTags = [];
     let availableCountries = [];
@@ -438,7 +436,6 @@ document.addEventListener('DOMContentLoaded', function() {
         const endIdx = startIdx + pageSize;
         const pageResults = allResults.slice(startIdx, endIdx);
         
-        resultsCount.textContent = `${allResults.length} results`;
         renderResults(pageResults);
         renderPagination(totalPages);
     }

@@ -531,14 +531,13 @@ def search_areas():
     try:
         data = request.get_json()
         query = data.get('query', '').lower()
-        include_deleted = data.get('include_deleted', False)
 
         result = rpc_call('search', {'query': query})
 
         if result is None:
             app.logger.error("RPC call returned None")
             return jsonify({'error': 'Server communication error'}), 500
-            
+
         if 'error' in result:
             app.logger.error(f"Error in RPC call: {result['error']}")
             return jsonify({'error': result['error']}), 400
@@ -548,10 +547,10 @@ def search_areas():
         for area in areas:
             if area['type'] != 'area':
                 continue
-            
+
             area_id = area['id']
             is_deleted = False
-            
+
             # Fetch area from REST API to get deleted_at field
             # (RPC search results don't include deleted_at)
             try:
@@ -562,18 +561,14 @@ def search_areas():
             except requests.exceptions.RequestException:
                 # If we can't fetch, assume not deleted
                 pass
-            
-            # Skip deleted areas unless include_deleted is True
-            if is_deleted and not include_deleted:
-                continue
-            
+
             filtered_areas.append({
                 'id': area['id'],
                 'name': area['name'],
                 'type': area['type'],
                 'deleted': is_deleted
             })
-        
+
         return jsonify(filtered_areas)
     except requests.exceptions.RequestException as e:
         app.logger.error(f"Network error in search_areas: {str(e)}")
@@ -784,16 +779,43 @@ def lint_results():
     
     return jsonify({
         'results': results,
-        'summary': lint_cache.get_summary(type_filter=type_filter, include_deleted=include_deleted)
+        'summary': lint_cache.get_summary(
+            rule_filter=rule_filter,
+            severity_filter=severity_filter,
+            type_filter=type_filter,
+            include_deleted=include_deleted,
+            issues_only=issues_only,
+            tag_filters=tag_filters if tag_filters else None,
+            country_id=country_filter
+        )
     })
 
 
 @app.route('/api/lint/summary')
 def lint_summary():
     """Get lint summary statistics."""
+    rule_filter = request.args.get('rule')
+    severity_filter = request.args.get('severity')
     type_filter = request.args.get('type')
+    country_filter = request.args.get('country')
     include_deleted = request.args.get('include_deleted', 'false').lower() == 'true'
-    return jsonify(lint_cache.get_summary(type_filter=type_filter, include_deleted=include_deleted))
+    
+    # Parse tag filters from query params (format: tag.name=value)
+    tag_filters = {}
+    for key, value in request.args.items():
+        if key.startswith('tag.'):
+            tag_name = key[4:]  # Remove 'tag.' prefix
+            # Empty value means "tag exists" (any value)
+            tag_filters[tag_name] = value if value else None
+    
+    return jsonify(lint_cache.get_summary(
+        rule_filter=rule_filter,
+        severity_filter=severity_filter,
+        type_filter=type_filter,
+        include_deleted=include_deleted,
+        tag_filters=tag_filters if tag_filters else None,
+        country_id=country_filter
+    ))
 
 
 @app.route('/api/lint/tags')

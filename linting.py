@@ -328,14 +328,77 @@ class LintCache:
         self._country_index = None
         self._country_geometries = []
     
-    def get_summary(self, type_filter: str = None, include_deleted: bool = False) -> dict:
+    def get_summary(self, rule_filter: Optional[str] = None, severity_filter: Optional[str] = None,
+                    type_filter: Optional[str] = None, include_deleted: bool = False,
+                    issues_only: bool = False, tag_filters: Optional[dict] = None,
+                    country_id: Optional[str] = None) -> dict:
         """Get summary statistics."""
-        # Filter results for summary
-        filtered_results = self.results
-        if type_filter:
-            filtered_results = [r for r in filtered_results if r['area_type'] == type_filter]
-        if not include_deleted:
-            filtered_results = [r for r in filtered_results if not r.get('is_deleted', False)]
+        # Filter results for summary (same logic as get_results)
+        filtered_results = []
+        
+        for area_result in self.results:
+            # Filter by deleted status
+            if not include_deleted and area_result.get('is_deleted', False):
+                continue
+            
+            # Filter by area type
+            if type_filter and area_result.get('area_type') != type_filter:
+                continue
+            
+            # Filter by country (only applies to non-country areas)
+            if country_id and area_result.get('area_type') != 'country':
+                if area_result.get('country_id') != country_id:
+                    continue
+            
+            # Filter by tags
+            if tag_filters:
+                tags = area_result.get('tags', {})
+                match = True
+                for tag_name, tag_value in tag_filters.items():
+                    area_tag_value = tags.get(tag_name)
+                    if tag_value is None:
+                        # Tag must exist (any value)
+                        if area_tag_value is None:
+                            match = False
+                            break
+                    else:
+                        # Tag must match value (supports wildcards with *)
+                        if area_tag_value is None:
+                            match = False
+                            break
+                        area_tag_str = str(area_tag_value)
+                        tag_value_str = str(tag_value)
+                        
+                        if '*' in tag_value_str:
+                            # Wildcard matching using fnmatch
+                            if not fnmatch.fnmatch(area_tag_str, tag_value_str):
+                                match = False
+                                break
+                        else:
+                            # Exact match
+                            if area_tag_str != tag_value_str:
+                                match = False
+                                break
+                if not match:
+                    continue
+            
+            issues = area_result['issues']
+            
+            # Filter issues
+            if rule_filter:
+                issues = [i for i in issues if i['rule_id'] == rule_filter]
+            if severity_filter:
+                issues = [i for i in issues if i['severity'] == severity_filter]
+            
+            # Skip areas with no matching issues if issues_only
+            if issues_only and not issues:
+                continue
+            
+            # Create a copy with filtered issues for summary calculation
+            filtered_results.append({
+                **area_result,
+                'issues': issues
+            })
         
         areas_with_issues = len([r for r in filtered_results if r['issues']])
         total_issues = sum(len(r['issues']) for r in filtered_results)
@@ -371,10 +434,10 @@ class LintCache:
             'sync_progress': self.sync_progress
         }
     
-    def get_results(self, rule_filter: str = None, severity_filter: str = None, 
-                    type_filter: str = None, include_deleted: bool = False,
-                    issues_only: bool = True, tag_filters: dict = None,
-                    country_id: str = None) -> list[dict]:
+    def get_results(self, rule_filter: Optional[str] = None, severity_filter: Optional[str] = None, 
+                    type_filter: Optional[str] = None, include_deleted: bool = False,
+                    issues_only: bool = True, tag_filters: Optional[dict] = None,
+                    country_id: Optional[str] = None) -> list[dict]:
         """Get filtered results.
         
         Args:
