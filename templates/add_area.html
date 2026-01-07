@@ -107,7 +107,7 @@
             <h6 class="mb-0">Generate GeoJSON from OpenStreetMap</h6>
         </div>
         <div class="card-body">
-            <div class="input-group mb-3">
+            <div class="d-flex gap-2 mb-3">
                 <input type="text" id="osm-search-input" class="form-control" 
                        placeholder="Search for a place (e.g., 'Berlin, Germany')">
                 <button id="osm-search-btn" class="btn btn-primary">Search</button>
@@ -501,6 +501,27 @@ document.addEventListener('DOMContentLoaded', function() {
         
         // Store the original GeoJSON
         originalOsmGeojson = result.geojson;
+        
+        // Auto-fill population from extratags if available
+        if (result.extratags && result.extratags.population) {
+            const populationValue = parseInt(result.extratags.population, 10);
+            if (!isNaN(populationValue)) {
+                // Find and fill the population input field using name attribute
+                const popInput = tagsTable.querySelector('input[name="population"]');
+                if (popInput) {
+                    popInput.value = populationValue;
+                }
+                
+                // Also set population:date to today
+                const today = new Date().toISOString().split('T')[0];
+                const popDateInput = tagsTable.querySelector('input[name="population:date"]');
+                if (popDateInput) {
+                    popDateInput.value = today;
+                }
+                
+                showToast('Info', `Population (${populationValue.toLocaleString()}) loaded from OpenStreetMap`, 'info');
+            }
+        }
         
         // Reset sliders to defaults
         simplifySlider.value = 5;  // Maps to ~0.001 tolerance
@@ -1077,6 +1098,8 @@ document.addEventListener('DOMContentLoaded', function() {
             }, 100);
         }
     } else {
+        // Default to 'community' type
+        typeSelect.value = 'community';
         updateFields();
     }
 });

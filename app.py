@@ -468,6 +468,7 @@ def search_osm():
                 'q': query,
                 'format': 'json',
                 'polygon_geojson': 1,
+                'extratags': 1,
                 'limit': 20
             },
             headers={
