@@ -40,7 +40,7 @@ document.addEventListener('DOMContentLoaded', function() {
         }
 
         try {
-            const response = await fetch('/api/search_areas', {
+            const response = await apiFetch('/api/search_areas', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -83,6 +83,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 </div>
             `).join('');
         } catch (error) {
+            if (error.message === 'Session expired') return;
             console.error('Error performing search:', error);
             let errorMessage = 'An unexpected error occurred';
 

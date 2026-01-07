@@ -154,6 +154,10 @@ def check_auth():
     if request.endpoint and request.endpoint not in [
             'login', 'static', 'health'
     ] and 'password' not in session:
+        # For API requests, return JSON 401 instead of redirect
+        # This allows JavaScript to detect session expiration and handle it gracefully
+        if request.path.startswith('/api/') or request.is_json or request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            return jsonify({'error': 'Session expired', 'session_expired': True}), 401
         return redirect(url_for('login', next=request.url))
 
 

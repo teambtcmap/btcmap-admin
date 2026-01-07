@@ -301,20 +301,21 @@ document.addEventListener('DOMContentLoaded', function() {
     async function loadSummary() {
         try {
             const params = getFilterParams();
-            const response = await fetch(`/api/lint/summary?${params}`);
+            const response = await apiFetch(`/api/lint/summary?${params}`);
             const data = await response.json();
             
             if (data.last_sync) {
                 updateUI(data);
             }
         } catch (error) {
+            if (error.message === 'Session expired') return;
             console.error('Error loading summary:', error);
         }
     }
 
     async function loadRules() {
         try {
-            const response = await fetch('/api/lint/rules');
+            const response = await apiFetch('/api/lint/rules');
             const data = await response.json();
             
             data.rules.forEach(rule => {
@@ -324,23 +325,25 @@ document.addEventListener('DOMContentLoaded', function() {
                 ruleFilter.appendChild(option);
             });
         } catch (error) {
+            if (error.message === 'Session expired') return;
             console.error('Error loading rules:', error);
         }
     }
 
     async function loadTags() {
         try {
-            const response = await fetch('/api/lint/tags');
+            const response = await apiFetch('/api/lint/tags');
             const data = await response.json();
             availableTags = data.tags || [];
         } catch (error) {
+            if (error.message === 'Session expired') return;
             console.error('Error loading tags:', error);
         }
     }
 
     async function loadCountries() {
         try {
-            const response = await fetch('/api/lint/countries');
+            const response = await apiFetch('/api/lint/countries');
             const data = await response.json();
             availableCountries = data.countries || [];
             
@@ -353,13 +356,14 @@ document.addEventListener('DOMContentLoaded', function() {
                 countryFilter.appendChild(option);
             });
         } catch (error) {
+            if (error.message === 'Session expired') return;
             console.error('Error loading countries:', error);
         }
     }
 
     async function loadOrganizations() {
         try {
-            const response = await fetch('/api/lint/community-orgs');
+            const response = await apiFetch('/api/lint/community-orgs');
             const data = await response.json();
             availableOrganizations = data.community_orgs || [];
             
@@ -372,6 +376,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 organizationFilter.appendChild(option);
             });
         } catch (error) {
+            if (error.message === 'Session expired') return;
             console.error('Error loading organizations:', error);
         }
     }
@@ -382,7 +387,7 @@ document.addEventListener('DOMContentLoaded', function() {
         syncSpinner.classList.remove('d-none');
 
         try {
-            const response = await fetch('/api/lint/sync', { method: 'POST' });
+            const response = await apiFetch('/api/lint/sync', { method: 'POST' });
             const data = await response.json();
 
             if (response.ok) {
@@ -396,6 +401,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 showToast('Error', data.error || 'Sync failed', 'error');
             }
         } catch (error) {
+            if (error.message === 'Session expired') return;
             console.error('Error syncing:', error);
             showToast('Error', 'Failed to sync areas', 'error');
         } finally {
@@ -436,7 +442,7 @@ document.addEventListener('DOMContentLoaded', function() {
         const url = `/api/lint/results?issues_only=true&${params}`;
 
         try {
-            const response = await fetch(url);
+            const response = await apiFetch(url);
             const data = await response.json();
 
             // Update summary stats with filtered data
@@ -459,6 +465,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 emptyState.style.display = 'block';
             }
         } catch (error) {
+            if (error.message === 'Session expired') return;
             console.error('Error loading results:', error);
         }
     }
@@ -611,7 +618,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 this.textContent = 'Fixing...';
 
                 try {
-                    const response = await fetch('/api/lint/fix', {
+                    const response = await apiFetch('/api/lint/fix', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ area_id: areaId, fix_action: fixAction })
@@ -630,6 +637,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         this.textContent = 'Retry';
                     }
                 } catch (error) {
+                    if (error.message === 'Session expired') return;
                     console.error('Error fixing:', error);
                     showToast('Error', 'Failed to apply fix', 'error');
                     this.disabled = false;

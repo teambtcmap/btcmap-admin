@@ -809,7 +809,7 @@ function updateGeoJson() {
         console.log('=== CLIENT: Full payload being sent ===');
         console.log(JSON.stringify(payload, null, 2));
 
-        fetch('/api/set_area_tag', {
+        apiFetch('/api/set_area_tag', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload)
@@ -833,6 +833,7 @@ function updateGeoJson() {
                 updateMapWithGeoJson(geometry);
             })
             .catch(error => {
+                if (error.message === 'Session expired') return;
                 console.log('=== CLIENT: Error ===');
                 console.error(error);
                 logDebug('Failed to update GeoJSON on server', error);
@@ -949,7 +950,7 @@ function updateTag(row) {
 
     console.log("Tag data to be sent:", {id: "{{ area.id }}", name: key, value: finalValue}); //Added console log
 
-    fetch('/api/set_area_tag', {
+    apiFetch('/api/set_area_tag', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -983,6 +984,7 @@ function updateTag(row) {
             }
         })
         .catch(error => {
+            if (error.message === 'Session expired') return;
             logDebug('Failed to update tag', error);
             showToast('Error', error.message, 'error');
         });
@@ -1275,7 +1277,7 @@ async function loadImageFromUrl(url) {
 
     try {
         // Use a proxy endpoint to fetch the image (avoids CORS issues)
-        const response = await fetch('/api/proxy_image', {
+        const response = await apiFetch('/api/proxy_image', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ url: url })
@@ -1325,6 +1327,7 @@ async function loadImageFromUrl(url) {
         img.src = imageSrc;
 
     } catch (error) {
+        if (error.message === 'Session expired') return;
         console.error('Error loading image from URL:', error);
         showIconError(error.message || 'Failed to load image from URL');
     } finally {
@@ -1444,7 +1447,7 @@ async function saveIcon() {
         });
 
         // Send to API
-        const response = await fetch('/api/set_area_icon', {
+        const response = await apiFetch('/api/set_area_icon', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -1552,6 +1555,7 @@ async function saveIcon() {
         showToast('Success', 'Icon updated successfully', 'success');
 
     } catch (error) {
+        if (error.message === 'Session expired') return;
         console.error('Error saving icon:', error);
         showIconError(error.message || 'Failed to save icon');
     } finally {
@@ -1578,7 +1582,7 @@ document.addEventListener('DOMContentLoaded', function() {
             this.textContent = 'Fixing...';
 
             try {
-                const response = await fetch('/api/lint/fix', {
+                const response = await apiFetch('/api/lint/fix', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ area_id: areaId, fix_action: fixAction })
@@ -1596,6 +1600,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     this.textContent = originalText;
                 }
             } catch (error) {
+                if (error.message === 'Session expired') return;
                 console.error('Error fixing:', error);
                 showToast('Error', 'Failed to apply fix', 'error');
                 this.disabled = false;

@@ -930,7 +930,7 @@ async function uploadIcon(areaId) {
     }
 
     try {
-        const response = await fetch('/api/set_area_icon', {
+        const response = await apiFetch('/api/set_area_icon', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -948,6 +948,9 @@ async function uploadIcon(areaId) {
 
         return { success: true };
     } catch (error) {
+        if (error.message === 'Session expired') {
+            return { success: false, error: 'Session expired' };
+        }
         console.error('Error uploading icon:', error);
         return { success: false, error: error.message };
     }
@@ -1013,7 +1016,7 @@ document.addEventListener('DOMContentLoaded', function() {
         submitAreaBtn.textContent = 'Creating Area...';
 
         try {
-            const response = await fetch('/add_area', {
+            const response = await apiFetch('/add_area', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
@@ -1064,6 +1067,7 @@ document.addEventListener('DOMContentLoaded', function() {
             }, 2000);
 
         } catch (error) {
+            if (error.message === 'Session expired') return;
             console.error('Error adding area:', error);
             showToast('Error', error.message || 'An unexpected error occurred', 'error');
         } finally {
