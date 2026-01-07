@@ -310,7 +310,7 @@
         </div>
         <div class="card-body">
             <p class="text-muted mb-3">Once you delete an area, there is no going back. Please be certain.</p>
-            <button class="btn btn-danger btn-lg" onclick="removeArea('{{ area.id }}')">Remove Area</button>
+            <button class="btn btn-danger btn-lg" onclick="confirmRemoveArea('{{ area.id }}')">Remove Area</button>
         </div>
     </div>
     {% endif %}
@@ -1041,6 +1041,20 @@ function handleTagsTableClick(e) {
             }
         );
     }
+}
+
+// Confirm and remove area
+function confirmRemoveArea(areaId) {
+    showToast(
+        'Confirm Delete',
+        'Are you sure you want to remove this area? This action cannot be undone.',
+        'warning',
+        {
+            confirmButtonText: 'Yes, delete it',
+            cancelButtonText: 'Cancel',
+            onConfirm: () => removeArea(areaId)
+        }
+    );
 }
 
 // Initialize everything after DOM is loaded
