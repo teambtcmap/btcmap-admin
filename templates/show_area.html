@@ -7,7 +7,12 @@
     <div class="d-flex justify-content-between align-items-start mt-5 mb-4">
         <div>
             <h1 class="mb-1">Area Details</h1>
-            <h2 class="mb-0">{{ area.tags.get('name', 'Unnamed Area') }} ({{ area.tags.get('type', 'Unknown Type') }})</h2>
+            <h2 class="mb-0">
+                {{ area.tags.get('name', 'Unnamed Area') }} ({{ area.tags.get('type', 'Unknown Type') }})
+                {% if area.is_deleted %}
+                <span class="badge bg-danger ms-2">Deleted</span>
+                {% endif %}
+            </h2>
         </div>
         <div class="position-relative area-icon-container">
             {% if area.tags.get('icon:square') %}
@@ -165,6 +170,42 @@
     </div>
     {% endif %}
 
+    <!-- Deleted Area Warning -->
+    {% if area.is_deleted %}
+    <div class="alert alert-danger mb-4">
+        <strong>This area has been deleted</strong>
+        {% if area.deleted_at %} on {{ area.deleted_at }}{% endif %}.
+        It is no longer visible on the public BTC Map.
+    </div>
+    {% endif %}
+
+    <!-- Area Metadata -->
+    <div class="card mb-4">
+        <div class="card-header">
+            <h6 class="mb-0">Area Metadata</h6>
+        </div>
+        <div class="card-body py-2">
+            <div class="row">
+                <div class="col-md-3">
+                    <small class="text-muted">ID</small>
+                    <div class="font-monospace">{{ area.id }}</div>
+                </div>
+                <div class="col-md-3">
+                    <small class="text-muted">Created</small>
+                    <div>{{ area.created_at or 'N/A' }}</div>
+                </div>
+                <div class="col-md-3">
+                    <small class="text-muted">Updated</small>
+                    <div>{{ area.updated_at or 'N/A' }}</div>
+                </div>
+                <div class="col-md-3">
+                    <small class="text-muted">Last Sync</small>
+                    <div>{{ area.last_sync or 'N/A' }}</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Map container with consistent styling -->
     <div id="map-container" class="position-relative mb-4">
         <div id="map" style="height: 400px; width: 100%;"></div>
@@ -235,6 +276,18 @@
         </div>
     </div>
 
+    {% if area.is_deleted %}
+    <!-- Create New Area from Template (for deleted areas) -->
+    <div class="card text-center border-primary mt-5 mb-4">
+        <div class="card-header bg-primary text-white">
+            <h3 class="mb-0">Recreate Area</h3>
+        </div>
+        <div class="card-body">
+            <p class="text-muted mb-3">This area has been deleted. You can create a new area using this one as a template.</p>
+            <a href="/add_area?template={{ area.id }}" class="btn btn-primary btn-lg">Create New Area from Template</a>
+        </div>
+    </div>
+    {% else %}
     <!-- Centered and styled danger zone -->
     <div class="card text-center border-danger mt-5 mb-4">
         <div class="card-header bg-danger text-white">
@@ -245,6 +298,7 @@
             <button class="btn btn-danger btn-lg" onclick="removeArea('{{ area.id }}')">Remove Area</button>
         </div>
     </div>
+    {% endif %}
 </div>
 {% endblock %}
 

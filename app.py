@@ -197,6 +197,20 @@ def select_area():
 def show_area(area_id):
     area = get_area(area_id)
     if area:
+        # Fetch from REST API to get deleted_at (RPC doesn't return it)
+        is_deleted = False
+        deleted_at = None
+        try:
+            api_response = requests.get(f"{API_BASE_URL}/v3/areas/{area_id}", timeout=10)
+            if api_response.ok:
+                api_data = api_response.json()
+                deleted_at = api_data.get('deleted_at')
+                is_deleted = bool(deleted_at)
+        except requests.exceptions.RequestException:
+            pass
+        
+        area['is_deleted'] = is_deleted
+        area['deleted_at'] = format_date(deleted_at) if deleted_at else None
         area['created_at'] = format_date(area.get('created_at'))
         area['updated_at'] = format_date(area.get('updated_at'))
         area['last_sync'] = format_date(area.get('last_sync'))
@@ -306,8 +320,23 @@ def add_area():
         app.logger.error(f"Error from RPC call: {result['error']}")
         return jsonify({'error': result['error']}), 400
 
+    # Check for template parameter to pre-fill form
+    template_area = None
+    template_id = request.args.get('template')
+    if template_id:
+        template_area = get_area(template_id)
+        if template_area:
+            # Also fetch geo_json which might need parsing
+            geo_json = template_area.get('tags', {}).get('geo_json')
+            if geo_json and isinstance(geo_json, str):
+                try:
+                    template_area['tags']['geo_json'] = json.loads(geo_json)
+                except json.JSONDecodeError:
+                    pass
+    
     return render_template('add_area.html',
-                           area_type_requirements=AREA_TYPE_REQUIREMENTS)
+                           area_type_requirements=AREA_TYPE_REQUIREMENTS,
+                           template_area=template_area)
 
 
 @app.route('/api/set_area_tag', methods=['POST'])
@@ -502,6 +531,7 @@ def search_areas():
     try:
         data = request.get_json()
         query = data.get('query', '').lower()
+        include_deleted = data.get('include_deleted', False)
 
         result = rpc_call('search', {'query': query})
 
@@ -514,11 +544,36 @@ def search_areas():
             return jsonify({'error': result['error']}), 400
 
         areas = result.get('result', [])
-        filtered_areas = [{
-            'id': area['id'],
-            'name': area['name'],
-            'type': area['type']
-        } for area in areas if area['type'] == 'area']
+        filtered_areas = []
+        for area in areas:
+            if area['type'] != 'area':
+                continue
+            
+            area_id = area['id']
+            is_deleted = False
+            
+            # Fetch area from REST API to get deleted_at field
+            # (RPC search results don't include deleted_at)
+            try:
+                api_response = requests.get(f"{API_BASE_URL}/v3/areas/{area_id}", timeout=10)
+                if api_response.ok:
+                    area_data = api_response.json()
+                    is_deleted = bool(area_data.get('deleted_at'))
+            except requests.exceptions.RequestException:
+                # If we can't fetch, assume not deleted
+                pass
+            
+            # Skip deleted areas unless include_deleted is True
+            if is_deleted and not include_deleted:
+                continue
+            
+            filtered_areas.append({
+                'id': area['id'],
+                'name': area['name'],
+                'type': area['type'],
+                'deleted': is_deleted
+            })
+        
         return jsonify(filtered_areas)
     except requests.exceptions.RequestException as e:
         app.logger.error(f"Network error in search_areas: {str(e)}")
@@ -780,7 +835,9 @@ def lint_rules():
 def get_area(area_id):
     result = rpc_call('get_area', {'id': area_id})
     if 'error' not in result:
-        return result['result']
+        return result.get('result')
+    # Log the error for debugging
+    app.logger.debug(f"get_area({area_id}) returned error: {result.get('error')}")
     return None
 
 def rpc_call(method, params):

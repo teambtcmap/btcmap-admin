@@ -9,6 +9,12 @@
         <div class="col-md-4">
             <form id="search-form" class="form-inline mb-3">
                 <input type="text" id="search-input" name="search" class="form-control mb-2 mr-sm-2" placeholder="Search by name ...">
+                <div class="form-check mt-2">
+                    <input class="form-check-input" type="checkbox" id="include-deleted" name="include_deleted">
+                    <label class="form-check-label" for="include-deleted">
+                        Include deleted areas
+                    </label>
+                </div>
             </form>
             <div id="search-results">
                 <p>Enter a search query to see results.</p>
@@ -25,12 +31,18 @@ document.addEventListener('DOMContentLoaded', function() {
     const searchForm = document.getElementById('search-form');
     const searchInput = document.getElementById('search-input');
     const searchResults = document.getElementById('search-results');
+    const includeDeletedCheckbox = document.getElementById('include-deleted');
     let searchTimeout;
 
     async function performSearch() {
         const searchQuery = searchInput.value.trim().toLowerCase();
         if (!searchQuery) {
             searchResults.innerHTML = '<p>Enter a search query to see results.</p>';
+            return;
+        }
+        
+        if (searchQuery.length < 3) {
+            searchResults.innerHTML = '<p class="text-muted">Please enter at least 3 characters to search.</p>';
             return;
         }
 
@@ -40,7 +52,10 @@ document.addEventListener('DOMContentLoaded', function() {
                 headers: {
                     'Content-Type': 'application/json',
                 },
-                body: JSON.stringify({ query: searchQuery })
+                body: JSON.stringify({ 
+                    query: searchQuery,
+                    include_deleted: includeDeletedCheckbox.checked
+                })
             });
 
             if (!response.ok) {
@@ -63,9 +78,12 @@ document.addEventListener('DOMContentLoaded', function() {
             }
 
             searchResults.innerHTML = data.map(area => `
-                <div class="card mb-2">
+                <div class="card mb-2${area.deleted ? ' border-secondary opacity-75' : ''}">
                     <div class="card-body">
-                        <h5 class="card-title">${escapeHtml(area.name || 'Unnamed Area')}</h5>
+                        <h5 class="card-title">
+                            ${escapeHtml(area.name || 'Unnamed Area')}
+                            ${area.deleted ? '<span class="badge bg-secondary ms-2">Deleted</span>' : ''}
+                        </h5>
                         <h6 class="card-subtitle mb-2 text-muted">${escapeHtml(area.type || 'Unknown Type')}</h6>
                         <p class="card-text">ID: ${escapeHtml(area.id)}</p>
                         <a href="/show_area/${encodeURIComponent(area.id)}" class="btn btn-primary btn-sm">View</a>
@@ -110,10 +128,19 @@ document.addEventListener('DOMContentLoaded', function() {
 
     searchInput.addEventListener('input', function() {
         clearTimeout(searchTimeout);
-        if (this.value.trim() === '') {
+        const query = this.value.trim();
+        if (query === '') {
             searchResults.innerHTML = '<p>Enter a search query to see results.</p>';
+        } else if (query.length < 3) {
+            searchResults.innerHTML = '<p class="text-muted">Please enter at least 3 characters to search.</p>';
         } else {
             searchTimeout = setTimeout(performSearch, 300);
+        }
+    });
+
+    includeDeletedCheckbox.addEventListener('change', function() {
+        if (searchInput.value.trim().length >= 3) {
+            performSearch();
         }
     });
 

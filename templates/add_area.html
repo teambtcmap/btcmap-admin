@@ -5,7 +5,12 @@
 {% block content %}
 <div class="container">
     <div class="d-flex justify-content-between align-items-start mt-5 mb-4">
-        <h1 class="mb-0">Add New Area</h1>
+        <div>
+            <h1 class="mb-0">Add New Area</h1>
+            {% if template_area %}
+            <p class="text-muted mb-0">Using deleted area "{{ template_area.tags.get('name', 'Unknown') }}" as template</p>
+            {% endif %}
+        </div>
         <div class="position-relative area-icon-container">
             <div id="icon-placeholder" class="d-flex align-items-center justify-content-center bg-light border" style="width: 80px; height: 80px; cursor: pointer;" data-bs-toggle="modal" data-bs-target="#editIconModal">
                 <span id="icon-placeholder-text" class="text-muted text-center" style="font-size: 0.7rem;">Click to<br>add icon</span>
@@ -157,6 +162,9 @@ document.addEventListener('DOMContentLoaded', function() {
     const addCustomFieldBtn = document.getElementById('add-custom-field-btn');
     const form = document.getElementById('add-area-form');
     const submitAreaBtn = document.getElementById('submit-area-btn');
+    
+    // Template data from deleted area (if any)
+    const templateArea = {{ template_area | tojson | safe if template_area else 'null' }};
 
     // Initialize map
     var map = L.map('map').setView([0, 0], 2);
@@ -623,7 +631,62 @@ document.addEventListener('DOMContentLoaded', function() {
     typeSelect.addEventListener('change', updateFields);
     addOptionalFieldBtn.addEventListener('click', addOptionalField);
     addCustomFieldBtn.addEventListener('click', addCustomField);
-    updateFields();
+    
+    // If we have template data, pre-fill the form
+    if (templateArea && templateArea.tags) {
+        const templateTags = templateArea.tags;
+        
+        // Set the area type first
+        if (templateTags.type) {
+            typeSelect.value = templateTags.type;
+            updateFields();
+            
+            // Now fill in the values
+            setTimeout(() => {
+                // Fill required fields
+                tagsTable.querySelectorAll('tr').forEach(row => {
+                    const keyElement = row.querySelector('td:first-child');
+                    const key = keyElement.textContent.trim();
+                    const valueInput = row.querySelector('td:nth-child(2) input, td:nth-child(2) select');
+                    
+                    if (valueInput && templateTags[key] !== undefined && key !== 'icon:square') {
+                        valueInput.value = templateTags[key];
+                    }
+                });
+                
+                // Add optional fields that have values in the template
+                const existingKeys = getExistingKeys();
+                Object.entries(templateTags).forEach(([key, value]) => {
+                    if (key === 'type' || key === 'geo_json' || key === 'icon:square' || existingKeys.includes(key)) {
+                        return;
+                    }
+                    
+                    // Check if it's an optional field for this type
+                    const requirements = areaTypeRequirements[templateTags.type]?.[key];
+                    if (requirements && !requirements.required) {
+                        const row = createTagRow(key, value, false, false, requirements.allowed_values);
+                        tagsTable.appendChild(row);
+                        // Set the value after adding (for selects)
+                        const valueInput = row.querySelector('td:nth-child(2) input, td:nth-child(2) select');
+                        if (valueInput) {
+                            valueInput.value = value;
+                        }
+                    } else if (!requirements) {
+                        // It's a custom field
+                        const row = createTagRow(key, value, false, false);
+                        tagsTable.appendChild(row);
+                    }
+                });
+                
+                // Load GeoJSON if present
+                if (templateTags.geo_json) {
+                    updateMap(templateTags.geo_json);
+                }
+            }, 100);
+        }
+    } else {
+        updateFields();
+    }
 });
 
 // ============================================
