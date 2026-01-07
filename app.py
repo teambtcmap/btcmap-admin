@@ -645,7 +645,7 @@ def lint_sync():
         batch_size = 100
         total_processed = 0
         total_fetched = 0
-        newest_update = None
+        newest_update = None  # Track global newest for final sync cursor
         seen_ids = set(r['area_id'] for r in lint_cache.results)
         batch_count = 0
         
@@ -669,15 +669,18 @@ def lint_sync():
             
             total_fetched += len(areas)
             new_in_batch = 0
+            batch_last_timestamp = None  # Track last item's timestamp for pagination cursor
             
             for area in areas:
                 area_id = str(area.get('id', ''))
                 area_updated = area.get('updated_at', '')
                 
-                # Track newest timestamp for cursor and final sync cursor
+                # Track newest timestamp globally for final sync cursor storage
                 if area_updated:
                     if newest_update is None or area_updated > newest_update:
                         newest_update = area_updated
+                    # Track last item's timestamp for pagination
+                    batch_last_timestamp = area_updated
                 
                 # Skip already seen areas
                 if area_id in seen_ids:
@@ -714,9 +717,10 @@ def lint_sync():
                     app.logger.error(f"Error advancing cursor: {e}")
                     break
             else:
-                # Use the newest timestamp from this batch as cursor
-                if newest_update:
-                    updated_since = newest_update
+                # Use the LAST item's timestamp from this batch as cursor
+                # (not the global max, as results may not be sorted by updated_at)
+                if batch_last_timestamp:
+                    updated_since = batch_last_timestamp
             
             # Pause between batches
             time.sleep(0.3)
