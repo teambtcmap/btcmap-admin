@@ -22,42 +22,6 @@
         </div>
     </div>
 
-    <!-- Summary Stats -->
-    <div class="row mb-4" id="summaryStats" style="display: none;">
-        <div class="col-md-3">
-            <div class="card text-center">
-                <div class="card-body">
-                    <h3 class="mb-0" id="statTotalAreas">0</h3>
-                    <small class="text-muted">Total Areas</small>
-                </div>
-            </div>
-        </div>
-        <div class="col-md-3">
-            <div class="card text-center">
-                <div class="card-body">
-                    <h3 class="mb-0" id="statAreasWithIssues">0</h3>
-                    <small class="text-muted">Areas with Issues</small>
-                </div>
-            </div>
-        </div>
-        <div class="col-md-3">
-            <div class="card text-center border-danger">
-                <div class="card-body">
-                    <h3 class="mb-0 text-danger" id="statErrors">0</h3>
-                    <small class="text-muted">Errors</small>
-                </div>
-            </div>
-        </div>
-        <div class="col-md-3">
-            <div class="card text-center border-warning">
-                <div class="card-body">
-                    <h3 class="mb-0 text-warning" id="statWarnings">0</h3>
-                    <small class="text-muted">Warnings</small>
-                </div>
-            </div>
-        </div>
-    </div>
-
     <!-- Filters -->
     <div class="card mb-4" id="filtersCard" style="display: none;">
         <div class="card-body">
@@ -107,9 +71,45 @@
             </div>
             
             <div class="row mt-3">
-                <div class="col-12">
+                <div class="col-12 d-flex justify-content-end">
+                    <button id="clearFiltersBtn" class="btn btn-outline-secondary me-2">Clear All</button>
                     <button id="applyFiltersBtn" class="btn btn-primary">Apply Filters</button>
-                    <button id="clearFiltersBtn" class="btn btn-outline-secondary ms-2">Clear All</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Summary Stats -->
+    <div class="row mb-4" id="summaryStats" style="display: none;">
+        <div class="col-md-3">
+            <div class="card text-center">
+                <div class="card-body">
+                    <h3 class="mb-0" id="statTotalAreas">0</h3>
+                    <small class="text-muted">Total Areas</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card text-center">
+                <div class="card-body">
+                    <h3 class="mb-0" id="statAreasWithIssues">0</h3>
+                    <small class="text-muted">Areas with Issues</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card text-center border-danger">
+                <div class="card-body">
+                    <h3 class="mb-0 text-danger" id="statErrors">0</h3>
+                    <small class="text-muted">Errors</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card text-center border-warning">
+                <div class="card-body">
+                    <h3 class="mb-0 text-warning" id="statWarnings">0</h3>
+                    <small class="text-muted">Warnings</small>
                 </div>
             </div>
         </div>
