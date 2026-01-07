@@ -1,3 +1,3 @@
 #!/bin/bash
 source venv/bin/activate
-python3 main.py
+FLASK_DEBUG=1 python3 main.py
