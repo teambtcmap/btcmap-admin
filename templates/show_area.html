@@ -243,6 +243,7 @@
                             <td>{{ key }}</td>
                             <td class="tag-value-cell">
                                 <span class="tag-value-content">{% if value is mapping %}[Object]{% else %}{{ value }}{% endif %}</span>
+                                {% if key != 'icon:square' %}
                                 {% if key in area_type_requirements and area_type_requirements[key].get('allowed_values') %}
                                 <select class="form-control tag-select d-none">
                                     {% for allowed_value in area_type_requirements[key].allowed_values %}
@@ -252,15 +253,20 @@
                                 {% else %}
                                 <input type="text" class="form-control tag-input d-none" value="{{ value if value is not mapping else '' }}">
                                 {% endif %}
+                                {% endif %}
                                 <div class="invalid-feedback"></div>
                             </td>
                             <td>
                                 <div class="btn-group">
+                                    {% if key == 'icon:square' %}
+                                    <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#editIconModal">Edit</button>
+                                    {% else %}
                                     <button class="btn btn-primary btn-sm edit-tag">Edit</button>
                                     <button class="btn btn-success btn-sm update-tag d-none">Update</button>
                                     <button class="btn btn-secondary btn-sm cancel-edit d-none">Cancel</button>
                                     {% if key not in area_type_requirements or not area_type_requirements[key].get('required', False) %}
                                     <button class="btn btn-danger btn-sm delete-tag">Remove</button>
+                                    {% endif %}
                                     {% endif %}
                                 </div>
                             </td>
