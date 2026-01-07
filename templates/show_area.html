@@ -57,8 +57,8 @@
 
                     <div class="mb-3">
                         <label for="iconFileInput" class="form-label">{% if area.tags.get('icon:square') %}Upload New Image to Replace{% else %}Upload Image{% endif %}</label>
-                        <input type="file" class="form-control" id="iconFileInput" accept="image/png,image/jpeg,image/webp">
-                        <div class="form-text">Accepted formats: PNG, JPG, WebP. The image will be cropped to a square.</div>
+                        <input type="file" class="form-control" id="iconFileInput" accept="image/png,image/jpeg,image/webp,image/svg+xml">
+                        <div class="form-text">Accepted formats: PNG, JPG, WebP, SVG. The image will be cropped to a square.</div>
                     </div>
 
                     <!-- Load from URL option -->
@@ -1160,9 +1160,9 @@ function handleFileSelect(e) {
     hideIconError();
 
     // Validate file type
-    const validTypes = ['image/png', 'image/jpeg', 'image/webp'];
+    const validTypes = ['image/png', 'image/jpeg', 'image/webp', 'image/svg+xml'];
     if (!validTypes.includes(file.type)) {
-        showIconError('Invalid file type. Please upload a PNG, JPG, or WebP image.');
+        showIconError('Invalid file type. Please upload a PNG, JPG, WebP, or SVG image.');
         return;
     }
 

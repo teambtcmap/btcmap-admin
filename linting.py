@@ -4,6 +4,7 @@ Area Linting System
 Provides lint rules and checks for area maintenance.
 """
 
+import fnmatch
 import re
 import requests
 from datetime import datetime, timedelta
@@ -397,10 +398,23 @@ class LintCache:
                             match = False
                             break
                     else:
-                        # Tag must match exact value
-                        if str(area_tag_value) != str(tag_value):
+                        # Tag must match value (supports wildcards with *)
+                        if area_tag_value is None:
                             match = False
                             break
+                        area_tag_str = str(area_tag_value)
+                        tag_value_str = str(tag_value)
+                        
+                        if '*' in tag_value_str:
+                            # Wildcard matching using fnmatch
+                            if not fnmatch.fnmatch(area_tag_str, tag_value_str):
+                                match = False
+                                break
+                        else:
+                            # Exact match
+                            if area_tag_str != tag_value_str:
+                                match = False
+                                break
                 if not match:
                     continue
             

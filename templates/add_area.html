@@ -33,8 +33,8 @@
                 <div class="modal-body">
                     <div class="mb-3">
                         <label for="iconFileInput" class="form-label">Upload Image</label>
-                        <input type="file" class="form-control" id="iconFileInput" accept="image/png,image/jpeg,image/webp">
-                        <div class="form-text">Accepted formats: PNG, JPG, WebP. The image will be cropped to a square.</div>
+                        <input type="file" class="form-control" id="iconFileInput" accept="image/png,image/jpeg,image/webp,image/svg+xml">
+                        <div class="form-text">Accepted formats: PNG, JPG, WebP, SVG. The image will be cropped to a square.</div>
                     </div>
                     
                     <div class="mb-3">
@@ -784,9 +784,9 @@ function handleIconFileSelect(e) {
 
     hideIconError();
 
-    const validTypes = ['image/png', 'image/jpeg', 'image/webp'];
+    const validTypes = ['image/png', 'image/jpeg', 'image/webp', 'image/svg+xml'];
     if (!validTypes.includes(file.type)) {
-        showIconError('Invalid file type. Please upload a PNG, JPG, or WebP image.');
+        showIconError('Invalid file type. Please upload a PNG, JPG, WebP, or SVG image.');
         return;
     }
 
