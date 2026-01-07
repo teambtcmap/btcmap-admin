@@ -885,6 +885,13 @@ def lint_countries():
     return jsonify({'countries': countries})
 
 
+@app.route('/api/lint/community-orgs')
+def lint_community_orgs():
+    """Get list of unique community_org tag values."""
+    orgs = lint_cache.get_community_orgs()
+    return jsonify({'community_orgs': orgs})
+
+
 def get_area(area_id):
     result = rpc_call('get_area', {'id': area_id})
     if 'error' not in result:

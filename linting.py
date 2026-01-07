@@ -621,6 +621,22 @@ class LintCache:
         
         return sorted(countries, key=lambda c: c['name'].lower())
     
+    def get_community_orgs(self) -> list[str]:
+        """Get list of unique organization tag values.
+        
+        Returns:
+            List of unique organization values sorted alphabetically.
+        """
+        orgs = set()
+        for area_result in self.results:
+            if area_result.get('is_deleted', False):
+                continue
+            organization = area_result.get('tags', {}).get('organization')
+            if organization:
+                orgs.add(organization)
+        
+        return sorted(list(orgs), key=lambda o: o.lower())
+    
     def build_country_index(self):
         """Build spatial index from country geometries for fast point-in-polygon lookups."""
         geometries = []

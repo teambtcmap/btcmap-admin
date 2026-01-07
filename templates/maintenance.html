@@ -53,6 +53,14 @@
                     </select>
                 </div>
                 <div class="col-md-2">
+                    <label for="organizationFilter" class="form-label">Organization</label>
+                    <select id="organizationFilter" class="form-select">
+                        <option value="">All Orgs</option>
+                    </select>
+                </div>
+            </div>
+            <div class="row mt-3">
+                <div class="col-md-2">
                     <label for="ruleFilter" class="form-label">Filter by Rule</label>
                     <select id="ruleFilter" class="form-select">
                         <option value="">All Rules</option>
@@ -198,6 +206,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const typeFilter = document.getElementById('typeFilter');
     const continentFilter = document.getElementById('continentFilter');
     const countryFilter = document.getElementById('countryFilter');
+    const organizationFilter = document.getElementById('organizationFilter');
     const ruleFilter = document.getElementById('ruleFilter');
     const severityFilter = document.getElementById('severityFilter');
     const includeDeleted = document.getElementById('includeDeleted');
@@ -209,6 +218,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     let availableTags = [];
     let availableCountries = [];
+    let availableOrganizations = [];
     let allResults = [];  // Store all results for pagination
     let currentPage = 1;
     const pageSize = 25;
@@ -224,6 +234,7 @@ document.addEventListener('DOMContentLoaded', function() {
     loadRules();
     loadTags();
     loadCountries();
+    loadOrganizations();
 
     // Event listeners
     syncBtn.addEventListener('click', syncAreas);
@@ -236,6 +247,7 @@ document.addEventListener('DOMContentLoaded', function() {
         if (typeFilter.value) params.append('type', typeFilter.value);
         if (continentFilter.value) params.append('tag.continent', continentFilter.value);
         if (countryFilter.value) params.append('country', countryFilter.value);
+        if (organizationFilter.value) params.append('tag.organization', organizationFilter.value);
         if (ruleFilter.value) params.append('rule', ruleFilter.value);
         if (severityFilter.value) params.append('severity', severityFilter.value);
         if (includeDeleted.checked) params.append('include_deleted', 'true');
@@ -257,6 +269,7 @@ document.addEventListener('DOMContentLoaded', function() {
         typeFilter.value = 'community';
         continentFilter.value = '';
         countryFilter.value = '';
+        organizationFilter.value = '';
         ruleFilter.value = '';
         severityFilter.value = '';
         includeDeleted.checked = false;
@@ -344,6 +357,25 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
+    async function loadOrganizations() {
+        try {
+            const response = await fetch('/api/lint/community-orgs');
+            const data = await response.json();
+            availableOrganizations = data.community_orgs || [];
+            
+            // Populate organization dropdown
+            organizationFilter.innerHTML = '<option value="">All Orgs</option>';
+            availableOrganizations.forEach(org => {
+                const option = document.createElement('option');
+                option.value = org;
+                option.textContent = org;
+                organizationFilter.appendChild(option);
+            });
+        } catch (error) {
+            console.error('Error loading organizations:', error);
+        }
+    }
+
     async function syncAreas() {
         syncBtn.disabled = true;
         syncBtnText.textContent = 'Syncing...';
@@ -358,6 +390,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 updateUI(data.summary);
                 loadTags();  // Reload available tags after sync
                 loadCountries();  // Reload countries after sync
+                loadOrganizations();  // Reload organizations after sync
                 loadResults();
             } else {
                 showToast('Error', data.error || 'Sync failed', 'error');
