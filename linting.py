@@ -91,6 +91,13 @@ LINT_RULES = {
         severity=Severity.ERROR,
         auto_fixable=False
     ),
+    'geo-json-large': LintRule(
+        id='geo-json-large',
+        name='Large GeoJSON',
+        description='GeoJSON contains more than 500 coordinate points',
+        severity=Severity.WARNING,
+        auto_fixable=False
+    ),
 }
 
 
@@ -186,6 +193,51 @@ def check_verified_stale(area: dict) -> Optional[LintResult]:
     return None
 
 
+def count_geojson_points(geo_json: dict) -> int:
+    """Count the total number of coordinate points in a GeoJSON object."""
+    if not geo_json:
+        return 0
+    
+    geom_type = geo_json.get('type', '')
+    coordinates = geo_json.get('coordinates', [])
+    
+    def count_points(coords, depth=0):
+        """Recursively count points in coordinate arrays."""
+        if not coords:
+            return 0
+        # If it's a point (list of numbers), count as 1
+        if isinstance(coords[0], (int, float)):
+            return 1
+        # Otherwise, recurse into nested arrays
+        return sum(count_points(c, depth + 1) for c in coords)
+    
+    if geom_type == 'GeometryCollection':
+        geometries = geo_json.get('geometries', [])
+        return sum(count_geojson_points(g) for g in geometries)
+    
+    return count_points(coordinates)
+
+
+def check_geo_json_large(area: dict) -> Optional[LintResult]:
+    """Check if geo_json has more than 500 coordinate points."""
+    tags = area.get('tags', {})
+    geo_json = tags.get('geo_json')
+    
+    if not geo_json:
+        return None
+    
+    point_count = count_geojson_points(geo_json)
+    
+    if point_count > 500:
+        return LintResult(
+            rule=LINT_RULES['geo-json-large'],
+            message=f'GeoJSON contains {point_count} points (exceeds 500 limit)',
+            current_value=str(point_count)
+        )
+    
+    return None
+
+
 def lint_area(area: dict) -> list[LintResult]:
     """Run all lint checks on an area and return results."""
     results = []
@@ -195,6 +247,7 @@ def lint_area(area: dict) -> list[LintResult]:
         check_icon_missing,
         check_icon_legacy_url,
         check_verified_stale,
+        check_geo_json_large,
     ]
     
     for check_fn in checks:
