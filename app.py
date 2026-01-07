@@ -730,6 +730,11 @@ def lint_sync():
         if newest_update:
             lint_cache.last_sync_cursor = newest_update
         
+        # Derive country for all communities based on geo_json centroids
+        app.logger.info("Deriving countries for communities...")
+        lint_cache.derive_countries_for_all_communities()
+        app.logger.info("Country derivation complete")
+        
         app.logger.info(f"Sync complete: {batch_count} batches, {total_fetched} fetched, {len(seen_ids)} unique, {total_processed} communities")
         
         return jsonify({
@@ -755,6 +760,7 @@ def lint_results():
     rule_filter = request.args.get('rule')
     severity_filter = request.args.get('severity')
     type_filter = request.args.get('type')
+    country_filter = request.args.get('country')
     include_deleted = request.args.get('include_deleted', 'false').lower() == 'true'
     issues_only = request.args.get('issues_only', 'true').lower() == 'true'
     
@@ -772,7 +778,8 @@ def lint_results():
         type_filter=type_filter,
         include_deleted=include_deleted,
         issues_only=issues_only,
-        tag_filters=tag_filters if tag_filters else None
+        tag_filters=tag_filters if tag_filters else None,
+        country_id=country_filter
     )
     
     return jsonify({
@@ -834,6 +841,13 @@ def lint_rules():
     """Get available lint rules."""
     rules = [rule.to_dict() for rule in LINT_RULES.values()]
     return jsonify({'rules': rules})
+
+
+@app.route('/api/lint/countries')
+def lint_countries():
+    """Get list of countries that have at least one community in them."""
+    countries = lint_cache.get_countries_with_communities()
+    return jsonify({'countries': countries})
 
 
 def get_area(area_id):

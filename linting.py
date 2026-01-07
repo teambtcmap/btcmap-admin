@@ -11,6 +11,8 @@ from datetime import datetime, timedelta
 from typing import Optional
 from dataclasses import dataclass, asdict
 from enum import Enum
+from shapely.geometry import shape, Point
+from shapely import STRtree
 
 
 class Severity(Enum):
@@ -311,16 +313,20 @@ class LintCache:
     """In-memory cache for global lint results."""
     
     def __init__(self):
-        self.results = []  # List of {area_id, area_name, area_type, is_deleted, issues: [...]}
+        self.results = []  # List of {area_id, area_name, area_type, is_deleted, country_id, country_name, issues: [...]}
         self.last_sync = None
         self.last_sync_cursor = None  # For incremental sync
         self.is_syncing = False
         self.sync_progress = {'current': 0, 'total': 0}
+        self._country_index = None  # STRtree for country lookup
+        self._country_geometries = []  # List of (area_id, area_name, geometry) tuples
     
     def clear(self):
         self.results = []
         self.last_sync = None
         self.last_sync_cursor = None
+        self._country_index = None
+        self._country_geometries = []
     
     def get_summary(self, type_filter: str = None, include_deleted: bool = False) -> dict:
         """Get summary statistics."""
@@ -367,13 +373,15 @@ class LintCache:
     
     def get_results(self, rule_filter: str = None, severity_filter: str = None, 
                     type_filter: str = None, include_deleted: bool = False,
-                    issues_only: bool = True, tag_filters: dict = None) -> list[dict]:
+                    issues_only: bool = True, tag_filters: dict = None,
+                    country_id: str = None) -> list[dict]:
         """Get filtered results.
         
         Args:
             tag_filters: Dict of {tag_name: tag_value} to filter by. 
                          Value can be None to match any value (tag exists),
                          or a string to match exact value.
+            country_id: Filter non-country areas by their derived country_id.
         """
         filtered = []
         
@@ -385,6 +393,11 @@ class LintCache:
             # Filter by area type
             if type_filter and area_result.get('area_type') != type_filter:
                 continue
+            
+            # Filter by country (only applies to non-country areas)
+            if country_id and area_result.get('area_type') != 'country':
+                if area_result.get('country_id') != country_id:
+                    continue
             
             # Filter by tags
             if tag_filters:
@@ -435,6 +448,8 @@ class LintCache:
                 'area_name': area_result['area_name'],
                 'area_type': area_result['area_type'],
                 'is_deleted': area_result.get('is_deleted', False),
+                'country_id': area_result.get('country_id'),
+                'country_name': area_result.get('country_name'),
                 'tags': area_result.get('tags', {}),
                 'issues': issues
             })
@@ -454,6 +469,120 @@ class LintCache:
                     all_tags.add(key)
         return sorted(list(all_tags))
     
+    def get_countries_with_communities(self) -> list[dict]:
+        """Get list of countries that have at least one community in them.
+        
+        Returns:
+            List of {id, name} dicts sorted alphabetically by name.
+        """
+        country_ids_with_communities = set()
+        for area_result in self.results:
+            if area_result.get('area_type') != 'country':
+                country_id = area_result.get('country_id')
+                if country_id:
+                    country_ids_with_communities.add(country_id)
+        
+        # Get country names from cached results
+        countries = []
+        for area_result in self.results:
+            if area_result.get('area_type') == 'country':
+                if area_result['area_id'] in country_ids_with_communities:
+                    countries.append({
+                        'id': area_result['area_id'],
+                        'name': area_result['area_name']
+                    })
+        
+        return sorted(countries, key=lambda c: c['name'].lower())
+    
+    def build_country_index(self):
+        """Build spatial index from country geometries for fast point-in-polygon lookups."""
+        geometries = []
+        self._country_geometries = []  # List of (area_id, area_name, geometry) tuples, indexed by position
+        
+        countries_with_geo = 0
+        countries_total = 0
+        
+        for area_result in self.results:
+            if area_result.get('area_type') != 'country':
+                continue
+            
+            countries_total += 1
+            geo_json = area_result.get('tags', {}).get('geo_json')
+            if not geo_json:
+                continue
+            
+            try:
+                geom = shape(geo_json)
+                if geom.is_valid:
+                    countries_with_geo += 1
+                    # Store by index position (STRtree.query returns indices in Shapely 2.x)
+                    self._country_geometries.append((
+                        area_result['area_id'],
+                        area_result['area_name'],
+                        geom
+                    ))
+                    geometries.append(geom)
+            except Exception:
+                # Skip invalid geometries
+                continue
+        
+        print(f"Country index: {countries_with_geo}/{countries_total} countries have valid geo_json")
+        
+        if geometries:
+            self._country_index = STRtree(geometries)
+        else:
+            self._country_index = None
+    
+    def derive_country_for_area(self, geo_json) -> tuple:
+        """Find which country contains the centroid of the given geometry.
+        
+        Returns:
+            Tuple of (country_id, country_name) or (None, 'Unknown') if not found.
+        """
+        if not self._country_index or not self._country_geometries or not geo_json:
+            return (None, 'Unknown')
+        
+        try:
+            geom = shape(geo_json)
+            centroid = geom.centroid
+            
+            # Query the spatial index for candidate country indices
+            # In Shapely 2.x, query() returns indices into the geometries list
+            candidate_indices = self._country_index.query(centroid)
+            
+            for idx in candidate_indices:
+                country_id, country_name, country_geom = self._country_geometries[idx]
+                if country_geom.contains(centroid):
+                    return (country_id, country_name)
+            
+            return (None, 'Unknown')
+        except Exception:
+            return (None, 'Unknown')
+    
+    def derive_countries_for_all_communities(self):
+        """Derive country for all non-country areas based on their geo_json centroid."""
+        self.build_country_index()
+        
+        countries_found = 0
+        communities_processed = 0
+        
+        for area_result in self.results:
+            if area_result.get('area_type') == 'country':
+                # Countries don't have a country_id
+                area_result['country_id'] = None
+                area_result['country_name'] = None
+                continue
+            
+            communities_processed += 1
+            geo_json = area_result.get('tags', {}).get('geo_json')
+            country_id, country_name = self.derive_country_for_area(geo_json)
+            area_result['country_id'] = country_id
+            area_result['country_name'] = country_name
+            if country_id:
+                countries_found += 1
+        
+        print(f"Country derivation: {countries_found}/{communities_processed} communities matched to countries")
+    
     def update_area(self, area_id: str, area: dict):
         """Update lint results for a single area."""
         is_deleted = area.get('deleted_at') is not None
@@ -464,11 +593,22 @@ class LintCache:
         else:
             issues = lint_area_dict(area)
         
+        area_type = area.get('tags', {}).get('type', 'unknown')
+        
+        # Derive country for non-country areas
+        country_id = None
+        country_name = None
+        if area_type != 'country':
+            geo_json = area.get('tags', {}).get('geo_json')
+            country_id, country_name = self.derive_country_for_area(geo_json)
+        
         area_result = {
             'area_id': str(area.get('id', area_id)),
             'area_name': area.get('tags', {}).get('name', 'Unknown'),
-            'area_type': area.get('tags', {}).get('type', 'unknown'),
+            'area_type': area_type,
             'is_deleted': is_deleted,
+            'country_id': country_id,
+            'country_name': country_name,
             'tags': area.get('tags', {}),  # Store full tags for search
             'issues': issues
         }

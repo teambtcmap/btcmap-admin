@@ -26,7 +26,7 @@
     <div class="card mb-4" id="filtersCard" style="display: none;">
         <div class="card-body">
             <div class="row">
-                <div class="col-md-3">
+                <div class="col-md-2">
                     <label for="typeFilter" class="form-label">Area Type</label>
                     <select id="typeFilter" class="form-select">
                         <option value="">All Types</option>
@@ -34,13 +34,31 @@
                         <option value="country">Country</option>
                     </select>
                 </div>
-                <div class="col-md-3">
+                <div class="col-md-2">
+                    <label for="continentFilter" class="form-label">Continent</label>
+                    <select id="continentFilter" class="form-select">
+                        <option value="">All Continents</option>
+                        <option value="africa">Africa</option>
+                        <option value="asia">Asia</option>
+                        <option value="europe">Europe</option>
+                        <option value="north-america">North America</option>
+                        <option value="oceania">Oceania</option>
+                        <option value="south-america">South America</option>
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label for="countryFilter" class="form-label">Country</label>
+                    <select id="countryFilter" class="form-select">
+                        <option value="">All Countries</option>
+                    </select>
+                </div>
+                <div class="col-md-2">
                     <label for="ruleFilter" class="form-label">Filter by Rule</label>
                     <select id="ruleFilter" class="form-select">
                         <option value="">All Rules</option>
                     </select>
                 </div>
-                <div class="col-md-3">
+                <div class="col-md-2">
                     <label for="severityFilter" class="form-label">Filter by Severity</label>
                     <select id="severityFilter" class="form-select">
                         <option value="">All Severities</option>
@@ -49,7 +67,7 @@
                         <option value="info">Info</option>
                     </select>
                 </div>
-                <div class="col-md-3">
+                <div class="col-md-2">
                     <div class="form-check mt-4">
                         <input class="form-check-input" type="checkbox" id="includeDeleted">
                         <label class="form-check-label" for="includeDeleted">Include Deleted</label>
@@ -179,6 +197,8 @@ document.addEventListener('DOMContentLoaded', function() {
     const emptyState = document.getElementById('emptyState');
     const initialState = document.getElementById('initialState');
     const typeFilter = document.getElementById('typeFilter');
+    const continentFilter = document.getElementById('continentFilter');
+    const countryFilter = document.getElementById('countryFilter');
     const ruleFilter = document.getElementById('ruleFilter');
     const severityFilter = document.getElementById('severityFilter');
     const includeDeleted = document.getElementById('includeDeleted');
@@ -190,6 +210,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const resultsCount = document.getElementById('resultsCount');
 
     let availableTags = [];
+    let availableCountries = [];
     let allResults = [];  // Store all results for pagination
     let currentPage = 1;
     const pageSize = 25;
@@ -204,6 +225,7 @@ document.addEventListener('DOMContentLoaded', function() {
     loadSummary();
     loadRules();
     loadTags();
+    loadCountries();
 
     // Event listeners
     syncBtn.addEventListener('click', syncAreas);
@@ -214,6 +236,8 @@ document.addEventListener('DOMContentLoaded', function() {
     function getFilterParams() {
         let params = new URLSearchParams();
         if (typeFilter.value) params.append('type', typeFilter.value);
+        if (continentFilter.value) params.append('tag.continent', continentFilter.value);
+        if (countryFilter.value) params.append('country', countryFilter.value);
         if (ruleFilter.value) params.append('rule', ruleFilter.value);
         if (severityFilter.value) params.append('severity', severityFilter.value);
         if (includeDeleted.checked) params.append('include_deleted', 'true');
@@ -233,6 +257,8 @@ document.addEventListener('DOMContentLoaded', function() {
 
     function clearAllFilters() {
         typeFilter.value = 'community';
+        continentFilter.value = '';
+        countryFilter.value = '';
         ruleFilter.value = '';
         severityFilter.value = '';
         includeDeleted.checked = false;
@@ -301,6 +327,25 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
+    async function loadCountries() {
+        try {
+            const response = await fetch('/api/lint/countries');
+            const data = await response.json();
+            availableCountries = data.countries || [];
+            
+            // Populate country dropdown
+            countryFilter.innerHTML = '<option value="">All Countries</option>';
+            availableCountries.forEach(country => {
+                const option = document.createElement('option');
+                option.value = country.id;
+                option.textContent = country.name;
+                countryFilter.appendChild(option);
+            });
+        } catch (error) {
+            console.error('Error loading countries:', error);
+        }
+    }
+
     async function syncAreas() {
         syncBtn.disabled = true;
         syncBtnText.textContent = 'Syncing...';
@@ -314,6 +359,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 showToast('Success', `Synced ${data.processed} areas`, 'success');
                 updateUI(data.summary);
                 loadTags();  // Reload available tags after sync
+                loadCountries();  // Reload countries after sync
                 loadResults();
             } else {
                 showToast('Error', data.error || 'Sync failed', 'error');
