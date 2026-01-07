@@ -251,7 +251,7 @@
                         <tr data-key="{{ key }}">
                             <td>{{ key }}</td>
                             <td class="tag-value-cell">
-                                <span class="tag-value-content">{% if value is mapping %}[Object]{% else %}{{ value }}{% endif %}</span>
+                                <span class="tag-value-content">{% if value is mapping %}[Object]{% elif key in area_type_requirements and area_type_requirements[key].get('type') == 'url' %}<a href="{{ value }}" target="_blank" rel="noopener noreferrer">{{ value }}</a>{% elif key in area_type_requirements and area_type_requirements[key].get('type') == 'email' %}<a href="mailto:{{ value }}">{{ value }}</a>{% elif value is string and (value.startswith('http://') or value.startswith('https://')) %}<a href="{{ value }}" target="_blank" rel="noopener noreferrer">{{ value }}</a>{% else %}{{ value }}{% endif %}</span>
                                 {% if key != 'icon:square' %}
                                 {% if key in area_type_requirements and area_type_requirements[key].get('allowed_values') %}
                                 <select class="form-control tag-select d-none">
