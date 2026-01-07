@@ -219,7 +219,7 @@
     </div>
     
     <!-- Separate section for Add Area button -->
-    <div class="mt-4 text-center">
+    <div class="mt-4 mb-5 text-center">
         <button id="submit-area-btn" class="btn btn-primary btn-lg">Add Area</button>
     </div>
 </div>
@@ -820,7 +820,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
         if (selectedType && areaTypeRequirements[selectedType]) {
             Object.entries(areaTypeRequirements[selectedType])
-                .filter(([_, requirements]) => requirements.required)
+                .filter(([key, requirements]) => requirements.required && key !== 'icon:square')
                 .forEach(([key, requirements]) => {
                     tagsTable.appendChild(createTagRow(
                         key, 
