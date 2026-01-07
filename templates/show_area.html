@@ -650,6 +650,7 @@ function createTagRow(key, value = '', isRequired = false, isCustom = false, all
                 : key}
         </td>
         <td class="tag-value-cell">
+            <span class="tag-value-content d-none"></span>
             ${allowedValues ? `
                 <select class="form-control tag-select">
                     <option value="">Select ${key}</option>
@@ -657,7 +658,7 @@ function createTagRow(key, value = '', isRequired = false, isCustom = false, all
                 </select>
             ` : `
                 <input type="${isNumericField ? 'number' : 'text'}" 
-                       class="form-control${isNumericField ? ' numeric-field' : ''}" 
+                       class="form-control tag-input${isNumericField ? ' numeric-field' : ''}" 
                        value="${value}"
                        ${isNumericField ? `min="0" step="${key === 'population' ? '1' : '0.01'}"` : ''}>
             `}
@@ -871,15 +872,41 @@ function startEditing(row) {
 
 function updateTag(row) {
     logDebug('Updating tag');
-    const key = row.dataset.key;
+    // Get key from data attribute, or from custom-key input for new custom tags
+    let key = row.dataset.key;
+    const customKeyInput = row.querySelector('.custom-key');
+    if (!key && customKeyInput) {
+        key = customKeyInput.value.trim();
+        if (!key) {
+            showToast('Error', 'Please enter a tag name', 'error');
+            return;
+        }
+        // Validate the custom key
+        if (!validateCustomKey(customKeyInput)) {
+            return;
+        }
+    }
+    
     const valueCell = row.querySelector('.tag-value-cell');
+    if (!valueCell) {
+        showToast('Error', 'Invalid row structure', 'error');
+        return;
+    }
     const input = valueCell.querySelector('.tag-input');
     const select = valueCell.querySelector('.tag-select');
     const content = valueCell.querySelector('.tag-value-content');
 
-    let value = (input && !input.classList.contains('d-none')) ? input.value :
-        (select && !select.classList.contains('d-none')) ? select.value :
-            content.textContent;
+    // Get value from visible input/select, checking for null before accessing classList
+    let value;
+    if (input && (!input.classList || !input.classList.contains('d-none'))) {
+        value = input.value;
+    } else if (select && (!select.classList || !select.classList.contains('d-none'))) {
+        value = select.value;
+    } else if (content) {
+        value = content.textContent;
+    } else {
+        value = '';
+    }
 
     // Validate the value
     const requirements = {{ area_type_requirements | tojson | safe }}[key] || {};
@@ -939,9 +966,17 @@ function updateTag(row) {
             if (data.error) {
                 throw new Error(data.error.message || 'Failed to update tag');
             }
-            content.textContent = value;  // Display the properly typed value
-            cancelEditing(row);
-            showToast('Success', 'Tag updated successfully', 'success');
+            // Check if this is a new tag (has .remove-field button instead of .delete-tag)
+            const isNewTag = row.querySelector('.remove-field') !== null;
+            if (isNewTag) {
+                // Reload page to show proper row structure for new tags
+                showToast('Success', 'Tag added successfully', 'success');
+                setTimeout(() => window.location.reload(), 1000);
+            } else {
+                content.textContent = value;  // Display the properly typed value
+                cancelEditing(row);
+                showToast('Success', 'Tag updated successfully', 'success');
+            }
         })
         .catch(error => {
             logDebug('Failed to update tag', error);
