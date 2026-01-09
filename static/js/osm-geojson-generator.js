@@ -41,6 +41,9 @@ function initOsmGeojsonGenerator(options = {}) {
         simplifyValue: document.getElementById('simplify-value'),
         bufferSlider: document.getElementById('buffer-slider'),
         bufferValue: document.getElementById('buffer-value'),
+        megaSimplifyCheckbox: document.getElementById('mega-simplify'),
+        tightnessSlider: document.getElementById('tightness-slider'),
+        tightnessValue: document.getElementById('tightness-value'),
         pointsCount: document.getElementById('points-count'),
         showOriginalBoundary: document.getElementById('show-original-boundary'),
         applyBtn: document.getElementById('apply-geojson-btn'),
@@ -112,6 +115,22 @@ function initOsmGeojsonGenerator(options = {}) {
         if (val < 0.001) return val.toFixed(5);
         if (val < 0.01) return val.toFixed(4);
         return val.toFixed(3);
+    }
+
+    // Convert tightness slider (0-10) to concavity for turf.convex()
+    // 0 = pure convex (concavity = Infinity)
+    // 10 = tighter fit (concavity = 1)
+    function sliderToConcavity(sliderVal) {
+        if (sliderVal === 0) return Infinity; // Pure convex hull
+        // Map 1-10 to concavity values (higher = looser, lower = tighter)
+        // 1 = 20 (loose), 10 = 1 (tight)
+        return Math.max(1, 21 - (sliderVal * 2));
+    }
+
+    function formatTightness(val) {
+        if (val === 0) return 'Loose';
+        if (val === 10) return 'Tight';
+        return val.toString();
     }
 
     // Search OSM via Nominatim
@@ -201,6 +220,18 @@ function initOsmGeojsonGenerator(options = {}) {
         elements.bufferSlider.value = 0.1;
         elements.bufferValue.textContent = '0.1';
         
+        // Reset mega simplify controls
+        if (elements.megaSimplifyCheckbox) {
+            elements.megaSimplifyCheckbox.checked = false;
+        }
+        if (elements.tightnessSlider) {
+            elements.tightnessSlider.value = 0;
+            elements.tightnessSlider.disabled = true;
+        }
+        if (elements.tightnessValue) {
+            elements.tightnessValue.textContent = 'Loose';
+        }
+        
         // Show controls and process
         elements.controls.style.display = 'block';
         
@@ -278,6 +309,26 @@ function initOsmGeojsonGenerator(options = {}) {
                     tolerance: tolerance,
                     highQuality: true
                 });
+            }
+            
+            // Apply mega simplify if checked
+            if (elements.megaSimplifyCheckbox && elements.megaSimplifyCheckbox.checked) {
+                const concavity = sliderToConcavity(parseFloat(elements.tightnessSlider.value));
+                
+                try {
+                    // Use turf.convex with concavity parameter
+                    // concavity: 1 = tight, Infinity = pure convex hull
+                    processed = turf.convex(processed, { concavity: concavity });
+                    
+                    if (!processed) {
+                        console.warn('[OsmGeojsonGenerator] Convex hull returned null');
+                        // Fallback: try pure convex
+                        processed = turf.convex(feature);
+                    }
+                } catch (e) {
+                    console.warn('[OsmGeojsonGenerator] Convex hull failed:', e.message);
+                    // Keep original processed value
+                }
             }
             
             processedGeojson = processed;
@@ -390,6 +441,28 @@ function initOsmGeojsonGenerator(options = {}) {
     
     if (elements.showOriginalBoundary) {
         elements.showOriginalBoundary.addEventListener('change', updateOriginalBoundaryLayer);
+    }
+    
+    // Mega simplify checkbox
+    if (elements.megaSimplifyCheckbox) {
+        elements.megaSimplifyCheckbox.addEventListener('change', function() {
+            // Enable/disable tightness slider based on checkbox
+            if (elements.tightnessSlider) {
+                elements.tightnessSlider.disabled = !this.checked;
+            }
+            processAndPreviewGeojson();
+        });
+    }
+    
+    // Tightness slider
+    if (elements.tightnessSlider) {
+        elements.tightnessSlider.addEventListener('input', function() {
+            const val = parseInt(this.value);
+            if (elements.tightnessValue) {
+                elements.tightnessValue.textContent = formatTightness(val);
+            }
+            processAndPreviewGeojson();
+        });
     }
     
     if (elements.applyBtn) {

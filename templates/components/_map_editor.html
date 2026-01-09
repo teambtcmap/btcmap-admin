@@ -1,12 +1,79 @@
-<!-- Map container with Edit GeoJSON button -->
+<!-- Map container with editing buttons -->
 <div id="map-container" class="position-relative mb-3">
     <div id="map" style="height: 400px; width: 100%;"></div>
-    <div id="map-buttons" class="position-absolute" style="top: 10px; right: 10px; z-index: 1000;">
+    <div id="map-buttons" class="position-absolute d-flex gap-2" style="top: 10px; right: 10px; z-index: 1000;">
+        <button id="edit-shape-btn" class="btn btn-primary btn-sm">Edit Shape</button>
         <button id="edit-geojson-btn" class="btn btn-primary btn-sm">Edit Raw GeoJSON</button>
     </div>
 </div>
 
-<!-- GeoJSON editing section -->
+<!-- Shape editing section (simplify/buffer/merge) -->
+<div id="shape-editor" class="card mb-3" style="display: none;">
+    <div class="card-body">
+        <div class="row mb-3">
+            <div class="col-md-6">
+                <label for="shape-simplify-slider" class="form-label">
+                    Simplification: <span id="shape-simplify-value">0</span>
+                </label>
+                <input type="range" class="form-range" id="shape-simplify-slider" 
+                       min="0" max="10" step="1" value="0">
+                <div class="d-flex justify-content-between">
+                    <small class="text-muted">More detail</small>
+                    <small class="text-muted">Less detail</small>
+                </div>
+            </div>
+            <div class="col-md-6">
+                    <label for="shape-buffer-slider" class="form-label">
+                        Buffer: <span id="shape-buffer-value">0</span> km
+                    </label>
+                    <input type="range" class="form-range" id="shape-buffer-slider" 
+                           min="0" max="5" step="0.1" value="0">
+                <div class="d-flex justify-content-between">
+                    <small class="text-muted">Exact</small>
+                    <small class="text-muted">Expanded</small>
+                </div>
+            </div>
+        </div>
+        
+        <div class="row mb-3">
+            <div class="col-md-6">
+                <div class="form-check mb-2">
+                    <input class="form-check-input" type="checkbox" id="shape-mega-simplify">
+                    <label class="form-check-label" for="shape-mega-simplify">
+                        Mega simplify
+                    </label>
+                </div>
+                <label for="shape-tightness-slider" class="form-label">
+                    Tightness: <span id="shape-tightness-value">Loose</span>
+                </label>
+                <input type="range" class="form-range" id="shape-tightness-slider" 
+                       min="0" max="10" step="1" value="0" disabled>
+                <div class="d-flex justify-content-between">
+                    <small class="text-muted">Convex (loose)</small>
+                    <small class="text-muted">Concave (tight)</small>
+                </div>
+            </div>
+        </div>
+        
+        <div class="d-flex justify-content-between align-items-center">
+            <div>
+                <span id="shape-points-count" class="badge bg-secondary me-2">Points: 0</span>
+                <div class="form-check form-check-inline">
+                    <input class="form-check-input" type="checkbox" id="shape-show-original" checked>
+                    <label class="form-check-label" for="shape-show-original">
+                        Show original shape
+                    </label>
+                </div>
+            </div>
+            <div class="btn-group">
+                <button id="apply-shape-btn" class="btn btn-success btn-sm">Update</button>
+                <button id="cancel-shape-btn" class="btn btn-secondary btn-sm">Cancel</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Raw GeoJSON editing section -->
 <div id="geojson-editor" class="mb-3" style="display: none;">
     <textarea id="geojson-input" class="form-control mb-2" rows="5"></textarea>
     <div class="btn-group">

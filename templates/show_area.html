@@ -216,25 +216,7 @@
     </div>
 
     {% include 'components/_geojson_generator.html' %}
-    
-    <!-- Map container - uses shared component but adds Update button for show_area -->
-    <div id="map-container" class="position-relative mb-3">
-        <div id="map" style="height: 400px; width: 100%;"></div>
-        <div id="map-buttons" class="position-absolute d-flex gap-2" style="top: 10px; right: 10px; z-index: 1000;">
-            <button id="update-polygon-btn" class="btn btn-success btn-sm">Update</button>
-            <button id="edit-geojson-btn" class="btn btn-primary btn-sm">Edit Raw GeoJSON</button>
-        </div>
-    </div>
-
-    <!-- GeoJSON editing section -->
-    <div id="geojson-editor" class="mb-3" style="display: none;">
-        <textarea id="geojson-input" class="form-control mb-2" rows="5"></textarea>
-        <div class="btn-group">
-            <button id="show-geojson-btn" class="btn btn-primary">Show</button>
-            <button id="save-locally-btn" class="btn btn-success">Save Locally</button>
-            <button id="cancel-geojson-btn" class="btn btn-secondary">Cancel</button>
-        </div>
-    </div>
+    {% include 'components/_map_editor.html' %}
 
     <!-- Area information with card styling -->
     <div class="card mb-4">
@@ -408,10 +390,37 @@ function initializeMapComponents() {
         }
     });
 
-    // Set up Update Polygon button (saves to server)
-    const updatePolygonBtn = document.getElementById('update-polygon-btn');
-    if (updatePolygonBtn) {
-        updatePolygonBtn.addEventListener('click', saveGeoJsonToServer);
+    // Override Save Locally button to also save to server (for show_area)
+    const saveLocallyBtn = document.getElementById('save-locally-btn');
+    if (saveLocallyBtn) {
+        // Remove default listener and add our own that saves to server
+        const newSaveBtn = saveLocallyBtn.cloneNode(true);
+        newSaveBtn.textContent = 'Update';
+        saveLocallyBtn.parentNode.replaceChild(newSaveBtn, saveLocallyBtn);
+        newSaveBtn.addEventListener('click', async function() {
+            const geoJsonInput = document.getElementById('geojson-input');
+            try {
+                const geoJson = JSON.parse(geoJsonInput.value);
+                mapEditor.updateGeoJson(geoJson);
+                document.getElementById('geojson-editor').style.display = 'none';
+                await saveGeoJsonToServer();
+            } catch (error) {
+                showToast('Error', 'Invalid GeoJSON: ' + error.message, 'error');
+            }
+        });
+    }
+
+    // Override shape editor Update button to also save to server
+    const applyShapeBtn = document.getElementById('apply-shape-btn');
+    if (applyShapeBtn) {
+        const originalClick = applyShapeBtn.onclick;
+        applyShapeBtn.addEventListener('click', async function() {
+            // The map-editor.js already applies the changes, we just need to save to server after
+            // Wait a moment for the shape to be applied
+            setTimeout(async () => {
+                await saveGeoJsonToServer();
+            }, 100);
+        });
     }
 }
 
