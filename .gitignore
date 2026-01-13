@@ -33,3 +33,4 @@ replit.nix
 # Others
 *.log
 *.sqlite
+.direnv
