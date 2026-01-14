@@ -6,7 +6,7 @@
 <div class="container">
     <div class="d-flex justify-content-between align-items-start mt-5 mb-4">
         <div>
-            <h1 class="mb-0">Add New Area</h1>
+            <h1 class="mb-0" id="add-new-area">Add New Area</h1>
             {% if template_area %}
             <p class="text-muted mb-0">Using deleted area "{{ template_area.tags.get('name', 'Unknown') }}" as template</p>
             {% endif %}
@@ -147,11 +147,21 @@
 {% block scripts %}
 <script src="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Turf.js/6.5.0/turf.min.js"></script>
+<script src="{{ url_for('static', filename='js/utils.js') }}"></script>
 <script src="{{ url_for('static', filename='js/validation.js') }}"></script>
 <script src="{{ url_for('static', filename='js/map-editor.js') }}"></script>
 <script src="{{ url_for('static', filename='js/osm-geojson-generator.js') }}"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
+    const issueId = GetURLParameter("issue-id")
+    document.getElementById("add-new-area").innerHTML += ` ${issueId}`
+    fetch(`https://gitea.btcmap.org/api/v1/repos/teambtcmap/btcmap-data/issues/${issueId}`).then(function(response) {
+      return response.json();
+    }).then(function(data) {
+      console.log(data);
+    }).catch(function(err) {
+      console.log('Fetch Error :-S', err);
+    });
     window.areaTypeRequirements = {{ area_type_requirements | tojson | safe }};
     const areaTypeRequirements = window.areaTypeRequirements;
     const typeSelect = document.getElementById('type');
