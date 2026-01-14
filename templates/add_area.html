@@ -162,15 +162,19 @@ document.addEventListener('DOMContentLoaded', function() {
         let issueReqData = body.data
         let issueText = issueReqData.body
         let issueData = {}
-        let issueKeys = ["Community name : ","Location: ","Associated areas: ","GeoJSON: ","Icon URL: ","Lightning: ","Social links: "]
-        let issueKeysNames = ["communityName","Location","associatedAreas","geoJSON","icon","lightningTips"]
+        let issueKeys = ["Community name : ","Location: ","Associated areas: ","GeoJSON: ","Icon URL: ","Lightning: ","Social links: ","Community leader contact: "]
+        let issueKeysNames = ["communityName","Location","associatedAreas","geoJSON","icon","lightningTips","contact"]
         for(let i=0;i< issueKeys.length-1; i++){
           issueData[issueKeysNames[i]] = issueText.substring(issueText.indexOf(issueKeys[i])+issueKeys[i].length,issueText.indexOf(issueKeys[i+1]))
         }
         console.log(issueData)
-        let icon;
-        let lightningTips;
-        let contact;
+        let contactRaw = issueData.contact.split("\n");
+        let contact = []
+        for(let i=0;i<contactRaw.length;i++){
+          if(contactRaw[i].length > 10){
+            contact.push(contactRaw[i])
+          }
+        }
         let description;
         console.log({
                     "NAME": issueData.communityName.replace("\n",""),
