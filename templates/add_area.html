@@ -164,6 +164,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const form = document.getElementById('add-area-form');
     const submitAreaBtn = document.getElementById('submit-area-btn');
     const issueId = GetURLParameter("issue-id")
+
     if(issueId){
       document.getElementById("add-new-area").innerHTML += ` ${issueId}`
       fetch(`api/gitea/get-issue/${issueId}`).then(function(response) {
@@ -184,7 +185,7 @@ document.addEventListener('DOMContentLoaded', function() {
             contact.push(contactRaw[i])
           }
         }
-        let description;
+        let selectedType = "community";
         let prefilledCommunityData = {
                     "name": issueData.communityName.replace("\n",""),
                     "icon": issueData.icon.replace("\n",""),
@@ -194,6 +195,11 @@ document.addEventListener('DOMContentLoaded', function() {
                   }
         tagsTable.querySelector('input[name="name"]').value = prefilledCommunityData.name
         document.getElementById("sugestions").innerHTML = `suggested logo: ${prefilledCommunityData.icon}`
+         
+     
+        const newRow = createTagRow('tips:lightning_address', prefilledCommunityData.lightningTips, false, false);
+        tagsTable.appendChild(newRow);
+        document.getElementById('tips:lightning_address').value = "tips:lightning_address"
       }).catch(function(err) {
         console.log('Fetch Error :-S', err);
       });
@@ -269,7 +275,7 @@ document.addEventListener('DOMContentLoaded', function() {
         row.innerHTML = `
             <td>
                 ${isCustom ? 
-                    `<input type="text" class="form-control custom-key" placeholder="Tag Name" required>
+                  `<input type="text" id="${key}" class="form-control custom-key" placeholder="Tag Name" required>
                      <div class="invalid-feedback">Please enter a valid key</div>` 
                     : key}
             </td>
