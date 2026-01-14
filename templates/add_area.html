@@ -162,8 +162,8 @@ document.addEventListener('DOMContentLoaded', function() {
         let issueReqData = body.data
         let issueText = issueReqData.body
         let issueData = {}
-        let issueKeys = ["Community name : ","Location: ","Associated areas: ","GeoJSON: ","Icon URL: ","Lightning: ","Social links: ","Community leader contact: "]
-        let issueKeysNames = ["communityName","Location","associatedAreas","geoJSON","icon","lightningTips","contact"]
+        let issueKeys = ["Community name : ","Location: ","Associated areas: ","GeoJSON: ","Icon URL: ","Lightning: ","Social links: ","Community leader contact: ","Notes: ","Created at: "]
+        let issueKeysNames = ["communityName","Location","associatedAreas","geoJSON","icon","lightningTips","contact","leaderContact","description"]
         for(let i=0;i< issueKeys.length-1; i++){
           issueData[issueKeysNames[i]] = issueText.substring(issueText.indexOf(issueKeys[i])+issueKeys[i].length,issueText.indexOf(issueKeys[i+1]))
         }
@@ -181,7 +181,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     "ICON": issueData.icon.replace("\n",""),
                     "LIGHTNING_TIPS": issueData.lightningTips.replace("\n",""),
                     "CONTACT": contact,
-                    "DESCRIPTION": description
+                    "DESCRIPTION": issueData.description.replace("\n","")
                   })
       }).catch(function(err) {
         console.log('Fetch Error :-S', err);
