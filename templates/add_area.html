@@ -162,8 +162,8 @@ document.addEventListener('DOMContentLoaded', function() {
         let issueReqData = body.data
         let issueText = issueReqData.body
         let issueData = {}
-        let issueKeys = ["Community name : ","Location: "]
-        let issueKeysNames = ["communityName"]
+        let issueKeys = ["Community name : ","Location: ","Associated areas: ","GeoJSON: ","Icon URL: ","Lightning: "]
+        let issueKeysNames = ["communityName","Location","associatedAreas","geoJSON","icon"]
         for(let i=0;i< issueKeys.length-1; i++){
           issueData[issueKeysNames[i]] = issueText.substring(issueText.indexOf(issueKeys[i])+issueKeys[i].length,issueText.indexOf(issueKeys[i+1]))
         }
@@ -174,7 +174,7 @@ document.addEventListener('DOMContentLoaded', function() {
         let description;
         console.log({
                     "NAME": issueData.communityName.replace("\n",""),
-                    "ICON": icon,
+                    "ICON": issueData.icon.replace("\n",""),
                     "LIGHTNING_TIPS": lightningTips,
                     "CONTACT": contact,
                     "DESCRIPTION": description
