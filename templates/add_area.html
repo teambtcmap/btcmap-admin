@@ -159,14 +159,21 @@ document.addEventListener('DOMContentLoaded', function() {
       fetch(`api/gitea/get-issue/${issueId}`).then(function(response) {
         return response.json();
       }).then(function(body) {
-        let issueData = body.data
-        let communityName;
+        let issueReqData = body.data
+        let issueText = issueReqData.body
+        let issueData = {}
+        let issueKeys = ["Community name : ","Location: "]
+        let issueKeysNames = ["communityName"]
+        for(let i=0;i< issueKeys.length-1; i++){
+          issueData[issueKeysNames[i]] = issueText.substring(issueText.indexOf(issueKeys[i])+issueKeys[i].length,issueText.indexOf(issueKeys[i+1]))
+        }
+        console.log(issueData)
         let icon;
         let lightningTips;
         let contact;
         let description;
         console.log({
-                    "NAME": communityName,
+                    "NAME": issueData.communityName.replace("\n",""),
                     "ICON": icon,
                     "LIGHTNING_TIPS": lightningTips,
                     "CONTACT": contact,
