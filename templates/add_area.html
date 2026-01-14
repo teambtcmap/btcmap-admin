@@ -154,14 +154,29 @@
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     const issueId = GetURLParameter("issue-id")
-    document.getElementById("add-new-area").innerHTML += ` ${issueId}`
-    fetch(`api/gitea/get-issue/${issueId}`).then(function(response) {
-      return response;
-    }).then(function(data) {
-      console.log(data);
-    }).catch(function(err) {
-      console.log('Fetch Error :-S', err);
-    });
+    if(issueId){
+      document.getElementById("add-new-area").innerHTML += ` ${issueId}`
+      fetch(`api/gitea/get-issue/${issueId}`).then(function(response) {
+        return response.json();
+      }).then(function(body) {
+        let issueData = body.data
+        let communityName;
+        let icon;
+        let lightningTips;
+        let contact;
+        let description;
+        console.log({
+                    "NAME": communityName,
+                    "ICON": icon,
+                    "LIGHTNING_TIPS": lightningTips,
+                    "CONTACT": contact,
+                    "DESCRIPTION": description
+                  })
+      }).catch(function(err) {
+        console.log('Fetch Error :-S', err);
+      });
+    }
+    
     window.areaTypeRequirements = {{ area_type_requirements | tojson | safe }};
     const areaTypeRequirements = window.areaTypeRequirements;
     const typeSelect = document.getElementById('type');
