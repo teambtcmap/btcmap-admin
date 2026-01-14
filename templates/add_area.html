@@ -153,6 +153,15 @@
 <script src="{{ url_for('static', filename='js/osm-geojson-generator.js') }}"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
+    
+    window.areaTypeRequirements = {{ area_type_requirements | tojson | safe }};
+    const areaTypeRequirements = window.areaTypeRequirements;
+    const typeSelect = document.getElementById('type');
+    const tagsTable = document.getElementById('tags-table').querySelector('tbody');
+    const addOptionalFieldBtn = document.getElementById('add-optional-field-btn');
+    const addCustomFieldBtn = document.getElementById('add-custom-field-btn');
+    const form = document.getElementById('add-area-form');
+    const submitAreaBtn = document.getElementById('submit-area-btn');
     const issueId = GetURLParameter("issue-id")
     if(issueId){
       document.getElementById("add-new-area").innerHTML += ` ${issueId}`
@@ -167,7 +176,6 @@ document.addEventListener('DOMContentLoaded', function() {
         for(let i=0;i< issueKeys.length-1; i++){
           issueData[issueKeysNames[i]] = issueText.substring(issueText.indexOf(issueKeys[i])+issueKeys[i].length,issueText.indexOf(issueKeys[i+1]))
         }
-        console.log(issueData)
         let contactRaw = issueData.contact.split("\n");
         let contact = []
         for(let i=0;i<contactRaw.length;i++){
@@ -176,26 +184,18 @@ document.addEventListener('DOMContentLoaded', function() {
           }
         }
         let description;
-        console.log({
-                    "NAME": issueData.communityName.replace("\n",""),
-                    "ICON": issueData.icon.replace("\n",""),
-                    "LIGHTNING_TIPS": issueData.lightningTips.replace("\n",""),
-                    "CONTACT": contact,
-                    "DESCRIPTION": issueData.description.replace("\n","")
-                  })
+        let prefilledCommunityData = {
+                    "name": issueData.communityName.replace("\n",""),
+                    "icon": issueData.icon.replace("\n",""),
+                    "lightningTips": issueData.lightningTips.replace("\n",""),
+                    "contact": contact,
+                    "description": issueData.description.replace("\n","")
+                  }
+        tagsTable.querySelector('input[name="name"]').value = prefilledCommunityData.name
       }).catch(function(err) {
         console.log('Fetch Error :-S', err);
       });
     }
-    
-    window.areaTypeRequirements = {{ area_type_requirements | tojson | safe }};
-    const areaTypeRequirements = window.areaTypeRequirements;
-    const typeSelect = document.getElementById('type');
-    const tagsTable = document.getElementById('tags-table').querySelector('tbody');
-    const addOptionalFieldBtn = document.getElementById('add-optional-field-btn');
-    const addCustomFieldBtn = document.getElementById('add-custom-field-btn');
-    const form = document.getElementById('add-area-form');
-    const submitAreaBtn = document.getElementById('submit-area-btn');
     
     // Template data from deleted area (if any)
     const templateArea = {{ template_area | tojson | safe if template_area else 'null' }};
