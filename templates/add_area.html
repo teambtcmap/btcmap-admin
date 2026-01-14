@@ -7,6 +7,7 @@
     <div class="d-flex justify-content-between align-items-start mt-5 mb-4">
         <div>
             <h1 class="mb-0" id="add-new-area">Add New Area</h1>
+            <p class="mb-0" id="sugestions"></p>
             {% if template_area %}
             <p class="text-muted mb-0">Using deleted area "{{ template_area.tags.get('name', 'Unknown') }}" as template</p>
             {% endif %}
@@ -192,6 +193,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     "description": issueData.description.replace("\n","")
                   }
         tagsTable.querySelector('input[name="name"]').value = prefilledCommunityData.name
+        document.getElementById("sugestions").innerHTML = `suggested logo: ${prefilledCommunityData.icon}`
       }).catch(function(err) {
         console.log('Fetch Error :-S', err);
       });
