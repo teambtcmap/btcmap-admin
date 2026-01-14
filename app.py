@@ -942,6 +942,10 @@ def lint_community_orgs():
     orgs = lint_cache.get_community_orgs()
     return jsonify({'community_orgs': orgs})
 
+@app.route('/api/gitea/get-issue/<int:issue_id>')
+def get_issue_data(issue_id):
+    return jsonify({'issue_id': issue_id})
+
 
 def get_area(area_id):
     result = rpc_call('get_area', {'id': area_id})
