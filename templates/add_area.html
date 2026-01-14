@@ -155,8 +155,8 @@
 document.addEventListener('DOMContentLoaded', function() {
     const issueId = GetURLParameter("issue-id")
     document.getElementById("add-new-area").innerHTML += ` ${issueId}`
-    fetch(`https://gitea.btcmap.org/api/v1/repos/teambtcmap/btcmap-data/issues/${issueId}`).then(function(response) {
-      return response.json();
+    fetch(`api/gitea/get-issue/${issueId}`).then(function(response) {
+      return response;
     }).then(function(data) {
       console.log(data);
     }).catch(function(err) {

@@ -944,7 +944,8 @@ def lint_community_orgs():
 
 @app.route('/api/gitea/get-issue/<int:issue_id>')
 def get_issue_data(issue_id):
-    return jsonify({'issue_id': issue_id})
+    req_data = requests.get("https://gitea.btcmap.org/api/v1/repos/teambtcmap/btcmap-data/issues/"+str(issue_id))
+    return jsonify({'data':req_data.json()})
 
 
 def get_area(area_id):
