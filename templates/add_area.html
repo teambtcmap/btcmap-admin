@@ -199,7 +199,6 @@ document.addEventListener('DOMContentLoaded', function() {
      
         const newRow = createTagRow('tips:lightning_address', prefilledCommunityData.lightningTips, false, false);
         tagsTable.appendChild(newRow);
-        document.getElementById('tips:lightning_address').value = "tips:lightning_address"
       }).catch(function(err) {
         console.log('Fetch Error :-S', err);
       });
