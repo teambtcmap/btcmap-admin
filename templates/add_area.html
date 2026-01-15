@@ -199,7 +199,7 @@ document.addEventListener('DOMContentLoaded', function() {
      
         let newRow = createTagRow('tips:lightning_address', prefilledCommunityData.lightningTips, false, false);
         tagsTable.appendChild(newRow);
-        let contactTagsInfo = [{name:"contact:discord",index:"discord"},{name:"contact:email",index:"@"}]
+        let contactTagsInfo = [{name:"contact:discord",index:"discord"},{name:"contact:email",index:"@"},{name:"contact:facebook",index:"facebook"}]
         for(let i=0;i<contact.length;i++){
           for(let j=0;j<contactTagsInfo.length;j++){
             if(contact[i].indexOf(contactTagsInfo[j].index) > -1){
