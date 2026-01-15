@@ -195,7 +195,10 @@ document.addEventListener('DOMContentLoaded', function() {
                   }
         tagsTable.querySelector('input[name="name"]').value = prefilledCommunityData.name
         document.getElementById("sugestions").innerHTML = `suggested logo: ${prefilledCommunityData.icon}`
-         
+        let urlAlias = prefilledCommunityData.name.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-zA-Z0-9\s]/g, "").toLowerCase().trim().replace(/\s+/g, "-");
+        tagsTable.querySelector('input[name="url_alias"]').value = urlAlias
+
+
         let newRow
         if(prefilledCommunityData?.lightningTips.length > 10){
           newRow = createTagRow('tips:lightning_address', prefilledCommunityData.lightningTips, false, false);
