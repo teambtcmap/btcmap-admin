@@ -196,9 +196,11 @@ document.addEventListener('DOMContentLoaded', function() {
         tagsTable.querySelector('input[name="name"]').value = prefilledCommunityData.name
         document.getElementById("sugestions").innerHTML = `suggested logo: ${prefilledCommunityData.icon}`
          
-     
-        let newRow = createTagRow('tips:lightning_address', prefilledCommunityData.lightningTips, false, false);
-        tagsTable.appendChild(newRow);
+        let newRow
+        if(prefilledCommunityData?.lightningTips.length > 10){
+          newRow = createTagRow('tips:lightning_address', prefilledCommunityData.lightningTips, false, false);
+          tagsTable.appendChild(newRow);
+        }
         newRow = createTagRow('description', prefilledCommunityData.description, false, false);
         tagsTable.appendChild(newRow);
         let contactTagsInfo = [{name:"contact:discord",index:/discord/},
