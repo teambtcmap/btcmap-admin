@@ -199,6 +199,8 @@ document.addEventListener('DOMContentLoaded', function() {
      
         let newRow = createTagRow('tips:lightning_address', prefilledCommunityData.lightningTips, false, false);
         tagsTable.appendChild(newRow);
+        newRow = createTagRow('description', prefilledCommunityData.description, false, false);
+        tagsTable.appendChild(newRow);
         let contactTagsInfo = [{name:"contact:discord",index:/discord/},
                                {name:"contact:email",index:/@/},
                                {name:"contact:facebook",index:/facebook/},
