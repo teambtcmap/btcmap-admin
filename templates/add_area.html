@@ -209,11 +209,12 @@ document.addEventListener('DOMContentLoaded', function() {
                                {name:"contact:matrix",index:/matrix|element[.]io|fluffychat|cinny[.]in/},
                                {name:"contact:meetup",index:/meetup[.]com/},
                                {name:"contact:nostr",index:/npub/},
-                               {name:"contact:phone",index:/(?:([+]\d{1,4})[-.\s]?)?(?:[(](\d{1,3})[)][-.\s]?)?(\d{1,4})[-.\s]?(\d{1,4})[-.\s]?(\d{1,9})/},
                                {name:"contact:rss",index:/feeds|rss/},
                                {name:"contact:signal",index:/signal[.]group/},
                                {name:"contact:telegram",index:/t[.]me/},
                                {name:"contact:twitter",index:/x[.]com|twitter[.]com/},
+                               {name:"contact:website",index:/https[://]/},
+                               {name:"contact:phone",index:/(?:([+]\d{1,4})[-.\s]?)?(?:[(](\d{1,3})[)][-.\s]?)?(\d{1,4})[-.\s]?(\d{1,4})[-.\s]?(\d{1,9})/},
                               ]
         for(let i=0;i<contact.length;i++){
           for(let j=0;j<contactTagsInfo.length;j++){
