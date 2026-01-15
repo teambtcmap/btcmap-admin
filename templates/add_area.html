@@ -163,82 +163,10 @@ document.addEventListener('DOMContentLoaded', function() {
     const addCustomFieldBtn = document.getElementById('add-custom-field-btn');
     const form = document.getElementById('add-area-form');
     const submitAreaBtn = document.getElementById('submit-area-btn');
+    
     const issueId = GetURLParameter("issue-id")
-
     if(issueId){
-      document.getElementById("add-new-area").innerHTML += ` ${issueId}`
-      fetch(`api/gitea/get-issue/${issueId}`).then(function(response) {
-        return response.json();
-      }).then(function(body) {
-        let issueReqData = body.data
-        let issueText = issueReqData.body
-        let issueData = {}
-        let issueKeys = ["Community name : ","Location: ","Associated areas: ","GeoJSON: ","Icon URL: ","Lightning: ","Social links: ","Community leader contact: ","Notes: ","Created at: "]
-        let issueKeysNames = ["communityName","Location","associatedAreas","geoJSON","icon","lightningTips","contact","leaderContact","description"]
-        for(let i=0;i< issueKeys.length-1; i++){
-          issueData[issueKeysNames[i]] = issueText.substring(issueText.indexOf(issueKeys[i])+issueKeys[i].length,issueText.indexOf(issueKeys[i+1]))
-        }
-        let contactRaw = issueData.contact.split("\n");
-        let contact = []
-        for(let i=0;i<contactRaw.length;i++){
-          if(contactRaw[i].length > 10){
-            contact.push(contactRaw[i])
-          }
-        }
-        let selectedType = "community";
-        let prefilledCommunityData = {
-                    "name": issueData.communityName.replace("\n",""),
-                    "icon": issueData.icon.replace("\n",""),
-                    "lightningTips": issueData.lightningTips.replace("\n",""),
-                    "contact": contact,
-                    "description": issueData.description.replace("\n","")
-                  }
-        tagsTable.querySelector('input[name="name"]').value = prefilledCommunityData.name
-        document.getElementById("sugestions").innerHTML = `suggested logo: ${prefilledCommunityData.icon}`
-        let urlAlias = prefilledCommunityData.name.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-zA-Z0-9\s]/g, "").toLowerCase().trim().replace(/\s+/g, "-");
-        tagsTable.querySelector('input[name="url_alias"]').value = urlAlias
-
-
-        let newRow
-        if(prefilledCommunityData?.lightningTips.length > 10){
-          newRow = createTagRow('tips:lightning_address', prefilledCommunityData.lightningTips, false, false);
-          tagsTable.appendChild(newRow);
-        }
-        if(prefilledCommunityData?.description.length > 10){
-          newRow = createTagRow('description', prefilledCommunityData.description, false, false);
-          tagsTable.appendChild(newRow);
-        }
-        let contactTagsInfo = [{name:"contact:discord",index:/discord/},
-                               {name:"contact:email",index:/@/},
-                               {name:"contact:facebook",index:/facebook/},
-                               {name:"contact:geyser",index:/geyser.fund/},
-                               {name:"contact:github",index:/github/},
-                               {name:"contact:instagram",index:/instagram/},
-                               {name:"contact:linkedin",index:/linkedin/},
-                               {name:"contact:matrix",index:/matrix|element[.]io|fluffychat|cinny[.]in/},
-                               {name:"contact:meetup",index:/meetup[.]com/},
-                               {name:"contact:nostr",index:/npub/},
-                               {name:"contact:rss",index:/feeds|rss/},
-                               {name:"contact:signal",index:/signal[.]group/},
-                               {name:"contact:telegram",index:/t[.]me/},
-                               {name:"contact:twitter",index:/x[.]com|twitter[.]com/},
-                               {name:"contact:whatsapp",index:/chat[.]whatsapp[.]com/},
-                               {name:"contact:youtube",index:/youtu[.]be|youtube[.]com/},
-                               {name:"contact:website",index:/https[://]/},
-                               {name:"contact:phone",index:/(?:([+]\d{1,4})[-.\s]?)?(?:[(](\d{1,3})[)][-.\s]?)?(\d{1,4})[-.\s]?(\d{1,4})[-.\s]?(\d{1,9})/},
-                              ]
-        for(let i=0;i<contact.length;i++){
-          for(let j=0;j<contactTagsInfo.length;j++){
-            if(contactTagsInfo[j].index.test(contact[i])){
-              let newRow = createTagRow(contactTagsInfo[j].name, contact[i], false, false);
-              tagsTable.appendChild(newRow);
-              break
-            }
-          } 
-        }
-      }).catch(function(err) {
-        console.log('Fetch Error :-S', err);
-      });
+        fillFieldsPassingIssue(issueId) 
     }
     
     // Template data from deleted area (if any)
@@ -474,6 +402,97 @@ document.addEventListener('DOMContentLoaded', function() {
     function addCustomField() {
         const newRow = createTagRow('', '', false, true);
         tagsTable.appendChild(newRow);
+    }
+  
+    async function treatIssueData(issueText){
+        let issueData = {}
+        let issueKeys = ["Community name : ","Location: ","Associated areas: ","GeoJSON: ","Icon URL: ","Lightning: ","Social links: ","Community leader contact: ","Notes: ","Created at: "]
+        let issueKeysNames = ["communityName","Location","associatedAreas","geoJSON","icon","lightningTips","contact","leaderContact","description"]
+        for(let i=0;i< issueKeys.length-1; i++){
+          issueData[issueKeysNames[i]] = issueText.substring(issueText.indexOf(issueKeys[i])+issueKeys[i].length,issueText.indexOf(issueKeys[i+1]))
+        }
+        return issueData;
+    }
+
+    async function fetchIssueData(issueId){
+        let response = await fetch(`api/gitea/get-issue/${issueId}`)
+        let issue = await response.json()
+        return issue.data
+    }
+
+    async function fillContact(issueData){ 
+        let contactRaw = issueData.contact.split("\n");
+        let contact = []
+        for(let i=0;i<contactRaw.length;i++){
+          if(contactRaw[i].length > 10){
+            contact.push(contactRaw[i])
+          }
+        }
+        return contact
+    }
+
+    async function fillContactFields(contact){
+      let contactTagsInfo = [{name:"contact:discord",index:/discord/},
+                               {name:"contact:email",index:/@/},
+                               {name:"contact:facebook",index:/facebook/},
+                               {name:"contact:geyser",index:/geyser.fund/},
+                               {name:"contact:github",index:/github/},
+                               {name:"contact:instagram",index:/instagram/},
+                               {name:"contact:linkedin",index:/linkedin/},
+                               {name:"contact:matrix",index:/matrix|element[.]io|fluffychat|cinny[.]in/},
+                               {name:"contact:meetup",index:/meetup[.]com/},
+                               {name:"contact:nostr",index:/npub/},
+                               {name:"contact:rss",index:/feeds|rss/},
+                               {name:"contact:signal",index:/signal[.]group/},
+                               {name:"contact:telegram",index:/t[.]me/},
+                               {name:"contact:twitter",index:/x[.]com|twitter[.]com/},
+                               {name:"contact:whatsapp",index:/chat[.]whatsapp[.]com/},
+                               {name:"contact:youtube",index:/youtu[.]be|youtube[.]com/},
+                               {name:"contact:website",index:/https[://]/},
+                               {name:"contact:phone",index:/(?:([+]\d{1,4})[-.\s]?)?(?:[(](\d{1,3})[)][-.\s]?)?(\d{1,4})[-.\s]?(\d{1,4})[-.\s]?(\d{1,9})/},
+                              ]
+        for(let i=0;i<contact.length;i++){
+          for(let j=0;j<contactTagsInfo.length;j++){
+            if(contactTagsInfo[j].index.test(contact[i])){
+              let newRow = createTagRow(contactTagsInfo[j].name, contact[i], false, false);
+              tagsTable.appendChild(newRow);
+              break
+            }
+          } 
+        }
+    }
+    
+    async function fillFields(issueData){
+      let contact = await fillContact(issueData) 
+      let prefilledCommunityData = {
+                    "name": issueData.communityName.replace("\n",""),
+                    "icon": issueData.icon.replace("\n",""),
+                    "lightningTips": issueData.lightningTips.replace("\n",""),
+                    "contact": contact,
+                    "description": issueData.description.replace("\n","")
+                  }
+        tagsTable.querySelector('input[name="name"]').value = prefilledCommunityData.name
+        document.getElementById("sugestions").innerHTML = `suggested logo: ${prefilledCommunityData.icon}`
+        let urlAlias = prefilledCommunityData.name.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-zA-Z0-9\s]/g, "").toLowerCase().trim().replace(/\s+/g, "-");
+        tagsTable.querySelector('input[name="url_alias"]').value = urlAlias
+
+
+        let newRow
+        if(prefilledCommunityData?.lightningTips.length > 10){
+          newRow = createTagRow('tips:lightning_address', prefilledCommunityData.lightningTips, false, false);
+          tagsTable.appendChild(newRow);
+        }
+        if(prefilledCommunityData?.description.length > 10){
+          newRow = createTagRow('description', prefilledCommunityData.description, false, false);
+          tagsTable.appendChild(newRow);
+        }
+        await fillContactFields(contact)
+    }
+
+    async function fillFieldsPassingIssue(issueId){
+        let issueReqData = await fetchIssueData(issueId) 
+        let issueData = await treatIssueData(issueReqData.body)
+        await fillFields(issueData)
     }
 
     window.validateAreaForm = function() {
@@ -947,6 +966,8 @@ async function uploadIcon(areaId) {
         return { success: false, error: error.message };
     }
 }
+
+
 
 // Initialize icon editor when DOM is ready
 document.addEventListener('DOMContentLoaded', function() {
