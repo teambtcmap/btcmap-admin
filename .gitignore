@@ -34,3 +34,4 @@ replit.nix
 *.log
 *.sqlite
 .direnv
+.env

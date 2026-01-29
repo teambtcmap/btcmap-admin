@@ -18,6 +18,7 @@ app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(minutes=30)
 app.config['SESSION_COOKIE_SECURE'] = True
 app.config['SESSION_COOKIE_HTTPONLY'] = True
 app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
+app.config['GITEA_BASE_URL'] = os.environ.get('SECRET_KEY', 'https://gitea.btcmap.org')
 
 API_BASE_URL = "https://api.btcmap.org"
 
@@ -944,8 +945,22 @@ def lint_community_orgs():
 
 @app.route('/api/gitea/get-issue/<int:issue_id>')
 def get_issue_data(issue_id):
-    req_data = requests.get("https://gitea.btcmap.org/api/v1/repos/teambtcmap/btcmap-data/issues/"+str(issue_id))
-    return jsonify({'data':req_data.json()})
+    try:
+        req_data = requests.get(
+            f"{app.config['GITEA_BASE_URL']}/api/v1/repos/teambtcmap/btcmap-data/issues/{issue_id}",
+            timeout=10
+        )
+        req_data.raise_for_status()
+        return jsonify({'success': True, 'data': req_data.json()})
+    except requests.exceptions.Timeout:
+        return jsonify({'error': 'Request to Gitea timed out'}), 408
+    except requests.exceptions.HTTPError as e:
+        if e.response.status_code == 404:
+            return jsonify({'error': f'Issue #{issue_id} not found'}), 404
+        return jsonify({'error': f'Gitea API error: {str(e)}'}), 502
+    except requests.exceptions.RequestException as e:
+        app.logger.error(f"Error fetching Gitea issue {issue_id}: {str(e)}")
+        return jsonify({'error': 'Failed to fetch issue data'}), 500
 
 
 def get_area(area_id):
