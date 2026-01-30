@@ -472,25 +472,26 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     async function fillContactFields(contact){
-      let contactTagsInfo = [{name:"contact:discord",index:/discord/},
-                               {name:"contact:email",index:/@/},
-                               {name:"contact:facebook",index:/facebook/},
-                               {name:"contact:geyser",index:/geyser.fund/},
-                               {name:"contact:github",index:/github/},
-                               {name:"contact:instagram",index:/instagram/},
-                               {name:"contact:linkedin",index:/linkedin/},
-                               {name:"contact:matrix",index:/matrix|element[.]io|fluffychat|cinny[.]in/},
-                               {name:"contact:meetup",index:/meetup[.]com/},
-                               {name:"contact:nostr",index:/npub/},
-                               {name:"contact:rss",index:/feeds|rss/},
-                               {name:"contact:signal",index:/signal[.]group/},
-                               {name:"contact:telegram",index:/t[.]me/},
-                               {name:"contact:twitter",index:/x[.]com|twitter[.]com/},
-                               {name:"contact:whatsapp",index:/chat[.]whatsapp[.]com/},
-                               {name:"contact:youtube",index:/youtu[.]be|youtube[.]com/},
-                               {name:"contact:website",index:/https[://]/},
-                               {name:"contact:phone",index:/(?:([+]\d{1,4})[-.\s]?)?(?:[(](\d{1,3})[)][-.\s]?)?(\d{1,4})[-.\s]?(\d{1,4})[-.\s]?(\d{1,9})/},
-                              ]
+      const contactTagsInfo = [
+          {name:"contact:email", index: /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/},
+          {name:"contact:discord", index: /discord\.gg|discord\.com/i},
+          {name:"contact:twitter", index: /(?:x\.com|twitter\.com)\/[\w]+/i},
+          {name:"contact:telegram", index: /t\.me\/[\w]+/i},
+          {name:"contact:signal", index: /signal\.group\//i},
+          {name:"contact:whatsapp", index: /chat\.whatsapp\.com\//i},
+          {name:"contact:facebook", index: /facebook\.com\/[\w.]+/i},
+          {name:"contact:instagram", index: /instagram\.com\/[\w._]+/i},
+          {name:"contact:youtube", index: /(?:youtu\.be|youtube\.com)\//i},
+          {name:"contact:github", index: /github\.com\/[\w-]+/i},
+          {name:"contact:linkedin", index: /linkedin\.com\//i},
+          {name:"contact:matrix", index: /@[\w._-]+:[\w.-]+/},
+          {name:"contact:meetup", index: /meetup\.com\//i},
+          {name:"contact:nostr", index: /^npub1[a-z0-9]{58}$/},
+          {name:"contact:geyser", index: /geyser\.fund\//i},
+          {name:"contact:rss", index: /\/(?:feed|rss)/i},
+          {name:"contact:phone", index: /^\+?[\d\s\-()]+$/},
+          {name:"contact:website", index: /^https?:\/\//i}
+      ]
         for(let i=0;i<contact.length;i++){
           for(let j=0;j<contactTagsInfo.length;j++){
             if(contactTagsInfo[j].index.test(contact[i])){
