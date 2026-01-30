@@ -1,4 +1,4 @@
 function GetURLParameter(sParam) {
     const params = new URLSearchParams(window.location.search)
-    return params.get(sParam)  // Automatically decoded
+    return params.get(sParam)
 }
