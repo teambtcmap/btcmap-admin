@@ -504,30 +504,34 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     async function fillFields(issueData){
-      let contact = await fillContact(issueData) 
+      let contact = await fillContact(issueData)
+      function cleanIssueText(text) {
+          return text?.replace(/\n/g, ' ').trim() || ''
+      }
+
       let prefilledCommunityData = {
-                    "name": issueData.communityName.replace("\n",""),
-                    "icon": issueData.icon.replace("\n",""),
-                    "lightningTips": issueData.lightningTips.replace("\n",""),
-                    "contact": contact,
-                    "description": issueData.description.replace("\n","")
-                  }
-        tagsTable.querySelector('input[name="name"]').value = prefilledCommunityData.name
-        document.getElementById("sugestions").textContent = `suggested logo: ${prefilledCommunityData.icon}`
-        let urlAlias = prefilledCommunityData.name.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-zA-Z0-9\s]/g, "").toLowerCase().trim().replace(/\s+/g, "-");
-        tagsTable.querySelector('input[name="url_alias"]').value = urlAlias
+          "name": cleanIssueText(issueData.communityName),
+          "icon": cleanIssueText(issueData.icon),
+          "lightningTips": cleanIssueText(issueData.lightningTips),
+          "contact": contact,
+          "description": cleanIssueText(issueData.description)
+      }
+      tagsTable.querySelector('input[name="name"]').value = prefilledCommunityData.name
+      document.getElementById("sugestions").textContent = `suggested logo: ${prefilledCommunityData.icon}`
+      let urlAlias = prefilledCommunityData.name.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-zA-Z0-9\s]/g, "").toLowerCase().trim().replace(/\s+/g, "-");
+      tagsTable.querySelector('input[name="url_alias"]').value = urlAlias
 
 
-        let newRow
-        if(prefilledCommunityData?.lightningTips.length > 10){
+      let newRow
+      if(prefilledCommunityData?.lightningTips.length > 10){
           newRow = createTagRow('tips:lightning_address', prefilledCommunityData.lightningTips, false, false);
           tagsTable.appendChild(newRow);
-        }
-        if(prefilledCommunityData?.description.length > 10){
+      }
+      if(prefilledCommunityData?.description.length > 10){
           newRow = createTagRow('description', prefilledCommunityData.description, false, false);
           tagsTable.appendChild(newRow);
-        }
-        await fillContactFields(contact)
+      }
+      await fillContactFields(contact)
     }
 
     async function fillFieldsPassingIssue(issueId){
