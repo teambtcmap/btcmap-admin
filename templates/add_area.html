@@ -415,9 +415,20 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     async function fetchIssueData(issueId){
-        let response = await fetch(`api/gitea/get-issue/${issueId}`)
-        let issue = await response.json()
-        return issue.data
+        try {
+            let response = await apiFetch(`/api/gitea/get-issue/${issueId}`)
+            let result = await response.json()
+            
+            if (!response.ok || result.error) {
+                throw new Error(result.error || 'Failed to fetch issue data')
+            }
+            
+            return result.data
+        } catch (error) {
+            if (error.message === 'Session expired') throw error;
+            showToast('Error', `Failed to load issue #${issueId}: ${error.message}`, 'error')
+            throw error
+        }
     }
 
     async function fillContact(issueData){ 
