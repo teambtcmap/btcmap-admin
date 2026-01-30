@@ -153,7 +153,7 @@
 <script src="{{ url_for('static', filename='js/map-editor.js') }}"></script>
 <script src="{{ url_for('static', filename='js/osm-geojson-generator.js') }}"></script>
 <script>
-document.addEventListener('DOMContentLoaded', function() {
+document.addEventListener('DOMContentLoaded', async function() {
     
     window.areaTypeRequirements = {{ area_type_requirements | tojson | safe }};
     const areaTypeRequirements = window.areaTypeRequirements;
@@ -163,11 +163,6 @@ document.addEventListener('DOMContentLoaded', function() {
     const addCustomFieldBtn = document.getElementById('add-custom-field-btn');
     const form = document.getElementById('add-area-form');
     const submitAreaBtn = document.getElementById('submit-area-btn');
-    
-    const issueId = GetURLParameter("issue-id")
-    if(issueId){
-        fillFieldsPassingIssue(issueId) 
-    }
     
     // Template data from deleted area (if any)
     const templateArea = {{ template_area | tojson | safe if template_area else 'null' }};
@@ -268,7 +263,6 @@ document.addEventListener('DOMContentLoaded', function() {
         if (!isRequired) {
             row.querySelector('.remove-field').addEventListener('click', function() {
                 row.remove();
-                updateOptionalFieldSelect();
             });
         }
 
@@ -335,7 +329,6 @@ document.addEventListener('DOMContentLoaded', function() {
                     ));
                 });
         }
-        updateOptionalFieldSelect();
     }
 
     function addOptionalField() {
@@ -388,12 +381,10 @@ document.addEventListener('DOMContentLoaded', function() {
                 requirements.allowed_values
             );
             tagsTable.replaceChild(row, newRow);
-            updateOptionalFieldSelect();
         });
 
         newRow.querySelector('.remove-field').addEventListener('click', function() {
             newRow.remove();
-            updateOptionalFieldSelect();
         });
 
         tagsTable.appendChild(newRow);
@@ -669,6 +660,11 @@ document.addEventListener('DOMContentLoaded', function() {
         // Default to 'community' type
         typeSelect.value = 'community';
         updateFields();
+    }
+  
+    const issueId = GetURLParameter("issue-id")
+    if(issueId){
+       await fillFieldsPassingIssue(issueId) 
     }
 });
 
