@@ -35,7 +35,10 @@ AREA_TYPE_REQUIREMENTS = {
         },
         'url_alias': {
             'required': True,
-            'type': 'text'
+            'type': 'text',
+            'min_length': 2,
+            'max_length': 100,
+            'pattern': r'^[a-z0-9\-]+$'
         },
         'continent': {
             'required': True,
@@ -68,7 +71,8 @@ AREA_TYPE_REQUIREMENTS = {
         },
         'contact:twitter': {
             'required': False,
-            'type': 'url'
+            'type': 'url',
+            'pattern': r'(?:x\.com|twitter\.com)\/[\w]+'
         },
         'contact:website': {
             'required': False,
@@ -80,47 +84,58 @@ AREA_TYPE_REQUIREMENTS = {
         },
         'contact:telegram': {
             'required': False,
-            'type': 'url'
+            'type': 'url',
+            'pattern': r't\.me\/[\w]+'
         },
         'contact:signal': {
             'required': False,
-            'type': 'url'
+            'type': 'url',
+            'pattern': r'signal\.group\/'
         },
         'contact:whatsapp': {
             'required': False,
-            'type': 'url'
+            'type': 'url',
+            'pattern': r'chat\.whatsapp\.com\/'
         },
         'contact:nostr': {
             'required': False,
-            'type': 'text'
+            'type': 'text',
+            'pattern': r'^npub1[a-z0-9]{58}$'
         },
         'contact:meetup': {
             'required': False,
-            'type': 'url'
+            'type': 'url',
+            'pattern': r'meetup\.com\/'
         },
         'contact:discord': {
             'required': False,
-            'type': 'url'
+            'type': 'url',
+            'pattern': r'discord\.gg|discord\.com'
         },
         'contact:instagram': {
             'required': False,
-            'type': 'url'
+            'type': 'url',
+            'pattern': r'instagram\.com\/[\w._]+'
         },
         'contact:youtube': {
             'required': False,
-            'type': 'url'
+            'type': 'url',
+            'pattern': r'(?:youtu\.be|youtube\.com)\/'
         },
         'contact:facebook': {
             'required': False,
-            'type': 'url'
+            'type': 'url',
+            'pattern': r'facebook\.com\/[\w.]+'
         },
         'contact:linkedin': {
             'required': False,
-            'type': 'url'
+            'type': 'url',
+            'pattern': r'linkedin\.com\/'
         },
         'contact:rss': {
             'required': False,
-            'type': 'url'
+            'type': 'url',
+            'pattern': r'\/(?:feed|rss)'
         },
         'contact:phone': {
             'required': False,
@@ -128,23 +143,30 @@ AREA_TYPE_REQUIREMENTS = {
         },
         'contact:github': {
             'required': False,
-            'type': 'url'
+            'type': 'url',
+            'pattern': r'github\.com\/[\w-]+'
         },
         'contact:matrix': {
             'required': False,
-            'type': 'url'
+            'type': 'url',
+            'matrix': r'@[\w._-]+:[\w.-]+'
         },
         'contact:geyser': {
             'required': False,
-            'type': 'url'
+            'type': 'url',
+            'pattern': r'geyser\.fund\/'
         },
         'tips:lightning_address': {
             'required': False,
-            'type': 'text'
+            'type': 'text',
+            'min_length': 10,
+            'pattern': r'^[\w\.\-]+@[\w\.\-]+\.[a-zA-Z]{2,}$'
         },
         'description': {
             'required': False,
-            'type': 'text'
+            'type': 'text',
+            'min_length': 10,
+            'max_length': 500
         }
     }
 }
