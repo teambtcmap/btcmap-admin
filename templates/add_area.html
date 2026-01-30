@@ -504,6 +504,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     async function fillFields(issueData){
+      const MIN_FIELD_LENGTH = 10;
       let contact = await fillContact(issueData)
       function cleanIssueText(text) {
           return text?.replace(/\n/g, ' ').trim() || ''
@@ -523,11 +524,11 @@ document.addEventListener('DOMContentLoaded', function() {
 
 
       let newRow
-      if(prefilledCommunityData?.lightningTips.length > 10){
+      if(prefilledCommunityData?.lightningTips.length > MIN_FIELD_LENGTH){
           newRow = createTagRow('tips:lightning_address', prefilledCommunityData.lightningTips, false, false);
           tagsTable.appendChild(newRow);
       }
-      if(prefilledCommunityData?.description.length > 10){
+      if(prefilledCommunityData?.description.length > MIN_FIELD_LENGTH){
           newRow = createTagRow('description', prefilledCommunityData.description, false, false);
           tagsTable.appendChild(newRow);
       }
