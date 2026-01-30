@@ -405,13 +405,42 @@ document.addEventListener('DOMContentLoaded', function() {
     }
   
     async function treatIssueData(issueText){
-        let issueData = {}
-        let issueKeys = ["Community name : ","Location: ","Associated areas: ","GeoJSON: ","Icon URL: ","Lightning: ","Social links: ","Community leader contact: ","Notes: ","Created at: "]
-        let issueKeysNames = ["communityName","Location","associatedAreas","geoJSON","icon","lightningTips","contact","leaderContact","description"]
-        for(let i=0;i< issueKeys.length-1; i++){
-          issueData[issueKeysNames[i]] = issueText.substring(issueText.indexOf(issueKeys[i])+issueKeys[i].length,issueText.indexOf(issueKeys[i+1]))
+        const issueData = {}
+        const issueTemplate = {
+              "Community name : ": "communityName",
+              "Location: ": "location",
+              "Associated areas: ": "associatedAreas",
+              "GeoJSON: ": "geoJSON",
+              "Icon URL: ": "icon",
+              "Lightning: ": "lightningTips",
+              "Social links: ": "contact",
+              "Community leader contact: ": "leaderContact",
+              "Notes: ": "description"
         }
-        return issueData;
+        
+        const keys = Object.keys(issueTemplate)
+        
+        for (let i = 0; i < keys.length; i++) {
+            const startKey = keys[i]
+            const endKey = keys[i + 1] || "Created at: "
+            const fieldName = issueTemplate[startKey]
+             
+            const startIdx = issueText.indexOf(startKey)
+            if (startIdx === -1) {
+                console.warn(`Issue template missing field: ${startKey}`)
+                issueData[fieldName] = ""
+                continue
+            }
+              
+            const endIdx = issueText.indexOf(endKey, startIdx + startKey.length)
+            if (endIdx === -1) {
+                issueData[fieldName] = issueText.substring(startIdx + startKey.length).trim()
+            } else {
+                issueData[fieldName] = issueText.substring(startIdx + startKey.length, endIdx).trim()
+            }
+        }
+          
+        return issueData
     }
 
     async function fetchIssueData(issueId){
