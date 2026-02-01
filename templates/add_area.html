@@ -395,7 +395,7 @@ document.addEventListener('DOMContentLoaded', async function() {
         tagsTable.appendChild(newRow);
     }
   
-    async function treatIssueData(issueText){
+    async function parseIssueData(issueText){
         const issueData = {}
         const issueTemplate = {
               "Community name: ": "communityName",
@@ -528,7 +528,7 @@ document.addEventListener('DOMContentLoaded', async function() {
 
     async function fillFieldsPassingIssue(issueId){
         let issueReqData = await fetchIssueData(issueId) 
-        let issueData = await treatIssueData(issueReqData.body)
+        let issueData = await parseIssueData(issueReqData.body)
         await fillFields(issueData)
     }
 
@@ -662,7 +662,7 @@ document.addEventListener('DOMContentLoaded', async function() {
         updateFields();
     }
   
-    const issueId = GetURLParameter("issue-id")
+    const issueId = getURLParameter("issue-id")
     if(issueId){
        await fillFieldsPassingIssue(issueId) 
     }
