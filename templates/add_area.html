@@ -155,6 +155,7 @@
 <script>
 document.addEventListener('DOMContentLoaded', async function() {
     
+    const MIN_FIELD_LENGTH = 10;
     window.areaTypeRequirements = {{ area_type_requirements | tojson | safe }};
     const areaTypeRequirements = window.areaTypeRequirements;
     const typeSelect = document.getElementById('type');
@@ -394,7 +395,13 @@ document.addEventListener('DOMContentLoaded', async function() {
         const newRow = createTagRow('', '', false, true);
         tagsTable.appendChild(newRow);
     }
-  
+    
+    /**
+     * With issue body, process its data and transform in a base object 
+     * @param {string} issueText - The the field social links with all community contact information 
+     * @returns {Promise<Object>} The issue body data as a parsed object with the main properties 
+     * @throws {} 
+     */
     async function parseIssueData(issueText){
         const issueData = {}
         const issueTemplate = {
@@ -433,7 +440,12 @@ document.addEventListener('DOMContentLoaded', async function() {
           
         return issueData
     }
-
+    /**
+     * Fetches issue data from Gitea API
+     * @param {number} issueId - The Gitea issue ID
+     * @returns {Promise<Object>} The issue data object
+     * @throws {Error} If the fetch fails or issue doesn't exist, if a timeout happens or if has an server or API service error. 
+     */
     async function fetchIssueData(issueId){
         try {
             let response = await apiFetch(`/api/gitea/get-issue/${issueId}`)
@@ -450,18 +462,28 @@ document.addEventListener('DOMContentLoaded', async function() {
             throw error
         }
     }
-
-    async function fillContact(issueData){ 
-        let contactRaw = issueData.contact.split("\n");
+    /**
+    * The social links string content is tranformed in a string array with contact information  
+    * @param {string} contactText - The the field social links with all community contact information 
+    * @returns {Array<string>} - Array with contact information 
+    * @throws {} 
+    */
+    function fillContact(contactText){ 
+        let contactRaw = contactText.split("\n");
         let contact = []
         for(let i=0;i<contactRaw.length;i++){
-          if(contactRaw[i].length > 10){
+          if(contactRaw[i].length > MIN_FIELD_LENGTH){
             contact.push(contactRaw[i])
           }
         }
         return contact
     }
-
+    /**
+    * With contact data that comes from fillFields fill the optional fields on form that are related with community contact 
+    * @param {Array<string>} contact - The the field social links with all community contact information 
+    * @returns {} 
+    * @throws {} 
+    */
     async function fillContactFields(contact){
       const contactTagsInfo = [
           {name:"contact:email", index: /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/},
@@ -494,12 +516,14 @@ document.addEventListener('DOMContentLoaded', async function() {
         }
     }
     
+    /**
+     * With issue data fill forms fields to add community 
+     * @param {Object} issueData - The Gitea issue data that comes from fetchIssueData
+     * @returns {} 
+     * @throws {} 
+     */
     async function fillFields(issueData){
-      const MIN_FIELD_LENGTH = 10;
-      let contact = await fillContact(issueData)
-      function cleanIssueText(text) {
-          return text?.replace(/\n/g, ' ').trim() || ''
-      }
+      let contact = fillContact(issueData.contact)
 
       let prefilledCommunityData = {
           "name": cleanIssueText(issueData.communityName),
@@ -526,6 +550,12 @@ document.addEventListener('DOMContentLoaded', async function() {
       await fillContactFields(contact)
     }
 
+    /**
+     * With issue id it gets it from gitea parse its data and then fill the required and optional fields on the form based on issue data on Gitea issue body 
+     * @param {number} issueId - The Gitea issue ID
+     * @returns {} 
+     * @throws {Error} If the fetch fails or issue doesn't exist, if a timeout happens or if has an server or API service error. 
+     */
     async function fillFieldsPassingIssue(issueId){
         let issueReqData = await fetchIssueData(issueId) 
         let issueData = await parseIssueData(issueReqData.body)
