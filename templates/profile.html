@@ -1,0 +1,125 @@
+{% extends "base.html" %}
+
+{% block title %}Profile{% endblock %}
+
+{% block content %}
+<div class="container mt-4" style="max-width: 800px;">
+    <h1 class="mb-4">User Profile</h1>
+    
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for category, message in messages %}
+                <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+                    {{ message }}
+                    <button type="button" class="close" data-dismiss="alert" aria-label="Close">
+                        <span aria-hidden="true">&times;</span>
+                    </button>
+                </div>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
+    
+    {% if first_login %}
+        <div class="alert alert-info" role="alert">
+            <strong>Welcome!</strong> Please add your BTC Map API token below to start using the admin panel.
+        </div>
+    {% endif %}
+    
+    <div class="card mb-4">
+        <div class="card-header">
+            <h5 class="mb-0">Nostr Identity</h5>
+        </div>
+        <div class="card-body">
+            <div class="form-group">
+                <label>Public Key (hex)</label>
+                <input type="text" class="form-control" value="{{ current_user.pubkey }}" readonly>
+
+            </div>
+            
+            {% if current_user.last_login %}
+            <div class="form-group mt-4">
+                <div class="d-flex align-items-baseline">
+                    <label class="mb-0 mr-2">Last Login:</label>&nbsp;<span class="text-muted">{{ current_user.last_login }}</span>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+    
+    <div class="card">
+        <div class="card-header">
+            <h5 class="mb-0">BTC Map API Token</h5>
+        </div>
+        <div class="card-body">
+            <form method="POST" action="{{ url_for('profile') }}">
+                <div class="form-group">
+                    <label for="rpc_token">API Token</label>
+                    <input type="password" class="form-control" id="rpc_token" name="rpc_token" 
+                           placeholder="Enter your BTC Map API token" 
+                           {% if current_user.has_rpc_token %}value="********"{% endif %}>
+                    <small class="form-text text-muted">
+                        This token is used to authenticate API requests to BTC Map. 
+                        It is encrypted before being stored.
+                        {% if not current_user.has_rpc_token %}
+                            <strong class="text-danger">You must set this token to use the admin panel.</strong>
+                        {% endif %}
+                    </small>
+                </div>
+                
+                <div class="form-group">
+                    <div class="custom-control custom-checkbox">
+                        <input type="checkbox" class="custom-control-input" id="show_token" onclick="toggleTokenVisibility()">
+                        <label class="custom-control-label" for="show_token">Show token</label>
+                    </div>
+                </div>
+                
+                <button type="submit" class="btn btn-primary">
+                    {% if current_user.has_rpc_token %}Update Token{% else %}Save Token{% endif %}
+                </button>
+                
+                {% if current_user.has_rpc_token %}
+                <button type="button" class="btn btn-outline-danger" onclick="confirmDeleteToken()">Remove Token</button>
+                {% endif %}
+            </form>
+            
+            <div class="mt-4 alert alert-secondary">
+                <strong>Where to get your API token:</strong>
+                <p class="mb-2">Contact the BTC Map team for API access and they will provide you with a token.</p>
+                <p class="mb-0"><strong>Important:</strong> Keep this token secure - it grants full access to the API.</p>
+            </div>
+        </div>
+    </div>
+    
+    <div class="mt-4">
+    </div>
+</div>
+
+<form id="delete-token-form" method="POST" action="{{ url_for('profile_delete_token') }}" style="display: none;">
+</form>
+
+<script>
+function toggleTokenVisibility() {
+    const tokenInput = document.getElementById('rpc_token');
+    const checkbox = document.getElementById('show_token');
+    
+    if (checkbox.checked) {
+        tokenInput.type = 'text';
+    } else {
+        tokenInput.type = 'password';
+    }
+}
+
+function confirmDeleteToken() {
+    if (confirm('Are you sure you want to remove your API token? You will not be able to make API requests until you add a new token.')) {
+        document.getElementById('delete-token-form').submit();
+    }
+}
+
+// Clear placeholder when user starts typing
+document.getElementById('rpc_token').addEventListener('focus', function() {
+    if (this.value === '********') {
+        this.value = '';
+    }
+});
+</script>
+{% endblock %}

@@ -3,12 +3,139 @@
 {% block title %}Login{% endblock %}
 
 {% block content %}
-<div class="text-center">
-    <form class="form-signin" method="POST">
-        <h1 class="h3 mb-3 font-weight-normal">Please sign in</h1>
-        <label for="password" class="sr-only">Password</label>
-        <input type="password" id="password" name="password" class="form-control" placeholder="Password" required autofocus>
-        <button class="btn btn-lg btn-primary btn-block" type="submit">Sign in</button>
-    </form>
+<div class="text-center" style="max-width: 400px; margin: 50px auto;">
+    <h1 class="h3 mb-4 font-weight-normal">Sign in with Nostr</h1>
+    
+    <div id="login-status" class="alert" role="alert" style="display: none;"></div>
+    
+    <button id="nostr-login-btn" class="btn btn-lg btn-primary btn-block mb-4" type="button">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor" style="vertical-align: middle; margin-right: 8px;">
+            <path d="M12 2L2 7v10c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V7l-10-5z"/>
+        </svg>
+        Sign in with Nostr
+    </button>
+    
+    <div class="alert alert-info text-left" style="font-size: 0.9rem;">
+        <strong>Requirements:</strong>
+        <ul class="mb-0">
+            <li>Install a Nostr browser extension (e.g., <a href="https://getalby.com" target="_blank">Alby</a>, <a href="https://github.com/fiatjaf/nos2x" target="_blank">nos2x</a>)</li>
+            <li>Allow the extension to sign authentication requests</li>
+        </ul>
+    </div>
 </div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const loginBtn = document.getElementById('nostr-login-btn');
+    const statusDiv = document.getElementById('login-status');
+    
+    function showStatus(message, type) {
+        statusDiv.textContent = message;
+        statusDiv.className = `alert alert-${type}`;
+        statusDiv.style.display = 'block';
+    }
+    
+    function hideStatus() {
+        statusDiv.style.display = 'none';
+    }
+    
+    async function performNostrLogin() {
+        try {
+            hideStatus();
+            loginBtn.disabled = true;
+            loginBtn.innerHTML = '<span class="spinner-border spinner-border-sm mr-2"></span>Connecting...';
+            
+            // Check if Nostr extension is available
+            if (!window.nostr) {
+                showStatus('No Nostr extension detected. Please install Alby, nos2x, or another NIP-07 compatible extension.', 'warning');
+                loginBtn.disabled = false;
+                loginBtn.innerHTML = '<svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor" style="vertical-align: middle; margin-right: 8px;"><path d="M12 2L2 7v10c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V7l-10-5z"/></svg>Sign in with Nostr';
+                return;
+            }
+            
+            // Get public key
+            showStatus('Getting public key from extension...', 'info');
+            const pubkey = await window.nostr.getPublicKey();
+            
+            // Get login URL for NIP-98
+            showStatus('Preparing authentication...', 'info');
+            const loginUrlResp = await fetch('/auth/login-url');
+            
+            if (!loginUrlResp.ok) {
+                throw new Error(`Failed to get login URL: ${loginUrlResp.status}`);
+            }
+            
+            const loginUrlData = await loginUrlResp.json();
+            
+            // Create NIP-98 event (kind 27235)
+            showStatus('Waiting for signature from extension...', 'info');
+            const event = {
+                kind: 27235,  // NIP-98 HTTP Auth
+                created_at: Math.floor(Date.now() / 1000),
+                tags: [
+                    ['u', loginUrlData.url],
+                    ['method', loginUrlData.method]
+                ],
+                content: '',  // Empty content for NIP-98
+                pubkey: pubkey
+            };
+            
+            // Sign the event
+            const signedEvent = await window.nostr.signEvent(event);
+            
+            // Verify with server
+            showStatus('Verifying signature...', 'info');
+            const verifyResp = await fetch('/auth/verify', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    event: signedEvent
+                })
+            });
+            
+            const verifyData = await verifyResp.json();
+            
+            if (!verifyResp.ok) {
+                throw new Error(verifyData.error || 'Authentication failed');
+            }
+            
+            if (verifyData.success) {
+                showStatus('Authentication successful! Redirecting...', 'success');
+                
+                // Check if user needs to set RPC token
+                if (!verifyData.has_token) {
+                    setTimeout(() => {
+                        window.location.href = '/profile?first_login=1';
+                    }, 1000);
+                } else {
+                    setTimeout(() => {
+                        window.location.href = '/select_area';
+                    }, 1000);
+                }
+            } else {
+                throw new Error('Authentication failed');
+            }
+            
+        } catch (error) {
+            console.error('Login error:', error);
+            let errorMsg = error.message || 'Unknown error';
+            
+            // Add more context for common errors
+            if (errorMsg.includes('Failed to fetch')) {
+                errorMsg = 'Cannot connect to server. Please ensure the server is running and try again.';
+            } else if (errorMsg.includes('window.nostr')) {
+                errorMsg = 'Nostr extension error. Please check your extension settings.';
+            }
+            
+            showStatus(`Error: ${errorMsg}`, 'danger');
+            loginBtn.disabled = false;
+            loginBtn.innerHTML = '<svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor" style="vertical-align: middle; margin-right: 8px;"><path d="M12 2L2 7v10c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V7l-10-5z"/></svg>Sign in with Nostr';
+        }
+    }
+    
+    loginBtn.addEventListener('click', performNostrLogin);
+});
+</script>
 {% endblock %}
