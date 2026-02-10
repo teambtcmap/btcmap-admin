@@ -44,6 +44,11 @@ def load_user(pubkey):
     """Load user by pubkey for Flask-Login."""
     return User.load_user(pubkey)
 
+# Make current_user available in templates
+@app.context_processor
+def inject_current_user():
+    return dict(current_user=current_user)
+
 API_BASE_URL = "https://api.btcmap.org"
 
 CONTINENTS = [
