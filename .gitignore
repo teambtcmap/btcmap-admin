@@ -24,6 +24,10 @@ Thumbs.db
 # Flask session files
 flask_session/
 
+# User data and secrets
+users.json
+.env
+
 # Replit specific
 .replit
 .breakpoints

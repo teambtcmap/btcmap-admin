@@ -31,9 +31,17 @@
                     </li>
                 </ul>
                 <ul class="navbar-nav">
-                    {% if session.get('password') %}
+                    {% if current_user.is_authenticated %}
                         <li class="nav-item">
-                            <a class="nav-link" href="{{ url_for('logout') }}">Logout</a>
+                            <a class="nav-link" href="{{ url_for('profile') }}">
+                                Profile
+                                {% if not current_user.has_rpc_token %}
+                                    <span class="badge bg-warning text-dark">!</span>
+                                {% endif %}
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="{{ url_for('auth.logout') }}">Logout</a>
                         </li>
                     {% else %}
                         <li class="nav-item">
