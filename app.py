@@ -149,6 +149,10 @@ AREA_TYPE_REQUIREMENTS = {
             'required': False,
             'type': 'url'
         },
+        'contact:satlantis': {
+            'required': False,
+            'type': 'url'
+        },
         'tips:lightning_address': {
             'required': False,
             'type': 'text'
