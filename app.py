@@ -137,6 +137,18 @@ AREA_TYPE_REQUIREMENTS = {
             'required': False,
             'type': 'url'
         },
+        'contact:eventbrite': {
+            'required': False,
+            'type': 'url'
+        },
+        'contact:reddit': {
+            'required': False,
+            'type': 'url'
+        },
+        'contact:simplex': {
+            'required': False,
+            'type': 'url'
+        },
         'tips:lightning_address': {
             'required': False,
             'type': 'text'
