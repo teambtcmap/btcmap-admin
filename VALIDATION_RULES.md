@@ -52,6 +52,7 @@ The application implements comprehensive validation at both client and server le
 | `contact:eventbrite` | url | Valid URL format |
 | `contact:reddit` | url | Valid URL format |
 | `contact:simplex` | url | Valid URL format |
+| `contact:satlantis` | url | Valid URL format |
 | `contact:rss` | url | Valid URL format |
 | `contact:meetup` | url | Valid URL format |
 | `contact:nostr` | text | Any non-empty string |
