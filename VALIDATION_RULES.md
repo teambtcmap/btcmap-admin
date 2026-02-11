@@ -49,6 +49,9 @@ The application implements comprehensive validation at both client and server le
 | `contact:github` | url | Valid URL format |
 | `contact:matrix` | url | Valid URL format |
 | `contact:geyser` | url | Valid URL format |
+| `contact:eventbrite` | url | Valid URL format |
+| `contact:reddit` | url | Valid URL format |
+| `contact:simplex` | url | Valid URL format |
 | `contact:rss` | url | Valid URL format |
 | `contact:meetup` | url | Valid URL format |
 | `contact:nostr` | text | Any non-empty string |
