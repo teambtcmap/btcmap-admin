@@ -18,6 +18,7 @@ app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(minutes=30)
 app.config['SESSION_COOKIE_SECURE'] = True
 app.config['SESSION_COOKIE_HTTPONLY'] = True
 app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
+app.config['GITEA_BASE_URL'] = os.environ.get('SECRET_KEY', 'https://gitea.btcmap.org')
 
 API_BASE_URL = "https://api.btcmap.org"
 
@@ -34,7 +35,10 @@ AREA_TYPE_REQUIREMENTS = {
         },
         'url_alias': {
             'required': True,
-            'type': 'text'
+            'type': 'text',
+            'min_length': 2,
+            'max_length': 100,
+            'pattern': r'^[a-z0-9\-]+$'
         },
         'continent': {
             'required': True,
@@ -67,7 +71,8 @@ AREA_TYPE_REQUIREMENTS = {
         },
         'contact:twitter': {
             'required': False,
-            'type': 'url'
+            'type': 'url',
+            'pattern': r'(?:x\.com|twitter\.com)\/[\w]+'
         },
         'contact:website': {
             'required': False,
@@ -79,47 +84,58 @@ AREA_TYPE_REQUIREMENTS = {
         },
         'contact:telegram': {
             'required': False,
-            'type': 'url'
+            'type': 'url',
+            'pattern': r't\.me\/[\w]+'
         },
         'contact:signal': {
             'required': False,
-            'type': 'url'
+            'type': 'url',
+            'pattern': r'signal\.group\/'
         },
         'contact:whatsapp': {
             'required': False,
-            'type': 'url'
+            'type': 'url',
+            'pattern': r'chat\.whatsapp\.com\/'
         },
         'contact:nostr': {
             'required': False,
-            'type': 'text'
+            'type': 'text',
+            'pattern': r'^npub1[a-z0-9]{58}$'
         },
         'contact:meetup': {
             'required': False,
-            'type': 'url'
+            'type': 'url',
+            'pattern': r'meetup\.com\/'
         },
         'contact:discord': {
             'required': False,
-            'type': 'url'
+            'type': 'url',
+            'pattern': r'discord\.gg|discord\.com'
         },
         'contact:instagram': {
             'required': False,
-            'type': 'url'
+            'type': 'url',
+            'pattern': r'instagram\.com\/[\w._]+'
         },
         'contact:youtube': {
             'required': False,
-            'type': 'url'
+            'type': 'url',
+            'pattern': r'(?:youtu\.be|youtube\.com)\/'
         },
         'contact:facebook': {
             'required': False,
-            'type': 'url'
+            'type': 'url',
+            'pattern': r'facebook\.com\/[\w.]+'
         },
         'contact:linkedin': {
             'required': False,
-            'type': 'url'
+            'type': 'url',
+            'pattern': r'linkedin\.com\/'
         },
         'contact:rss': {
             'required': False,
-            'type': 'url'
+            'type': 'url',
+            'pattern': r'\/(?:feed|rss)'
         },
         'contact:phone': {
             'required': False,
@@ -127,15 +143,18 @@ AREA_TYPE_REQUIREMENTS = {
         },
         'contact:github': {
             'required': False,
-            'type': 'url'
+            'type': 'url',
+            'pattern': r'github\.com\/[\w-]+'
         },
         'contact:matrix': {
             'required': False,
-            'type': 'url'
+            'type': 'url',
+            'matrix': r'@[\w._-]+:[\w.-]+'
         },
         'contact:geyser': {
             'required': False,
-            'type': 'url'
+            'type': 'url',
+            'pattern': r'geyser\.fund\/'
         },
         'contact:eventbrite': {
             'required': False,
@@ -155,11 +174,15 @@ AREA_TYPE_REQUIREMENTS = {
         },
         'tips:lightning_address': {
             'required': False,
-            'type': 'text'
+            'type': 'text',
+            'min_length': 10,
+            'pattern': r'^[\w\.\-]+@[\w\.\-]+\.[a-zA-Z]{2,}$'
         },
         'description': {
             'required': False,
-            'type': 'text'
+            'type': 'text',
+            'min_length': 10,
+            'max_length': 500
         }
     }
 }
@@ -957,6 +980,25 @@ def lint_community_orgs():
     """Get list of unique community_org tag values."""
     orgs = lint_cache.get_community_orgs()
     return jsonify({'community_orgs': orgs})
+
+@app.route('/api/gitea/get-issue/<int:issue_id>')
+def get_issue_data(issue_id):
+    try:
+        req_data = requests.get(
+            f"{app.config['GITEA_BASE_URL']}/api/v1/repos/teambtcmap/btcmap-data/issues/{issue_id}",
+            timeout=10
+        )
+        req_data.raise_for_status()
+        return jsonify({'success': True, 'data': req_data.json()})
+    except requests.exceptions.Timeout:
+        return jsonify({'error': 'Request to Gitea timed out'}), 408
+    except requests.exceptions.HTTPError as e:
+        if e.response.status_code == 404:
+            return jsonify({'error': f'Issue #{issue_id} not found'}), 404
+        return jsonify({'error': f'Gitea API error: {str(e)}'}), 502
+    except requests.exceptions.RequestException as e:
+        app.logger.error(f"Error fetching Gitea issue {issue_id}: {str(e)}")
+        return jsonify({'error': 'Failed to fetch issue data'}), 500
 
 
 def get_area(area_id):

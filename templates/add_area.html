@@ -6,7 +6,8 @@
 <div class="container">
     <div class="d-flex justify-content-between align-items-start mt-5 mb-4">
         <div>
-            <h1 class="mb-0">Add New Area</h1>
+            <h1 class="mb-0" id="add-new-area">Add New Area</h1>
+            <p class="mb-0" id="sugestions"></p>
             {% if template_area %}
             <p class="text-muted mb-0">Using deleted area "{{ template_area.tags.get('name', 'Unknown') }}" as template</p>
             {% endif %}
@@ -147,11 +148,14 @@
 {% block scripts %}
 <script src="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Turf.js/6.5.0/turf.min.js"></script>
+<script src="{{ url_for('static', filename='js/utils.js') }}"></script>
 <script src="{{ url_for('static', filename='js/validation.js') }}"></script>
 <script src="{{ url_for('static', filename='js/map-editor.js') }}"></script>
 <script src="{{ url_for('static', filename='js/osm-geojson-generator.js') }}"></script>
 <script>
-document.addEventListener('DOMContentLoaded', function() {
+document.addEventListener('DOMContentLoaded', async function() {
+    
+    const MIN_FIELD_LENGTH = 10;
     window.areaTypeRequirements = {{ area_type_requirements | tojson | safe }};
     const areaTypeRequirements = window.areaTypeRequirements;
     const typeSelect = document.getElementById('type');
@@ -231,7 +235,7 @@ document.addEventListener('DOMContentLoaded', function() {
         row.innerHTML = `
             <td>
                 ${isCustom ? 
-                    `<input type="text" class="form-control custom-key" placeholder="Tag Name" required>
+                  `<input type="text" id="${key}" class="form-control custom-key" placeholder="Tag Name" required>
                      <div class="invalid-feedback">Please enter a valid key</div>` 
                     : key}
             </td>
@@ -260,7 +264,6 @@ document.addEventListener('DOMContentLoaded', function() {
         if (!isRequired) {
             row.querySelector('.remove-field').addEventListener('click', function() {
                 row.remove();
-                updateOptionalFieldSelect();
             });
         }
 
@@ -327,7 +330,6 @@ document.addEventListener('DOMContentLoaded', function() {
                     ));
                 });
         }
-        updateOptionalFieldSelect();
     }
 
     function addOptionalField() {
@@ -380,12 +382,10 @@ document.addEventListener('DOMContentLoaded', function() {
                 requirements.allowed_values
             );
             tagsTable.replaceChild(row, newRow);
-            updateOptionalFieldSelect();
         });
 
         newRow.querySelector('.remove-field').addEventListener('click', function() {
             newRow.remove();
-            updateOptionalFieldSelect();
         });
 
         tagsTable.appendChild(newRow);
@@ -394,6 +394,172 @@ document.addEventListener('DOMContentLoaded', function() {
     function addCustomField() {
         const newRow = createTagRow('', '', false, true);
         tagsTable.appendChild(newRow);
+    }
+    
+    /**
+     * With issue body, process its data and transform in a base object 
+     * @param {string} issueText - The the field social links with all community contact information 
+     * @returns {Promise<Object>} The issue body data as a parsed object with the main properties 
+     * @throws {} 
+     */
+    async function parseIssueData(issueText){
+        const issueData = {}
+        const issueTemplate = {
+              "Community name: ": "communityName",
+              "Location: ": "location",
+              "Associated areas: ": "associatedAreas",
+              "GeoJSON: ": "geoJSON",
+              "Icon URL: ": "icon",
+              "Lightning: ": "lightningTips",
+              "Social links: ": "contact",
+              "Community leader contact: ": "leaderContact",
+              "Notes: ": "description"
+        }
+        
+        const keys = Object.keys(issueTemplate)
+        
+        for (let i = 0; i < keys.length; i++) {
+            const startKey = keys[i]
+            const endKey = keys[i + 1] || "Created at: "
+            const fieldName = issueTemplate[startKey]
+             
+            const startIdx = issueText.indexOf(startKey)
+            if (startIdx === -1) {
+                console.warn(`Issue template missing field: ${startKey}`)
+                issueData[fieldName] = ""
+                continue
+            }
+              
+            const endIdx = issueText.indexOf(endKey, startIdx + startKey.length)
+            if (endIdx === -1) {
+                issueData[fieldName] = issueText.substring(startIdx + startKey.length).trim()
+            } else {
+                issueData[fieldName] = issueText.substring(startIdx + startKey.length, endIdx).trim()
+            }
+        }
+          
+        return issueData
+    }
+    /**
+     * Fetches issue data from Gitea API
+     * @param {number} issueId - The Gitea issue ID
+     * @returns {Promise<Object>} The issue data object
+     * @throws {Error} If the fetch fails or issue doesn't exist, if a timeout happens or if has an server or API service error. 
+     */
+    async function fetchIssueData(issueId){
+        try {
+            let response = await apiFetch(`/api/gitea/get-issue/${issueId}`)
+            let result = await response.json()
+            
+            if (!response.ok || result.error) {
+                throw new Error(result.error || 'Failed to fetch issue data')
+            }
+            
+            return result.data
+        } catch (error) {
+            if (error.message === 'Session expired') throw error;
+            showToast('Error', `Failed to load issue #${issueId}: ${error.message}`, 'error')
+            throw error
+        }
+    }
+    /**
+    * The social links string content is tranformed in a string array with contact information  
+    * @param {string} contactText - The the field social links with all community contact information 
+    * @returns {Array<string>} - Array with contact information 
+    * @throws {} 
+    */
+    function fillContact(contactText){ 
+        let contactRaw = contactText.split("\n");
+        let contact = []
+        for(let i=0;i<contactRaw.length;i++){
+          if(contactRaw[i].length > MIN_FIELD_LENGTH){
+            contact.push(contactRaw[i])
+          }
+        }
+        return contact
+    }
+    /**
+    * With contact data that comes from fillFields fill the optional fields on form that are related with community contact 
+    * @param {Array<string>} contact - The the field social links with all community contact information 
+    * @returns {} 
+    * @throws {} 
+    */
+    async function fillContactFields(contact){
+      const contactTagsInfo = [
+          {name:"contact:email", index: /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/},
+          {name:"contact:discord", index: /discord\.gg|discord\.com/i},
+          {name:"contact:twitter", index: /(?:x\.com|twitter\.com)\/[\w]+/i},
+          {name:"contact:telegram", index: /t\.me\/[\w]+/i},
+          {name:"contact:signal", index: /signal\.group\//i},
+          {name:"contact:whatsapp", index: /chat\.whatsapp\.com\//i},
+          {name:"contact:facebook", index: /facebook\.com\/[\w.]+/i},
+          {name:"contact:instagram", index: /instagram\.com\/[\w._]+/i},
+          {name:"contact:youtube", index: /(?:youtu\.be|youtube\.com)\//i},
+          {name:"contact:github", index: /github\.com\/[\w-]+/i},
+          {name:"contact:linkedin", index: /linkedin\.com\//i},
+          {name:"contact:matrix", index: /@[\w._-]+:[\w.-]+/},
+          {name:"contact:meetup", index: /meetup\.com\//i},
+          {name:"contact:nostr", index: /^npub1[a-z0-9]{58}$/},
+          {name:"contact:geyser", index: /geyser\.fund\//i},
+          {name:"contact:rss", index: /\/(?:feed|rss)/i},
+          {name:"contact:phone", index: /^\+?[\d\s\-()]+$/},
+          {name:"contact:website", index: /^https?:\/\//i}
+      ]
+        for(let i=0;i<contact.length;i++){
+          for(let j=0;j<contactTagsInfo.length;j++){
+            if(contactTagsInfo[j].index.test(contact[i])){
+              let newRow = createTagRow(contactTagsInfo[j].name, contact[i], false, false);
+              tagsTable.appendChild(newRow);
+              break
+            }
+          } 
+        }
+    }
+    
+    /**
+     * With issue data fill forms fields to add community 
+     * @param {Object} issueData - The Gitea issue data that comes from fetchIssueData
+     * @returns {} 
+     * @throws {} 
+     */
+    async function fillFields(issueData){
+      let contact = fillContact(issueData.contact)
+
+      let prefilledCommunityData = {
+          "name": cleanIssueText(issueData.communityName),
+          "icon": cleanIssueText(issueData.icon),
+          "lightningTips": cleanIssueText(issueData.lightningTips),
+          "contact": contact,
+          "description": cleanIssueText(issueData.description)
+      }
+      tagsTable.querySelector('input[name="name"]').value = prefilledCommunityData.name
+      document.getElementById("sugestions").textContent = `suggested logo: ${prefilledCommunityData.icon}`
+      let urlAlias = prefilledCommunityData.name.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-zA-Z0-9\s]/g, "").toLowerCase().trim().replace(/\s+/g, "-");
+      tagsTable.querySelector('input[name="url_alias"]').value = urlAlias
+
+
+      let newRow
+      if(prefilledCommunityData?.lightningTips.length > MIN_FIELD_LENGTH){
+          newRow = createTagRow('tips:lightning_address', prefilledCommunityData.lightningTips, false, false);
+          tagsTable.appendChild(newRow);
+      }
+      if(prefilledCommunityData?.description.length > MIN_FIELD_LENGTH){
+          newRow = createTagRow('description', prefilledCommunityData.description, false, false);
+          tagsTable.appendChild(newRow);
+      }
+      await fillContactFields(contact)
+    }
+
+    /**
+     * With issue id it gets it from gitea parse its data and then fill the required and optional fields on the form based on issue data on Gitea issue body 
+     * @param {number} issueId - The Gitea issue ID
+     * @returns {} 
+     * @throws {Error} If the fetch fails or issue doesn't exist, if a timeout happens or if has an server or API service error. 
+     */
+    async function fillFieldsPassingIssue(issueId){
+        let issueReqData = await fetchIssueData(issueId) 
+        let issueData = await parseIssueData(issueReqData.body)
+        await fillFields(issueData)
     }
 
     window.validateAreaForm = function() {
@@ -524,6 +690,11 @@ document.addEventListener('DOMContentLoaded', function() {
         // Default to 'community' type
         typeSelect.value = 'community';
         updateFields();
+    }
+  
+    const issueId = getURLParameter("issue-id")
+    if(issueId){
+       await fillFieldsPassingIssue(issueId) 
     }
 });
 
@@ -867,6 +1038,8 @@ async function uploadIcon(areaId) {
         return { success: false, error: error.message };
     }
 }
+
+
 
 // Initialize icon editor when DOM is ready
 document.addEventListener('DOMContentLoaded', function() {
