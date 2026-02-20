@@ -31,10 +31,48 @@ This application serves as an administrative interface for BTC Map's area manage
 
 ## Quick Start
 
-1. Run the application: `python3 main.py`
-2. Access the interface at `http://localhost:5000`
-3. Login with your credentials
-4. Start managing areas!
+### Prerequisites
+
+- Python 3.11+
+- [uv](https://github.com/astral-sh/uv) package manager
+
+Install uv if you don't have it:
+```bash
+pip install uv
+# or via Homebrew
+brew install uv
+```
+
+### Setup
+
+```bash
+# Create virtual environment
+uv venv
+
+# Activate and install dependencies
+source .venv/bin/activate
+uv sync
+```
+
+### Run the Application
+
+```bash
+./run.sh
+```
+
+- Access the interface at `http://localhost:5001` (default port 5000 may be blocked by AirPlay Receiver on macOS)
+- Login with your BTC Map admin password
+- Start managing areas!
+
+### Troubleshooting
+
+**Port 5000 blocked**: If you get "Address already in use", macOS AirPlay Receiver may be using port 5000. Either:
+- Disable it in System Settings → General → AirDrop & Handoff → AirPlay Receiver, or
+- Edit `run.sh` to use a different port
+
+**"No module named 'flask'"**: Make sure you've run `uv sync` inside the activated virtual environment.
+
+**Credentials**: Use your BTC Map admin account password to log in. If you don't have one, request access from the BTC Map team.
 
 ## Project Structure
 
