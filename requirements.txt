@@ -1,0 +1,11 @@
+flask
+flask_session
+flask-login
+requests
+datetime
+geojson_rewind
+shapely
+pyproj
+typing
+cryptography
+nostr-sdk
