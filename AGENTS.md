@@ -38,7 +38,7 @@ python3 main.py
 # Or with debug mode
 FLASK_DEBUG=1 python3 main.py
 
-# Using the run script (requires venv)
+# Using the run script (requires .venv)
 ./run.sh
 
 # Production (gunicorn)
@@ -48,7 +48,11 @@ gunicorn app:app
 ### Dependencies
 
 ```bash
-# Install dependencies with uv
+# Create virtual environment (if not exists)
+uv venv
+
+# Activate and install dependencies with uv
+source .venv/bin/activate
 uv sync
 
 # Or pip
