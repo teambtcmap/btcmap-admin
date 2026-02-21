@@ -1,14 +1,14 @@
 {
-    "name": "btcmap-admin",
-    "version": "0.1.0",
-    "description": "BTC Map Admin - Frontend dev tools",
-    "private": true,
-    "scripts": {
-        "lint": "biome check .",
-        "format": "biome format --write .",
-        "lint:fix": "biome check --write ."
-    },
-    "devDependencies": {
-        "@biomejs/biome": "^1.9.0"
-    }
+	"name": "btcmap-admin",
+	"version": "0.1.0",
+	"description": "BTC Map Admin - Frontend dev tools",
+	"private": true,
+	"scripts": {
+		"lint": "biome check .",
+		"format": "biome format --write .",
+		"lint:fix": "biome check --write ."
+	},
+	"devDependencies": {
+		"@biomejs/biome": "^1.9.0"
+	}
 }
