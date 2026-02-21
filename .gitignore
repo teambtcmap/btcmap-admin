@@ -9,7 +9,14 @@ instance/
 
 # Virtual environment
 venv/
+.venv/
 env/
+
+# Node.js
+node_modules/
+
+# Biome
+.biome/
 
 # IDEs and editors
 .vscode/
