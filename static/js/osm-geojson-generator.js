@@ -90,7 +90,7 @@ function initOsmGeojsonGenerator(options = {}) {
 		}
 
 		const geometry = geojson.geometry || geojson;
-		if (geometry && geometry.coordinates) {
+		if (geometry?.coordinates) {
 			countCoords(geometry.coordinates);
 		}
 
@@ -121,7 +121,7 @@ function initOsmGeojsonGenerator(options = {}) {
 	// 0 = pure convex (concavity = Infinity)
 	// 10 = tighter fit (concavity = 1)
 	function sliderToConcavity(sliderVal) {
-		if (sliderVal === 0) return Infinity; // Pure convex hull
+		if (sliderVal === 0) return Number.POSITIVE_INFINITY; // Pure convex hull
 		// Map 1-10 to concavity values (higher = looser, lower = tighter)
 		// 1 = 20 (loose), 10 = 1 (tight)
 		return Math.max(1, 21 - sliderVal * 2);
@@ -190,7 +190,7 @@ function initOsmGeojsonGenerator(options = {}) {
 		const index = elements.resultsSelect.value;
 		if (index === '') return;
 
-		const result = osmSearchResults[parseInt(index)];
+		const result = osmSearchResults[Number.parseInt(index)];
 		if (!result || !result.geojson) {
 			showError('Selected place has no boundary data');
 			return;
@@ -210,13 +210,12 @@ function initOsmGeojsonGenerator(options = {}) {
 		originalOsmGeojson = result.geojson;
 
 		// Handle population data from OSM extratags
-		if (
-			result.extratags &&
-			result.extratags.population &&
-			onPopulationFound
-		) {
-			const populationValue = parseInt(result.extratags.population, 10);
-			if (!isNaN(populationValue)) {
+		if (result.extratags?.population && onPopulationFound) {
+			const populationValue = Number.parseInt(
+				result.extratags.population,
+				10,
+			);
+			if (!Number.isNaN(populationValue)) {
 				const today = new Date().toISOString().split('T')[0];
 				onPopulationFound(populationValue, today);
 			}
@@ -320,9 +319,9 @@ function initOsmGeojsonGenerator(options = {}) {
 			}
 
 			const tolerance = sliderToTolerance(
-				parseFloat(elements.simplifySlider.value),
+				Number.parseFloat(elements.simplifySlider.value),
 			);
-			const buffer = parseFloat(elements.bufferSlider.value);
+			const buffer = Number.parseFloat(elements.bufferSlider.value);
 
 			let processed = feature;
 
@@ -342,12 +341,9 @@ function initOsmGeojsonGenerator(options = {}) {
 			}
 
 			// Apply mega simplify if checked
-			if (
-				elements.megaSimplifyCheckbox &&
-				elements.megaSimplifyCheckbox.checked
-			) {
+			if (elements.megaSimplifyCheckbox?.checked) {
 				const concavity = sliderToConcavity(
-					parseFloat(elements.tightnessSlider.value),
+					Number.parseFloat(elements.tightnessSlider.value),
 				);
 
 				try {
@@ -479,7 +475,7 @@ function initOsmGeojsonGenerator(options = {}) {
 
 	if (elements.simplifySlider) {
 		elements.simplifySlider.addEventListener('input', function () {
-			const tolerance = sliderToTolerance(parseFloat(this.value));
+			const tolerance = sliderToTolerance(Number.parseFloat(this.value));
 			elements.simplifyValue.textContent = formatTolerance(tolerance);
 			processAndPreviewGeojson();
 		});
@@ -513,7 +509,7 @@ function initOsmGeojsonGenerator(options = {}) {
 	// Tightness slider
 	if (elements.tightnessSlider) {
 		elements.tightnessSlider.addEventListener('input', function () {
-			const val = parseInt(this.value);
+			const val = Number.parseInt(this.value);
 			if (elements.tightnessValue) {
 				elements.tightnessValue.textContent = formatTightness(val);
 			}

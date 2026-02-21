@@ -4,7 +4,7 @@ function validateKey(key, existingKeys) {
 	if (!key) {
 		return { isValid: false, message: 'Key cannot be empty' };
 	}
-	if (existingKeys && existingKeys.includes(key)) {
+	if (existingKeys?.includes(key)) {
 		return { isValid: false, message: 'Key already exists' };
 	}
 	if (!/^[a-zA-Z][a-zA-Z0-9_:]*$/.test(key)) {
@@ -31,7 +31,7 @@ function validateNumericValue(value, type) {
 				message: 'Value must be a valid integer (no decimal points)',
 			};
 		}
-		const num = parseInt(value, 10);
+		const num = Number.parseInt(value, 10);
 		if (num < 0) {
 			return { isValid: false, message: 'Value must be non-negative' };
 		}
@@ -44,8 +44,8 @@ function validateNumericValue(value, type) {
 					'Value must contain only digits and at most one decimal point',
 			};
 		}
-		const num = parseFloat(value);
-		if (isNaN(num)) {
+		const num = Number.parseFloat(value);
+		if (Number.isNaN(num)) {
 			return { isValid: false, message: 'Value must be a valid number' };
 		}
 		if (num < 0) {
@@ -62,7 +62,7 @@ function validateValue(value, requirements) {
 		return { isValid: false, message: 'Value cannot be empty' };
 	}
 
-	if (requirements && requirements.type) {
+	if (requirements?.type) {
 		if (requirements.type === 'integer' || requirements.type === 'number') {
 			return validateNumericValue(value, requirements.type);
 		} else if (requirements.allowed_values) {

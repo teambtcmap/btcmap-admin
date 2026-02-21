@@ -21,9 +21,7 @@ async function apiFetch(url, options = {}) {
 					'warning',
 				);
 				setTimeout(() => {
-					window.location.href =
-						'/login?next=' +
-						encodeURIComponent(window.location.href);
+					window.location.href = `/login?next=${encodeURIComponent(window.location.href)}`;
 				}, 1500);
 				throw new Error('Session expired');
 			}
@@ -41,9 +39,7 @@ async function apiFetch(url, options = {}) {
 					'warning',
 				);
 				setTimeout(() => {
-					window.location.href =
-						'/login?next=' +
-						encodeURIComponent(window.location.href);
+					window.location.href = `/login?next=${encodeURIComponent(window.location.href)}`;
 				}, 1500);
 				throw new Error('Session expired');
 			}
@@ -58,8 +54,7 @@ async function apiFetch(url, options = {}) {
 			'warning',
 		);
 		setTimeout(() => {
-			window.location.href =
-				'/login?next=' + encodeURIComponent(window.location.href);
+			window.location.href = `/login?next=${encodeURIComponent(window.location.href)}`;
 		}, 1500);
 		throw new Error('Session expired');
 	}

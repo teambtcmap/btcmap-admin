@@ -232,7 +232,7 @@ function initMapEditor(options = {}) {
 	}
 
 	// Handle draw created
-	map.on(L.Draw.Event.CREATED, function (e) {
+	map.on(L.Draw.Event.CREATED, (e) => {
 		const layer = e.layer;
 		// Clear existing and add new
 		drawnItems.clearLayers();
@@ -241,12 +241,12 @@ function initMapEditor(options = {}) {
 	});
 
 	// Handle draw edited
-	map.on(L.Draw.Event.EDITED, function (e) {
+	map.on(L.Draw.Event.EDITED, (e) => {
 		updateGeoJsonFromDrawnItems();
 	});
 
 	// Handle draw deleted
-	map.on(L.Draw.Event.DELETED, function (e) {
+	map.on(L.Draw.Event.DELETED, (e) => {
 		currentGeoJson = null;
 		if (geoJsonLayer) {
 			map.removeLayer(geoJsonLayer);
@@ -294,7 +294,7 @@ function initMapEditor(options = {}) {
 			if (typeof showToast === 'function') {
 				showToast(
 					'Error',
-					'Invalid GeoJSON: ' + error.message,
+					`Invalid GeoJSON: ${error.message}`,
 					'error',
 				);
 			}
@@ -316,7 +316,7 @@ function initMapEditor(options = {}) {
 			if (typeof showToast === 'function') {
 				showToast(
 					'Error',
-					'Invalid GeoJSON: ' + error.message,
+					`Invalid GeoJSON: ${error.message}`,
 					'error',
 				);
 			}
@@ -356,7 +356,7 @@ function initMapEditor(options = {}) {
 	// 0 = pure convex (concavity = Infinity)
 	// 10 = tighter fit (concavity = 1)
 	function sliderToConcavity(sliderVal) {
-		if (sliderVal === 0) return Infinity;
+		if (sliderVal === 0) return Number.POSITIVE_INFINITY;
 		return Math.max(1, 21 - sliderVal * 2);
 	}
 
@@ -376,7 +376,7 @@ function initMapEditor(options = {}) {
 			}
 		}
 		const geometry = geojson.geometry || geojson;
-		if (geometry && geometry.coordinates) {
+		if (geometry?.coordinates) {
 			countCoords(geometry.coordinates);
 		}
 		return count;
@@ -501,9 +501,11 @@ function initMapEditor(options = {}) {
 			}
 
 			const tolerance = sliderToTolerance(
-				parseFloat(elements.shapeSimplifySlider?.value || 0),
+				Number.parseFloat(elements.shapeSimplifySlider?.value || 0),
 			);
-			const buffer = parseFloat(elements.shapeBufferSlider?.value || 0);
+			const buffer = Number.parseFloat(
+				elements.shapeBufferSlider?.value || 0,
+			);
 
 			let processed = feature;
 
@@ -528,7 +530,9 @@ function initMapEditor(options = {}) {
 				typeof turf !== 'undefined'
 			) {
 				const concavity = sliderToConcavity(
-					parseFloat(elements.shapeTightnessSlider?.value || 0),
+					Number.parseFloat(
+						elements.shapeTightnessSlider?.value || 0,
+					),
 				);
 
 				try {
@@ -658,7 +662,7 @@ function initMapEditor(options = {}) {
 	}
 	if (elements.shapeSimplifySlider) {
 		elements.shapeSimplifySlider.addEventListener('input', function () {
-			const tolerance = sliderToTolerance(parseFloat(this.value));
+			const tolerance = sliderToTolerance(Number.parseFloat(this.value));
 			elements.shapeSimplifyValue.textContent =
 				formatTolerance(tolerance);
 			processAndPreviewShape();
@@ -683,7 +687,7 @@ function initMapEditor(options = {}) {
 	}
 	if (elements.shapeTightnessSlider) {
 		elements.shapeTightnessSlider.addEventListener('input', function () {
-			const val = parseInt(this.value);
+			const val = Number.parseInt(this.value);
 			if (elements.shapeTightnessValue) {
 				elements.shapeTightnessValue.textContent = formatTightness(val);
 			}

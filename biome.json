@@ -7,20 +7,15 @@
 		"rules": {
 			"recommended": true,
 			"complexity": {
-				"noForEach": "off",
-				"useOptionalChain": "off",
-				"useArrowFunction": "off"
+				"noForEach": "off"
 			},
 			"style": {
-				"noParameterAssign": "off",
 				"noUselessElse": "off",
-				"useNumberNamespace": "off",
-				"useTemplate": "off",
-				"useExponentiationOperator": "off"
+				"useExponentiationOperator": "off",
+				"noParameterAssign": "off"
 			},
 			"suspicious": {
-				"noAssignInExpressions": "off",
-				"noGlobalIsNan": "off"
+				"noAssignInExpressions": "off"
 			}
 		},
 		"ignore": ["**/.venv/**", "**/node_modules/**", "**/__pycache__/**"]
