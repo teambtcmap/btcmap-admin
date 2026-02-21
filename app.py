@@ -1,16 +1,32 @@
-import os
-from flask import Flask, render_template, request, jsonify, session, redirect, url_for
-from flask_session import Session
-import requests
 import json
-from datetime import datetime, timedelta
-from geojson_rewind import rewind
-from urllib.parse import urlparse
+import os
 import re
+from datetime import datetime, timedelta
+from urllib.parse import urlparse
+
+import pyproj
+import requests
+from flask import (
+    Flask,
+    jsonify,
+    redirect,
+    render_template,
+    request,
+    session,
+    url_for,
+)
+from geojson_rewind import rewind
 from shapely.geometry import shape
 from shapely.ops import transform
-import pyproj
-from linting import lint_area_dict, lint_cache, LINT_RULES, FIX_ACTIONS, fix_migrate_icon, fix_bump_verified
+
+from linting import (
+    FIX_ACTIONS,
+    LINT_RULES,
+    fix_bump_verified,
+    fix_migrate_icon,
+    lint_area_dict,
+    lint_cache,
+)
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev-secret-key-change-in-production')
@@ -1128,7 +1144,7 @@ def validate_url(value, allowed_values=None):
     try:
         result = urlparse(value)
         return all([result.scheme, result.netloc]), "Invalid URL format"
-    except:
+    except Exception:
         return False, "Invalid URL"
 
 

@@ -16,3 +16,16 @@ dependencies = [
     "pyproj>=3.7.0",
     "gunicorn>=23.0.0",
 ]
+
+[dependency-groups]
+dev = [
+    "ruff>=0.15.2",
+]
+
+[tool.ruff]
+line-length = 80
+indent-width = 4
+
+[tool.ruff.lint]
+select = ["E", "F", "I"]
+ignore = ["E501"]

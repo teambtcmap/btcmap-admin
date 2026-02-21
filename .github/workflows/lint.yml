@@ -6,6 +6,8 @@ on:
       - 'static/**'
       - 'package.json'
       - 'biome.json'
+      - '*.py'
+      - 'pyproject.toml'
   push:
     branches:
       - main
@@ -13,9 +15,11 @@ on:
       - 'static/**'
       - 'package.json'
       - 'biome.json'
+      - '*.py'
+      - 'pyproject.toml'
 
 jobs:
-  lint:
+  lint-frontend:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -32,3 +36,24 @@ jobs:
 
       - name: Run Biome
         run: npm run lint
+
+  lint-python:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install uv
+        run: pip install uv
+
+      - name: Install dependencies
+        run: uv sync --dev
+
+      - name: Run Ruff
+        run: uv run ruff check .
