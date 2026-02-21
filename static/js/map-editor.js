@@ -26,7 +26,7 @@
 
 function initMapEditor(options = {}) {
 	const {
-		containerId = 'map',
+		containerId = "map",
 		initialGeoJson = null,
 		onGeoJsonChange = null,
 	} = options;
@@ -45,39 +45,37 @@ function initMapEditor(options = {}) {
 	const elements = {
 		mapContainer: document.getElementById(containerId),
 		// Raw GeoJSON editor
-		editGeoJsonBtn: document.getElementById('edit-geojson-btn'),
-		geoJsonEditor: document.getElementById('geojson-editor'),
-		geoJsonInput: document.getElementById('geojson-input'),
-		showBtn: document.getElementById('show-geojson-btn'),
-		saveLocallyBtn: document.getElementById('save-locally-btn'),
-		cancelBtn: document.getElementById('cancel-geojson-btn'),
+		editGeoJsonBtn: document.getElementById("edit-geojson-btn"),
+		geoJsonEditor: document.getElementById("geojson-editor"),
+		geoJsonInput: document.getElementById("geojson-input"),
+		showBtn: document.getElementById("show-geojson-btn"),
+		saveLocallyBtn: document.getElementById("save-locally-btn"),
+		cancelBtn: document.getElementById("cancel-geojson-btn"),
 		// Shape editor
-		editShapeBtn: document.getElementById('edit-shape-btn'),
-		shapeEditor: document.getElementById('shape-editor'),
-		shapeSimplifySlider: document.getElementById('shape-simplify-slider'),
-		shapeSimplifyValue: document.getElementById('shape-simplify-value'),
-		shapeBufferSlider: document.getElementById('shape-buffer-slider'),
-		shapeBufferValue: document.getElementById('shape-buffer-value'),
-		shapeMegaSimplifyCheckbox: document.getElementById(
-			'shape-mega-simplify',
-		),
-		shapeTightnessSlider: document.getElementById('shape-tightness-slider'),
-		shapeTightnessValue: document.getElementById('shape-tightness-value'),
-		shapePointsCount: document.getElementById('shape-points-count'),
-		shapeShowOriginal: document.getElementById('shape-show-original'),
-		applyShapeBtn: document.getElementById('apply-shape-btn'),
-		cancelShapeBtn: document.getElementById('cancel-shape-btn'),
+		editShapeBtn: document.getElementById("edit-shape-btn"),
+		shapeEditor: document.getElementById("shape-editor"),
+		shapeSimplifySlider: document.getElementById("shape-simplify-slider"),
+		shapeSimplifyValue: document.getElementById("shape-simplify-value"),
+		shapeBufferSlider: document.getElementById("shape-buffer-slider"),
+		shapeBufferValue: document.getElementById("shape-buffer-value"),
+		shapeMegaSimplifyCheckbox: document.getElementById("shape-mega-simplify"),
+		shapeTightnessSlider: document.getElementById("shape-tightness-slider"),
+		shapeTightnessValue: document.getElementById("shape-tightness-value"),
+		shapePointsCount: document.getElementById("shape-points-count"),
+		shapeShowOriginal: document.getElementById("shape-show-original"),
+		applyShapeBtn: document.getElementById("apply-shape-btn"),
+		cancelShapeBtn: document.getElementById("cancel-shape-btn"),
 	};
 
 	// Initialize map
 	if (!elements.mapContainer) {
-		console.error('[MapEditor] Map container not found:', containerId);
+		console.error("[MapEditor] Map container not found:", containerId);
 		return null;
 	}
 
 	const map = L.map(containerId).setView([0, 0], 2);
-	L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-		attribution: '&copy; OpenStreetMap contributors',
+	L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+		attribution: "&copy; OpenStreetMap contributors",
 	}).addTo(map);
 
 	// Initialize draw control
@@ -90,13 +88,13 @@ function initMapEditor(options = {}) {
 				allowIntersection: false,
 				showArea: true,
 				shapeOptions: {
-					color: '#3388ff',
+					color: "#3388ff",
 					weight: 3,
 				},
 			},
 			rectangle: {
 				shapeOptions: {
-					color: '#3388ff',
+					color: "#3388ff",
 					weight: 3,
 				},
 			},
@@ -118,7 +116,7 @@ function initMapEditor(options = {}) {
 		if (drawnItems.getLayers().length === 0) {
 			currentGeoJson = null;
 			if (elements.geoJsonInput) {
-				elements.geoJsonInput.value = '';
+				elements.geoJsonInput.value = "";
 			}
 			if (onGeoJsonChange) {
 				onGeoJsonChange(null);
@@ -132,11 +130,7 @@ function initMapEditor(options = {}) {
 
 		// Keep textarea in sync
 		if (elements.geoJsonInput) {
-			elements.geoJsonInput.value = JSON.stringify(
-				currentGeoJson,
-				null,
-				2,
-			);
+			elements.geoJsonInput.value = JSON.stringify(currentGeoJson, null, 2);
 		}
 
 		map.fitBounds(drawnItems.getBounds());
@@ -160,7 +154,7 @@ function initMapEditor(options = {}) {
 			if (!geoJson) {
 				currentGeoJson = null;
 				if (elements.geoJsonInput) {
-					elements.geoJsonInput.value = '';
+					elements.geoJsonInput.value = "";
 				}
 				if (onGeoJsonChange) {
 					onGeoJsonChange(null);
@@ -169,16 +163,16 @@ function initMapEditor(options = {}) {
 			}
 
 			// Handle string input
-			if (typeof geoJson === 'string') {
+			if (typeof geoJson === "string") {
 				geoJson = JSON.parse(geoJson);
 			}
 
 			// Extract geometry if wrapped in Feature
 			let geometry = geoJson;
-			if (geoJson.type === 'Feature') {
+			if (geoJson.type === "Feature") {
 				geometry = geoJson.geometry;
 			} else if (
-				geoJson.type === 'FeatureCollection' &&
+				geoJson.type === "FeatureCollection" &&
 				geoJson.features &&
 				geoJson.features.length > 0
 			) {
@@ -190,7 +184,7 @@ function initMapEditor(options = {}) {
 
 			// Wrap back as Feature for display in Leaflet
 			const featureCollection = {
-				type: 'Feature',
+				type: "Feature",
 				geometry: geometry,
 			};
 
@@ -206,11 +200,7 @@ function initMapEditor(options = {}) {
 
 			// Update textarea with current GeoJSON (keep them in sync)
 			if (elements.geoJsonInput) {
-				elements.geoJsonInput.value = JSON.stringify(
-					currentGeoJson,
-					null,
-					2,
-				);
+				elements.geoJsonInput.value = JSON.stringify(currentGeoJson, null, 2);
 			}
 
 			if (onGeoJsonChange) {
@@ -219,13 +209,9 @@ function initMapEditor(options = {}) {
 
 			return true;
 		} catch (error) {
-			console.error('[MapEditor] Error adding GeoJSON to map:', error);
-			if (typeof showToast === 'function') {
-				showToast(
-					'Error',
-					`Invalid GeoJSON: ${error.message}`,
-					'error',
-				);
+			console.error("[MapEditor] Error adding GeoJSON to map:", error);
+			if (typeof showToast === "function") {
+				showToast("Error", `Invalid GeoJSON: ${error.message}`, "error");
 			}
 			return false;
 		}
@@ -253,7 +239,7 @@ function initMapEditor(options = {}) {
 			geoJsonLayer = null;
 		}
 		if (elements.geoJsonInput) {
-			elements.geoJsonInput.value = '';
+			elements.geoJsonInput.value = "";
 		}
 		if (onGeoJsonChange) {
 			onGeoJsonChange(null);
@@ -263,21 +249,17 @@ function initMapEditor(options = {}) {
 	// Raw GeoJSON editor functionality
 	function showEditor() {
 		if (elements.geoJsonEditor) {
-			elements.geoJsonEditor.style.display = 'block';
+			elements.geoJsonEditor.style.display = "block";
 		}
 		if (currentGeoJson && elements.geoJsonInput) {
-			elements.geoJsonInput.value = JSON.stringify(
-				currentGeoJson,
-				null,
-				2,
-			);
+			elements.geoJsonInput.value = JSON.stringify(currentGeoJson, null, 2);
 			previouslySavedGeoJson = JSON.parse(JSON.stringify(currentGeoJson));
 		}
 	}
 
 	function hideEditor() {
 		if (elements.geoJsonEditor) {
-			elements.geoJsonEditor.style.display = 'none';
+			elements.geoJsonEditor.style.display = "none";
 		}
 	}
 
@@ -285,18 +267,14 @@ function initMapEditor(options = {}) {
 		try {
 			const geoJson = JSON.parse(elements.geoJsonInput.value);
 			if (updateGeoJson(geoJson)) {
-				if (typeof showToast === 'function') {
-					showToast('Success', 'GeoJSON preview updated', 'success');
+				if (typeof showToast === "function") {
+					showToast("Success", "GeoJSON preview updated", "success");
 				}
 			}
 		} catch (error) {
-			console.error('[MapEditor] Error parsing GeoJSON:', error);
-			if (typeof showToast === 'function') {
-				showToast(
-					'Error',
-					`Invalid GeoJSON: ${error.message}`,
-					'error',
-				);
+			console.error("[MapEditor] Error parsing GeoJSON:", error);
+			if (typeof showToast === "function") {
+				showToast("Error", `Invalid GeoJSON: ${error.message}`, "error");
 			}
 		}
 	}
@@ -307,18 +285,14 @@ function initMapEditor(options = {}) {
 			if (updateGeoJson(geoJson)) {
 				hideEditor();
 				previouslySavedGeoJson = currentGeoJson;
-				if (typeof showToast === 'function') {
-					showToast('Success', 'GeoJSON saved locally', 'success');
+				if (typeof showToast === "function") {
+					showToast("Success", "GeoJSON saved locally", "success");
 				}
 			}
 		} catch (error) {
-			console.error('[MapEditor] Error saving GeoJSON:', error);
-			if (typeof showToast === 'function') {
-				showToast(
-					'Error',
-					`Invalid GeoJSON: ${error.message}`,
-					'error',
-				);
+			console.error("[MapEditor] Error saving GeoJSON:", error);
+			if (typeof showToast === "function") {
+				showToast("Error", `Invalid GeoJSON: ${error.message}`, "error");
 			}
 		}
 	}
@@ -344,7 +318,7 @@ function initMapEditor(options = {}) {
 	}
 
 	function formatTolerance(val) {
-		if (val === 0) return '0';
+		if (val === 0) return "0";
 		if (val < 0.00001) return val.toExponential(1);
 		if (val < 0.0001) return val.toFixed(6);
 		if (val < 0.001) return val.toFixed(5);
@@ -361,15 +335,15 @@ function initMapEditor(options = {}) {
 	}
 
 	function formatTightness(val) {
-		if (val === 0) return 'Loose';
-		if (val === 10) return 'Tight';
+		if (val === 0) return "Loose";
+		if (val === 10) return "Tight";
 		return val.toString();
 	}
 
 	function countGeojsonPoints(geojson) {
 		let count = 0;
 		function countCoords(coords) {
-			if (typeof coords[0] === 'number') {
+			if (typeof coords[0] === "number") {
 				count++;
 			} else {
 				coords.forEach((c) => countCoords(c));
@@ -384,11 +358,11 @@ function initMapEditor(options = {}) {
 
 	function showShapeEditor() {
 		if (!currentGeoJson) {
-			if (typeof showToast === 'function') {
+			if (typeof showToast === "function") {
 				showToast(
-					'Warning',
-					'No shape to edit. Draw or import a polygon first.',
-					'warning',
+					"Warning",
+					"No shape to edit. Draw or import a polygon first.",
+					"warning",
 				);
 			}
 			return;
@@ -403,11 +377,11 @@ function initMapEditor(options = {}) {
 		// Reset sliders to neutral (no changes)
 		if (elements.shapeSimplifySlider) {
 			elements.shapeSimplifySlider.value = 0;
-			elements.shapeSimplifyValue.textContent = '0';
+			elements.shapeSimplifyValue.textContent = "0";
 		}
 		if (elements.shapeBufferSlider) {
 			elements.shapeBufferSlider.value = 0;
-			elements.shapeBufferValue.textContent = '0';
+			elements.shapeBufferValue.textContent = "0";
 		}
 		if (elements.shapeMegaSimplifyCheckbox) {
 			elements.shapeMegaSimplifyCheckbox.checked = false;
@@ -415,12 +389,12 @@ function initMapEditor(options = {}) {
 		if (elements.shapeTightnessSlider) {
 			elements.shapeTightnessSlider.value = 0;
 			elements.shapeTightnessSlider.disabled = true;
-			elements.shapeTightnessValue.textContent = 'Loose';
+			elements.shapeTightnessValue.textContent = "Loose";
 		}
 
 		// Show editor
 		if (elements.shapeEditor) {
-			elements.shapeEditor.style.display = 'block';
+			elements.shapeEditor.style.display = "block";
 		}
 
 		// Show original shape and initial preview
@@ -430,7 +404,7 @@ function initMapEditor(options = {}) {
 
 	function hideShapeEditor() {
 		if (elements.shapeEditor) {
-			elements.shapeEditor.style.display = 'none';
+			elements.shapeEditor.style.display = "none";
 		}
 		// Remove preview layers
 		if (shapePreviewLayer) {
@@ -461,11 +435,11 @@ function initMapEditor(options = {}) {
 		// Wrap as Feature if needed
 		let feature = originalShapeGeoJson;
 		if (
-			originalShapeGeoJson.type !== 'Feature' &&
-			originalShapeGeoJson.type !== 'FeatureCollection'
+			originalShapeGeoJson.type !== "Feature" &&
+			originalShapeGeoJson.type !== "FeatureCollection"
 		) {
 			feature = {
-				type: 'Feature',
+				type: "Feature",
 				geometry: originalShapeGeoJson,
 				properties: {},
 			};
@@ -474,9 +448,9 @@ function initMapEditor(options = {}) {
 		// Create dashed line style for reference
 		originalShapeLayer = L.geoJSON(feature, {
 			style: {
-				color: '#ff6600',
+				color: "#ff6600",
 				weight: 2,
-				dashArray: '5, 5',
+				dashArray: "5, 5",
 				fillOpacity: 0,
 				interactive: false,
 			},
@@ -490,11 +464,11 @@ function initMapEditor(options = {}) {
 			// Wrap as Feature if needed
 			let feature = originalShapeGeoJson;
 			if (
-				originalShapeGeoJson.type !== 'Feature' &&
-				originalShapeGeoJson.type !== 'FeatureCollection'
+				originalShapeGeoJson.type !== "Feature" &&
+				originalShapeGeoJson.type !== "FeatureCollection"
 			) {
 				feature = {
-					type: 'Feature',
+					type: "Feature",
 					geometry: originalShapeGeoJson,
 					properties: {},
 				};
@@ -503,21 +477,19 @@ function initMapEditor(options = {}) {
 			const tolerance = sliderToTolerance(
 				Number.parseFloat(elements.shapeSimplifySlider?.value || 0),
 			);
-			const buffer = Number.parseFloat(
-				elements.shapeBufferSlider?.value || 0,
-			);
+			const buffer = Number.parseFloat(elements.shapeBufferSlider?.value || 0);
 
 			let processed = feature;
 
 			// Apply buffer if > 0
-			if (buffer > 0 && typeof turf !== 'undefined') {
+			if (buffer > 0 && typeof turf !== "undefined") {
 				processed = turf.buffer(processed, buffer, {
-					units: 'kilometers',
+					units: "kilometers",
 				});
 			}
 
 			// Apply simplification if > 0
-			if (tolerance > 0 && typeof turf !== 'undefined') {
+			if (tolerance > 0 && typeof turf !== "undefined") {
 				processed = turf.simplify(processed, {
 					tolerance: tolerance,
 					highQuality: true,
@@ -527,12 +499,10 @@ function initMapEditor(options = {}) {
 			// Apply mega simplify if checked
 			if (
 				elements.shapeMegaSimplifyCheckbox?.checked &&
-				typeof turf !== 'undefined'
+				typeof turf !== "undefined"
 			) {
 				const concavity = sliderToConcavity(
-					Number.parseFloat(
-						elements.shapeTightnessSlider?.value || 0,
-					),
+					Number.parseFloat(elements.shapeTightnessSlider?.value || 0),
 				);
 
 				try {
@@ -542,11 +512,11 @@ function initMapEditor(options = {}) {
 					});
 
 					if (!processed) {
-						console.warn('[MapEditor] Convex hull returned null');
+						console.warn("[MapEditor] Convex hull returned null");
 						processed = turf.convex(feature);
 					}
 				} catch (e) {
-					console.warn('[MapEditor] Convex hull failed:', e.message);
+					console.warn("[MapEditor] Convex hull failed:", e.message);
 					// Keep original processed value
 				}
 			}
@@ -564,9 +534,9 @@ function initMapEditor(options = {}) {
 			// Add preview layer
 			shapePreviewLayer = L.geoJSON(processed, {
 				style: {
-					color: '#3388ff',
+					color: "#3388ff",
 					weight: 3,
-					fillColor: '#3388ff',
+					fillColor: "#3388ff",
 					fillOpacity: 0.2,
 				},
 			}).addTo(map);
@@ -580,21 +550,17 @@ function initMapEditor(options = {}) {
 				elements.shapePointsCount.textContent = `Points: ${count}`;
 			}
 		} catch (error) {
-			console.error('[MapEditor] Error processing shape:', error);
-			if (typeof showToast === 'function') {
-				showToast(
-					'Error',
-					`Error processing: ${error.message}`,
-					'error',
-				);
+			console.error("[MapEditor] Error processing shape:", error);
+			if (typeof showToast === "function") {
+				showToast("Error", `Error processing: ${error.message}`, "error");
 			}
 		}
 	}
 
 	function applyShapeChanges() {
 		if (!shapePreviewLayer) {
-			if (typeof showToast === 'function') {
-				showToast('Warning', 'No changes to apply', 'warning');
+			if (typeof showToast === "function") {
+				showToast("Warning", "No changes to apply", "warning");
 			}
 			return;
 		}
@@ -603,11 +569,11 @@ function initMapEditor(options = {}) {
 		const previewGeoJson = shapePreviewLayer.toGeoJSON();
 		let geometry = previewGeoJson;
 		if (
-			previewGeoJson.type === 'FeatureCollection' &&
+			previewGeoJson.type === "FeatureCollection" &&
 			previewGeoJson.features.length > 0
 		) {
 			geometry = previewGeoJson.features[0].geometry;
-		} else if (previewGeoJson.type === 'Feature') {
+		} else if (previewGeoJson.type === "Feature") {
 			geometry = previewGeoJson.geometry;
 		}
 
@@ -622,8 +588,8 @@ function initMapEditor(options = {}) {
 		// Apply the processed geometry
 		updateGeoJson(geometry);
 
-		if (typeof showToast === 'function') {
-			showToast('Success', 'Shape changes applied', 'success');
+		if (typeof showToast === "function") {
+			showToast("Success", "Shape changes applied", "success");
 		}
 	}
 
@@ -644,49 +610,45 @@ function initMapEditor(options = {}) {
 
 	// Set up event listeners - Raw GeoJSON editor
 	if (elements.editGeoJsonBtn) {
-		elements.editGeoJsonBtn.addEventListener('click', showEditor);
+		elements.editGeoJsonBtn.addEventListener("click", showEditor);
 	}
 	if (elements.showBtn) {
-		elements.showBtn.addEventListener('click', showGeoJsonPreview);
+		elements.showBtn.addEventListener("click", showGeoJsonPreview);
 	}
 	if (elements.saveLocallyBtn) {
-		elements.saveLocallyBtn.addEventListener('click', saveLocally);
+		elements.saveLocallyBtn.addEventListener("click", saveLocally);
 	}
 	if (elements.cancelBtn) {
-		elements.cancelBtn.addEventListener('click', cancelEditing);
+		elements.cancelBtn.addEventListener("click", cancelEditing);
 	}
 
 	// Set up event listeners - Shape editor
 	if (elements.editShapeBtn) {
-		elements.editShapeBtn.addEventListener('click', showShapeEditor);
+		elements.editShapeBtn.addEventListener("click", showShapeEditor);
 	}
 	if (elements.shapeSimplifySlider) {
-		elements.shapeSimplifySlider.addEventListener('input', function () {
+		elements.shapeSimplifySlider.addEventListener("input", function () {
 			const tolerance = sliderToTolerance(Number.parseFloat(this.value));
-			elements.shapeSimplifyValue.textContent =
-				formatTolerance(tolerance);
+			elements.shapeSimplifyValue.textContent = formatTolerance(tolerance);
 			processAndPreviewShape();
 		});
 	}
 	if (elements.shapeBufferSlider) {
-		elements.shapeBufferSlider.addEventListener('input', function () {
+		elements.shapeBufferSlider.addEventListener("input", function () {
 			elements.shapeBufferValue.textContent = this.value;
 			processAndPreviewShape();
 		});
 	}
 	if (elements.shapeMegaSimplifyCheckbox) {
-		elements.shapeMegaSimplifyCheckbox.addEventListener(
-			'change',
-			function () {
-				if (elements.shapeTightnessSlider) {
-					elements.shapeTightnessSlider.disabled = !this.checked;
-				}
-				processAndPreviewShape();
-			},
-		);
+		elements.shapeMegaSimplifyCheckbox.addEventListener("change", function () {
+			if (elements.shapeTightnessSlider) {
+				elements.shapeTightnessSlider.disabled = !this.checked;
+			}
+			processAndPreviewShape();
+		});
 	}
 	if (elements.shapeTightnessSlider) {
-		elements.shapeTightnessSlider.addEventListener('input', function () {
+		elements.shapeTightnessSlider.addEventListener("input", function () {
 			const val = Number.parseInt(this.value);
 			if (elements.shapeTightnessValue) {
 				elements.shapeTightnessValue.textContent = formatTightness(val);
@@ -696,15 +658,15 @@ function initMapEditor(options = {}) {
 	}
 	if (elements.shapeShowOriginal) {
 		elements.shapeShowOriginal.addEventListener(
-			'change',
+			"change",
 			updateOriginalShapeLayer,
 		);
 	}
 	if (elements.applyShapeBtn) {
-		elements.applyShapeBtn.addEventListener('click', applyShapeChanges);
+		elements.applyShapeBtn.addEventListener("click", applyShapeChanges);
 	}
 	if (elements.cancelShapeBtn) {
-		elements.cancelShapeBtn.addEventListener('click', cancelShapeEditing);
+		elements.cancelShapeBtn.addEventListener("click", cancelShapeEditing);
 	}
 
 	// Load initial GeoJSON if provided
@@ -729,6 +691,6 @@ function initMapEditor(options = {}) {
 }
 
 // Export for module systems if available
-if (typeof module !== 'undefined' && module.exports) {
+if (typeof module !== "undefined" && module.exports) {
 	module.exports = { initMapEditor };
 }

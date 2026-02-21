@@ -1,55 +1,54 @@
 // Common validation functions
 function validateKey(key, existingKeys) {
-	key = key ? key.trim() : '';
+	key = key ? key.trim() : "";
 	if (!key) {
-		return { isValid: false, message: 'Key cannot be empty' };
+		return { isValid: false, message: "Key cannot be empty" };
 	}
 	if (existingKeys?.includes(key)) {
-		return { isValid: false, message: 'Key already exists' };
+		return { isValid: false, message: "Key already exists" };
 	}
 	if (!/^[a-zA-Z][a-zA-Z0-9_:]*$/.test(key)) {
 		return {
 			isValid: false,
 			message:
-				'Key must start with a letter and contain only letters, numbers, underscores, and colons',
+				"Key must start with a letter and contain only letters, numbers, underscores, and colons",
 		};
 	}
 	return { isValid: true };
 }
 
 function validateNumericValue(value, type) {
-	if (!value || value.trim() === '') {
-		return { isValid: false, message: 'Value cannot be empty' };
+	if (!value || value.trim() === "") {
+		return { isValid: false, message: "Value cannot be empty" };
 	}
 
 	value = value.toString().trim();
 
-	if (type === 'integer') {
+	if (type === "integer") {
 		if (!/^\d+$/.test(value)) {
 			return {
 				isValid: false,
-				message: 'Value must be a valid integer (no decimal points)',
+				message: "Value must be a valid integer (no decimal points)",
 			};
 		}
 		const num = Number.parseInt(value, 10);
 		if (num < 0) {
-			return { isValid: false, message: 'Value must be non-negative' };
+			return { isValid: false, message: "Value must be non-negative" };
 		}
 		return { isValid: true, value: num };
-	} else if (type === 'number') {
+	} else if (type === "number") {
 		if (!/^\d*\.?\d*$/.test(value)) {
 			return {
 				isValid: false,
-				message:
-					'Value must contain only digits and at most one decimal point',
+				message: "Value must contain only digits and at most one decimal point",
 			};
 		}
 		const num = Number.parseFloat(value);
 		if (Number.isNaN(num)) {
-			return { isValid: false, message: 'Value must be a valid number' };
+			return { isValid: false, message: "Value must be a valid number" };
 		}
 		if (num < 0) {
-			return { isValid: false, message: 'Value must be non-negative' };
+			return { isValid: false, message: "Value must be non-negative" };
 		}
 		return { isValid: true, value: num };
 	}
@@ -58,18 +57,18 @@ function validateNumericValue(value, type) {
 }
 
 function validateValue(value, requirements) {
-	if (!value || value.trim() === '') {
-		return { isValid: false, message: 'Value cannot be empty' };
+	if (!value || value.trim() === "") {
+		return { isValid: false, message: "Value cannot be empty" };
 	}
 
 	if (requirements?.type) {
-		if (requirements.type === 'integer' || requirements.type === 'number') {
+		if (requirements.type === "integer" || requirements.type === "number") {
 			return validateNumericValue(value, requirements.type);
 		} else if (requirements.allowed_values) {
 			if (!requirements.allowed_values.includes(value)) {
 				return {
 					isValid: false,
-					message: `Value must be one of: ${requirements.allowed_values.join(', ')}`,
+					message: `Value must be one of: ${requirements.allowed_values.join(", ")}`,
 				};
 			}
 		}

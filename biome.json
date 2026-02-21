@@ -21,12 +21,6 @@
 		"ignore": ["**/.venv/**", "**/node_modules/**", "**/__pycache__/**"]
 	},
 	"formatter": {
-		"indentWidth": 4,
 		"ignore": ["**/.venv/**", "**/node_modules/**", "**/__pycache__/**"]
-	},
-	"javascript": {
-		"formatter": {
-			"quoteStyle": "single"
-		}
 	}
 }
