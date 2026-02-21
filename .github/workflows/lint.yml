@@ -8,6 +8,7 @@ on:
       - 'biome.json'
       - '*.py'
       - 'pyproject.toml'
+      - 'uv.lock'
   push:
     branches:
       - main
@@ -17,6 +18,7 @@ on:
       - 'biome.json'
       - '*.py'
       - 'pyproject.toml'
+      - 'uv.lock'
 
 jobs:
   lint-frontend:
