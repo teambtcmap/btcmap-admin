@@ -1,16 +1,16 @@
 /**
  * Map Editor Component
- * 
+ *
  * Provides Leaflet map with draw controls for polygon editing,
  * shape editing tools (simplify/buffer/merge), and a raw GeoJSON text editor.
- * 
+ *
  * Usage:
  *   const mapEditor = initMapEditor({
  *       containerId: 'map',
  *       initialGeoJson: existingGeoJson || null,
  *       onGeoJsonChange: (geometry) => { window.currentGeoJson = geometry; }
  *   });
- * 
+ *
  * Returns:
  *   {
  *       map: Leaflet map instance,
@@ -18,7 +18,7 @@
  *       getCurrentGeoJson: () => geometry object or null,
  *       updateGeoJson: (geojson) => void,
  *   }
- * 
+ *
  * Requires:
  *   - Leaflet and Leaflet.draw loaded
  *   - Turf.js loaded (for shape editing)
@@ -28,18 +28,18 @@ function initMapEditor(options = {}) {
     const {
         containerId = 'map',
         initialGeoJson = null,
-        onGeoJsonChange = null
+        onGeoJsonChange = null,
     } = options;
 
     // State
     let currentGeoJson = null;
     let geoJsonLayer = null;
     let previouslySavedGeoJson = null;
-    
+
     // Shape editor state
-    let originalShapeGeoJson = null;    // Original shape before editing
-    let shapePreviewLayer = null;       // Preview layer for shape edits
-    let originalShapeLayer = null;      // Reference layer showing original
+    let originalShapeGeoJson = null; // Original shape before editing
+    let shapePreviewLayer = null; // Preview layer for shape edits
+    let originalShapeLayer = null; // Reference layer showing original
 
     // DOM Elements
     const elements = {
@@ -58,13 +58,15 @@ function initMapEditor(options = {}) {
         shapeSimplifyValue: document.getElementById('shape-simplify-value'),
         shapeBufferSlider: document.getElementById('shape-buffer-slider'),
         shapeBufferValue: document.getElementById('shape-buffer-value'),
-        shapeMegaSimplifyCheckbox: document.getElementById('shape-mega-simplify'),
+        shapeMegaSimplifyCheckbox: document.getElementById(
+            'shape-mega-simplify'
+        ),
         shapeTightnessSlider: document.getElementById('shape-tightness-slider'),
         shapeTightnessValue: document.getElementById('shape-tightness-value'),
         shapePointsCount: document.getElementById('shape-points-count'),
         shapeShowOriginal: document.getElementById('shape-show-original'),
         applyShapeBtn: document.getElementById('apply-shape-btn'),
-        cancelShapeBtn: document.getElementById('cancel-shape-btn')
+        cancelShapeBtn: document.getElementById('cancel-shape-btn'),
     };
 
     // Initialize map
@@ -75,7 +77,7 @@ function initMapEditor(options = {}) {
 
     const map = L.map(containerId).setView([0, 0], 2);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: '&copy; OpenStreetMap contributors'
+        attribution: '&copy; OpenStreetMap contributors',
     }).addTo(map);
 
     // Initialize draw control
@@ -89,25 +91,25 @@ function initMapEditor(options = {}) {
                 showArea: true,
                 shapeOptions: {
                     color: '#3388ff',
-                    weight: 3
-                }
+                    weight: 3,
+                },
             },
             rectangle: {
                 shapeOptions: {
                     color: '#3388ff',
-                    weight: 3
-                }
+                    weight: 3,
+                },
             },
             circle: false,
             circlemarker: false,
             marker: false,
-            polyline: false
+            polyline: false,
         },
         edit: {
             featureGroup: drawnItems,
             remove: true,
-            edit: true
-        }
+            edit: true,
+        },
     });
     map.addControl(drawControl);
 
@@ -130,7 +132,11 @@ function initMapEditor(options = {}) {
 
         // Keep textarea in sync
         if (elements.geoJsonInput) {
-            elements.geoJsonInput.value = JSON.stringify(currentGeoJson, null, 2);
+            elements.geoJsonInput.value = JSON.stringify(
+                currentGeoJson,
+                null,
+                2
+            );
         }
 
         map.fitBounds(drawnItems.getBounds());
@@ -171,7 +177,11 @@ function initMapEditor(options = {}) {
             let geometry = geoJson;
             if (geoJson.type === 'Feature') {
                 geometry = geoJson.geometry;
-            } else if (geoJson.type === 'FeatureCollection' && geoJson.features && geoJson.features.length > 0) {
+            } else if (
+                geoJson.type === 'FeatureCollection' &&
+                geoJson.features &&
+                geoJson.features.length > 0
+            ) {
                 geometry = geoJson.features[0].geometry;
             }
 
@@ -180,8 +190,8 @@ function initMapEditor(options = {}) {
 
             // Wrap back as Feature for display in Leaflet
             const featureCollection = {
-                "type": "Feature",
-                "geometry": geometry
+                type: 'Feature',
+                geometry: geometry,
             };
 
             // Create GeoJSON feature and add to map
@@ -196,7 +206,11 @@ function initMapEditor(options = {}) {
 
             // Update textarea with current GeoJSON (keep them in sync)
             if (elements.geoJsonInput) {
-                elements.geoJsonInput.value = JSON.stringify(currentGeoJson, null, 2);
+                elements.geoJsonInput.value = JSON.stringify(
+                    currentGeoJson,
+                    null,
+                    2
+                );
             }
 
             if (onGeoJsonChange) {
@@ -205,16 +219,20 @@ function initMapEditor(options = {}) {
 
             return true;
         } catch (error) {
-            console.error("[MapEditor] Error adding GeoJSON to map:", error);
+            console.error('[MapEditor] Error adding GeoJSON to map:', error);
             if (typeof showToast === 'function') {
-                showToast('Error', `Invalid GeoJSON: ${error.message}`, 'error');
+                showToast(
+                    'Error',
+                    `Invalid GeoJSON: ${error.message}`,
+                    'error'
+                );
             }
             return false;
         }
     }
 
     // Handle draw created
-    map.on(L.Draw.Event.CREATED, function(e) {
+    map.on(L.Draw.Event.CREATED, function (e) {
         const layer = e.layer;
         // Clear existing and add new
         drawnItems.clearLayers();
@@ -223,12 +241,12 @@ function initMapEditor(options = {}) {
     });
 
     // Handle draw edited
-    map.on(L.Draw.Event.EDITED, function(e) {
+    map.on(L.Draw.Event.EDITED, function (e) {
         updateGeoJsonFromDrawnItems();
     });
 
     // Handle draw deleted
-    map.on(L.Draw.Event.DELETED, function(e) {
+    map.on(L.Draw.Event.DELETED, function (e) {
         currentGeoJson = null;
         if (geoJsonLayer) {
             map.removeLayer(geoJsonLayer);
@@ -248,7 +266,11 @@ function initMapEditor(options = {}) {
             elements.geoJsonEditor.style.display = 'block';
         }
         if (currentGeoJson && elements.geoJsonInput) {
-            elements.geoJsonInput.value = JSON.stringify(currentGeoJson, null, 2);
+            elements.geoJsonInput.value = JSON.stringify(
+                currentGeoJson,
+                null,
+                2
+            );
             previouslySavedGeoJson = JSON.parse(JSON.stringify(currentGeoJson));
         }
     }
@@ -268,9 +290,13 @@ function initMapEditor(options = {}) {
                 }
             }
         } catch (error) {
-            console.error("[MapEditor] Error parsing GeoJSON:", error);
+            console.error('[MapEditor] Error parsing GeoJSON:', error);
             if (typeof showToast === 'function') {
-                showToast('Error', 'Invalid GeoJSON: ' + error.message, 'error');
+                showToast(
+                    'Error',
+                    'Invalid GeoJSON: ' + error.message,
+                    'error'
+                );
             }
         }
     }
@@ -286,9 +312,13 @@ function initMapEditor(options = {}) {
                 }
             }
         } catch (error) {
-            console.error("[MapEditor] Error saving GeoJSON:", error);
+            console.error('[MapEditor] Error saving GeoJSON:', error);
             if (typeof showToast === 'function') {
-                showToast('Error', 'Invalid GeoJSON: ' + error.message, 'error');
+                showToast(
+                    'Error',
+                    'Invalid GeoJSON: ' + error.message,
+                    'error'
+                );
             }
         }
     }
@@ -327,7 +357,7 @@ function initMapEditor(options = {}) {
     // 10 = tighter fit (concavity = 1)
     function sliderToConcavity(sliderVal) {
         if (sliderVal === 0) return Infinity;
-        return Math.max(1, 21 - (sliderVal * 2));
+        return Math.max(1, 21 - sliderVal * 2);
     }
 
     function formatTightness(val) {
@@ -342,7 +372,7 @@ function initMapEditor(options = {}) {
             if (typeof coords[0] === 'number') {
                 count++;
             } else {
-                coords.forEach(c => countCoords(c));
+                coords.forEach((c) => countCoords(c));
             }
         }
         const geometry = geojson.geometry || geojson;
@@ -355,7 +385,11 @@ function initMapEditor(options = {}) {
     function showShapeEditor() {
         if (!currentGeoJson) {
             if (typeof showToast === 'function') {
-                showToast('Warning', 'No shape to edit. Draw or import a polygon first.', 'warning');
+                showToast(
+                    'Warning',
+                    'No shape to edit. Draw or import a polygon first.',
+                    'warning'
+                );
             }
             return;
         }
@@ -416,14 +450,25 @@ function initMapEditor(options = {}) {
             originalShapeLayer = null;
         }
 
-        if (!originalShapeGeoJson || !elements.shapeShowOriginal || !elements.shapeShowOriginal.checked) {
+        if (
+            !originalShapeGeoJson ||
+            !elements.shapeShowOriginal ||
+            !elements.shapeShowOriginal.checked
+        ) {
             return;
         }
 
         // Wrap as Feature if needed
         let feature = originalShapeGeoJson;
-        if (originalShapeGeoJson.type !== 'Feature' && originalShapeGeoJson.type !== 'FeatureCollection') {
-            feature = { type: 'Feature', geometry: originalShapeGeoJson, properties: {} };
+        if (
+            originalShapeGeoJson.type !== 'Feature' &&
+            originalShapeGeoJson.type !== 'FeatureCollection'
+        ) {
+            feature = {
+                type: 'Feature',
+                geometry: originalShapeGeoJson,
+                properties: {},
+            };
         }
 
         // Create dashed line style for reference
@@ -433,8 +478,8 @@ function initMapEditor(options = {}) {
                 weight: 2,
                 dashArray: '5, 5',
                 fillOpacity: 0,
-                interactive: false
-            }
+                interactive: false,
+            },
         }).addTo(map);
     }
 
@@ -444,36 +489,54 @@ function initMapEditor(options = {}) {
         try {
             // Wrap as Feature if needed
             let feature = originalShapeGeoJson;
-            if (originalShapeGeoJson.type !== 'Feature' && originalShapeGeoJson.type !== 'FeatureCollection') {
-                feature = { type: 'Feature', geometry: originalShapeGeoJson, properties: {} };
+            if (
+                originalShapeGeoJson.type !== 'Feature' &&
+                originalShapeGeoJson.type !== 'FeatureCollection'
+            ) {
+                feature = {
+                    type: 'Feature',
+                    geometry: originalShapeGeoJson,
+                    properties: {},
+                };
             }
 
-            const tolerance = sliderToTolerance(parseFloat(elements.shapeSimplifySlider?.value || 0));
+            const tolerance = sliderToTolerance(
+                parseFloat(elements.shapeSimplifySlider?.value || 0)
+            );
             const buffer = parseFloat(elements.shapeBufferSlider?.value || 0);
 
             let processed = feature;
 
             // Apply buffer if > 0
             if (buffer > 0 && typeof turf !== 'undefined') {
-                processed = turf.buffer(processed, buffer, { units: 'kilometers' });
+                processed = turf.buffer(processed, buffer, {
+                    units: 'kilometers',
+                });
             }
 
             // Apply simplification if > 0
             if (tolerance > 0 && typeof turf !== 'undefined') {
                 processed = turf.simplify(processed, {
                     tolerance: tolerance,
-                    highQuality: true
+                    highQuality: true,
                 });
             }
 
             // Apply mega simplify if checked
-            if (elements.shapeMegaSimplifyCheckbox?.checked && typeof turf !== 'undefined') {
-                const concavity = sliderToConcavity(parseFloat(elements.shapeTightnessSlider?.value || 0));
+            if (
+                elements.shapeMegaSimplifyCheckbox?.checked &&
+                typeof turf !== 'undefined'
+            ) {
+                const concavity = sliderToConcavity(
+                    parseFloat(elements.shapeTightnessSlider?.value || 0)
+                );
 
                 try {
                     // Use turf.convex with concavity parameter
-                    processed = turf.convex(processed, { concavity: concavity });
-                    
+                    processed = turf.convex(processed, {
+                        concavity: concavity,
+                    });
+
                     if (!processed) {
                         console.warn('[MapEditor] Convex hull returned null');
                         processed = turf.convex(feature);
@@ -490,7 +553,7 @@ function initMapEditor(options = {}) {
             }
 
             // Hide the main drawn items while previewing
-            drawnItems.eachLayer(layer => {
+            drawnItems.eachLayer((layer) => {
                 layer.setStyle({ opacity: 0, fillOpacity: 0 });
             });
 
@@ -500,8 +563,8 @@ function initMapEditor(options = {}) {
                     color: '#3388ff',
                     weight: 3,
                     fillColor: '#3388ff',
-                    fillOpacity: 0.2
-                }
+                    fillOpacity: 0.2,
+                },
             }).addTo(map);
 
             // Fit bounds
@@ -512,11 +575,14 @@ function initMapEditor(options = {}) {
             if (elements.shapePointsCount) {
                 elements.shapePointsCount.textContent = `Points: ${count}`;
             }
-
         } catch (error) {
             console.error('[MapEditor] Error processing shape:', error);
             if (typeof showToast === 'function') {
-                showToast('Error', `Error processing: ${error.message}`, 'error');
+                showToast(
+                    'Error',
+                    `Error processing: ${error.message}`,
+                    'error'
+                );
             }
         }
     }
@@ -532,7 +598,10 @@ function initMapEditor(options = {}) {
         // Get geometry from preview layer
         const previewGeoJson = shapePreviewLayer.toGeoJSON();
         let geometry = previewGeoJson;
-        if (previewGeoJson.type === 'FeatureCollection' && previewGeoJson.features.length > 0) {
+        if (
+            previewGeoJson.type === 'FeatureCollection' &&
+            previewGeoJson.features.length > 0
+        ) {
             geometry = previewGeoJson.features[0].geometry;
         } else if (previewGeoJson.type === 'Feature') {
             geometry = previewGeoJson.geometry;
@@ -542,7 +611,7 @@ function initMapEditor(options = {}) {
         hideShapeEditor();
 
         // Restore visibility of drawn items
-        drawnItems.eachLayer(layer => {
+        drawnItems.eachLayer((layer) => {
             layer.setStyle({ opacity: 1, fillOpacity: 0.2 });
         });
 
@@ -558,7 +627,7 @@ function initMapEditor(options = {}) {
         hideShapeEditor();
 
         // Restore visibility of drawn items
-        drawnItems.eachLayer(layer => {
+        drawnItems.eachLayer((layer) => {
             layer.setStyle({ opacity: 1, fillOpacity: 0.2 });
         });
 
@@ -588,28 +657,32 @@ function initMapEditor(options = {}) {
         elements.editShapeBtn.addEventListener('click', showShapeEditor);
     }
     if (elements.shapeSimplifySlider) {
-        elements.shapeSimplifySlider.addEventListener('input', function() {
+        elements.shapeSimplifySlider.addEventListener('input', function () {
             const tolerance = sliderToTolerance(parseFloat(this.value));
-            elements.shapeSimplifyValue.textContent = formatTolerance(tolerance);
+            elements.shapeSimplifyValue.textContent =
+                formatTolerance(tolerance);
             processAndPreviewShape();
         });
     }
     if (elements.shapeBufferSlider) {
-        elements.shapeBufferSlider.addEventListener('input', function() {
+        elements.shapeBufferSlider.addEventListener('input', function () {
             elements.shapeBufferValue.textContent = this.value;
             processAndPreviewShape();
         });
     }
     if (elements.shapeMegaSimplifyCheckbox) {
-        elements.shapeMegaSimplifyCheckbox.addEventListener('change', function() {
-            if (elements.shapeTightnessSlider) {
-                elements.shapeTightnessSlider.disabled = !this.checked;
+        elements.shapeMegaSimplifyCheckbox.addEventListener(
+            'change',
+            function () {
+                if (elements.shapeTightnessSlider) {
+                    elements.shapeTightnessSlider.disabled = !this.checked;
+                }
+                processAndPreviewShape();
             }
-            processAndPreviewShape();
-        });
+        );
     }
     if (elements.shapeTightnessSlider) {
-        elements.shapeTightnessSlider.addEventListener('input', function() {
+        elements.shapeTightnessSlider.addEventListener('input', function () {
             const val = parseInt(this.value);
             if (elements.shapeTightnessValue) {
                 elements.shapeTightnessValue.textContent = formatTightness(val);
@@ -618,7 +691,10 @@ function initMapEditor(options = {}) {
         });
     }
     if (elements.shapeShowOriginal) {
-        elements.shapeShowOriginal.addEventListener('change', updateOriginalShapeLayer);
+        elements.shapeShowOriginal.addEventListener(
+            'change',
+            updateOriginalShapeLayer
+        );
     }
     if (elements.applyShapeBtn) {
         elements.applyShapeBtn.addEventListener('click', applyShapeChanges);
@@ -644,7 +720,7 @@ function initMapEditor(options = {}) {
         showEditor,
         hideEditor,
         showShapeEditor,
-        hideShapeEditor
+        hideShapeEditor,
     };
 }
 

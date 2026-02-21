@@ -1,16 +1,16 @@
 /**
  * OSM GeoJSON Generator Component
- * 
+ *
  * Provides OSM search functionality with Turf.js processing
  * for simplification and buffering of boundaries.
- * 
+ *
  * Usage:
  *   initOsmGeojsonGenerator({
  *       mapEditor: mapEditorInstance,
  *       onApply: (geometry) => mapEditor.updateGeoJson(geometry),
  *       onPopulationFound: (population, date) => { ... }
  *   });
- * 
+ *
  * Requires:
  *   - Turf.js loaded
  *   - mapEditor instance from map-editor.js
@@ -22,7 +22,7 @@ function initOsmGeojsonGenerator(options = {}) {
     const {
         mapEditor = null,
         onApply = null,
-        onPopulationFound = null
+        onPopulationFound = null,
     } = options;
 
     if (!mapEditor) {
@@ -48,15 +48,15 @@ function initOsmGeojsonGenerator(options = {}) {
         showOriginalBoundary: document.getElementById('show-original-boundary'),
         applyBtn: document.getElementById('apply-geojson-btn'),
         loading: document.getElementById('geojson-loading'),
-        error: document.getElementById('geojson-error')
+        error: document.getElementById('geojson-error'),
     };
 
     // State
-    let originalOsmGeojson = null;      // Full-detail from Nominatim
-    let processedGeojson = null;        // After simplification/buffer
-    let originalBoundaryLayer = null;   // Reference layer showing original
-    let previewLayer = null;            // Preview layer for processed result
-    let osmSearchResults = [];          // Store search results
+    let originalOsmGeojson = null; // Full-detail from Nominatim
+    let processedGeojson = null; // After simplification/buffer
+    let originalBoundaryLayer = null; // Reference layer showing original
+    let previewLayer = null; // Preview layer for processed result
+    let osmSearchResults = []; // Store search results
 
     // Helper functions
     function showError(message) {
@@ -80,20 +80,20 @@ function initOsmGeojsonGenerator(options = {}) {
 
     function countGeojsonPoints(geojson) {
         let count = 0;
-        
+
         function countCoords(coords) {
             if (typeof coords[0] === 'number') {
                 count++;
             } else {
-                coords.forEach(c => countCoords(c));
+                coords.forEach((c) => countCoords(c));
             }
         }
-        
+
         const geometry = geojson.geometry || geojson;
         if (geometry && geometry.coordinates) {
             countCoords(geometry.coordinates);
         }
-        
+
         return count;
     }
 
@@ -102,8 +102,8 @@ function initOsmGeojsonGenerator(options = {}) {
     function sliderToTolerance(sliderVal) {
         if (sliderVal === 0) return 0;
         // Map 1-10 to 0.000001-0.01 logarithmically (6 orders of magnitude)
-        const minLog = Math.log10(0.000001);  // -6
-        const maxLog = Math.log10(0.01);      // -2
+        const minLog = Math.log10(0.000001); // -6
+        const maxLog = Math.log10(0.01); // -2
         const logVal = minLog + (sliderVal / 10) * (maxLog - minLog);
         return Math.pow(10, logVal);
     }
@@ -124,7 +124,7 @@ function initOsmGeojsonGenerator(options = {}) {
         if (sliderVal === 0) return Infinity; // Pure convex hull
         // Map 1-10 to concavity values (higher = looser, lower = tighter)
         // 1 = 20 (loose), 10 = 1 (tight)
-        return Math.max(1, 21 - (sliderVal * 2));
+        return Math.max(1, 21 - sliderVal * 2);
     }
 
     function formatTightness(val) {
@@ -142,37 +142,41 @@ function initOsmGeojsonGenerator(options = {}) {
             }
             return;
         }
-        
+
         hideError();
         elements.resultsContainer.style.display = 'none';
         elements.controls.style.display = 'none';
         showLoading(true);
-        
+
         try {
-            const response = await apiFetch(`/api/search_osm?q=${encodeURIComponent(query)}`);
+            const response = await apiFetch(
+                `/api/search_osm?q=${encodeURIComponent(query)}`
+            );
             const results = await response.json();
-            
+
             if (results.error) {
                 throw new Error(results.error);
             }
-            
+
             if (results.length === 0) {
-                showError('No administrative areas found. Try a different search term.');
+                showError(
+                    'No administrative areas found. Try a different search term.'
+                );
                 return;
             }
-            
+
             // Store results and populate dropdown
             osmSearchResults = results;
-            elements.resultsSelect.innerHTML = '<option value="">Select a place...</option>';
+            elements.resultsSelect.innerHTML =
+                '<option value="">Select a place...</option>';
             results.forEach((r, index) => {
                 const option = document.createElement('option');
                 option.value = index;
                 option.textContent = r.display_name;
                 elements.resultsSelect.appendChild(option);
             });
-            
+
             elements.resultsContainer.style.display = 'block';
-            
         } catch (error) {
             console.error('[OsmGeojsonGenerator] Search error:', error);
             showError(error.message || 'Search failed');
@@ -185,13 +189,13 @@ function initOsmGeojsonGenerator(options = {}) {
     async function onSearchResultSelect() {
         const index = elements.resultsSelect.value;
         if (index === '') return;
-        
+
         const result = osmSearchResults[parseInt(index)];
         if (!result || !result.geojson) {
             showError('Selected place has no boundary data');
             return;
         }
-        
+
         // Check if there's already a polygon, confirm before replacing
         const currentGeoJson = mapEditor.getCurrentGeoJson();
         if (currentGeoJson && mapEditor.drawnItems.getLayers().length > 0) {
@@ -201,25 +205,31 @@ function initOsmGeojsonGenerator(options = {}) {
                 return;
             }
         }
-        
+
         // Store the original GeoJSON
         originalOsmGeojson = result.geojson;
-        
+
         // Handle population data from OSM extratags
-        if (result.extratags && result.extratags.population && onPopulationFound) {
+        if (
+            result.extratags &&
+            result.extratags.population &&
+            onPopulationFound
+        ) {
             const populationValue = parseInt(result.extratags.population, 10);
             if (!isNaN(populationValue)) {
                 const today = new Date().toISOString().split('T')[0];
                 onPopulationFound(populationValue, today);
             }
         }
-        
+
         // Reset sliders to defaults
-        elements.simplifySlider.value = 5;  // Maps to ~0.001 tolerance
-        elements.simplifyValue.textContent = formatTolerance(sliderToTolerance(5));
+        elements.simplifySlider.value = 5; // Maps to ~0.001 tolerance
+        elements.simplifyValue.textContent = formatTolerance(
+            sliderToTolerance(5)
+        );
         elements.bufferSlider.value = 0.1;
         elements.bufferValue.textContent = '0.1';
-        
+
         // Reset mega simplify controls
         if (elements.megaSimplifyCheckbox) {
             elements.megaSimplifyCheckbox.checked = false;
@@ -231,10 +241,10 @@ function initOsmGeojsonGenerator(options = {}) {
         if (elements.tightnessValue) {
             elements.tightnessValue.textContent = 'Loose';
         }
-        
+
         // Show controls and process
         elements.controls.style.display = 'block';
-        
+
         // Show original boundary and process
         updateOriginalBoundaryLayer();
         processAndPreviewGeojson();
@@ -243,7 +253,9 @@ function initOsmGeojsonGenerator(options = {}) {
     // Confirmation dialog for replacing existing polygon
     function confirmPolygonReplacement() {
         return new Promise((resolve) => {
-            const result = confirm('Replace existing polygon with the selected OSM boundary?');
+            const result = confirm(
+                'Replace existing polygon with the selected OSM boundary?'
+            );
             resolve(result);
         });
     }
@@ -251,23 +263,30 @@ function initOsmGeojsonGenerator(options = {}) {
     // Show/hide original boundary reference layer
     function updateOriginalBoundaryLayer() {
         const map = mapEditor.map;
-        
+
         // Remove existing layer
         if (originalBoundaryLayer) {
             map.removeLayer(originalBoundaryLayer);
             originalBoundaryLayer = null;
         }
-        
+
         if (!originalOsmGeojson || !elements.showOriginalBoundary.checked) {
             return;
         }
-        
+
         // Wrap as Feature if needed
         let feature = originalOsmGeojson;
-        if (originalOsmGeojson.type !== 'Feature' && originalOsmGeojson.type !== 'FeatureCollection') {
-            feature = { type: 'Feature', geometry: originalOsmGeojson, properties: {} };
+        if (
+            originalOsmGeojson.type !== 'Feature' &&
+            originalOsmGeojson.type !== 'FeatureCollection'
+        ) {
+            feature = {
+                type: 'Feature',
+                geometry: originalOsmGeojson,
+                properties: {},
+            };
         }
-        
+
         // Create dashed line style for reference
         originalBoundaryLayer = L.geoJSON(feature, {
             style: {
@@ -275,88 +294,113 @@ function initOsmGeojsonGenerator(options = {}) {
                 weight: 2,
                 dashArray: '5, 5',
                 fillOpacity: 0,
-                interactive: false
-            }
+                interactive: false,
+            },
         }).addTo(map);
     }
 
     // Process GeoJSON with Turf.js and preview
     function processAndPreviewGeojson() {
         if (!originalOsmGeojson) return;
-        
+
         const map = mapEditor.map;
-        
+
         try {
             // Wrap as Feature if needed
             let feature = originalOsmGeojson;
-            if (originalOsmGeojson.type !== 'Feature' && originalOsmGeojson.type !== 'FeatureCollection') {
-                feature = { type: 'Feature', geometry: originalOsmGeojson, properties: {} };
+            if (
+                originalOsmGeojson.type !== 'Feature' &&
+                originalOsmGeojson.type !== 'FeatureCollection'
+            ) {
+                feature = {
+                    type: 'Feature',
+                    geometry: originalOsmGeojson,
+                    properties: {},
+                };
             }
-            
-            const tolerance = sliderToTolerance(parseFloat(elements.simplifySlider.value));
+
+            const tolerance = sliderToTolerance(
+                parseFloat(elements.simplifySlider.value)
+            );
             const buffer = parseFloat(elements.bufferSlider.value);
-            
+
             let processed = feature;
-            
+
             // Apply buffer if > 0
             if (buffer > 0) {
-                processed = turf.buffer(processed, buffer, { units: 'kilometers' });
+                processed = turf.buffer(processed, buffer, {
+                    units: 'kilometers',
+                });
             }
-            
+
             // Apply simplification if > 0
             if (tolerance > 0) {
                 processed = turf.simplify(processed, {
                     tolerance: tolerance,
-                    highQuality: true
+                    highQuality: true,
                 });
             }
-            
+
             // Apply mega simplify if checked
-            if (elements.megaSimplifyCheckbox && elements.megaSimplifyCheckbox.checked) {
-                const concavity = sliderToConcavity(parseFloat(elements.tightnessSlider.value));
-                
+            if (
+                elements.megaSimplifyCheckbox &&
+                elements.megaSimplifyCheckbox.checked
+            ) {
+                const concavity = sliderToConcavity(
+                    parseFloat(elements.tightnessSlider.value)
+                );
+
                 try {
                     // Use turf.convex with concavity parameter
                     // concavity: 1 = tight, Infinity = pure convex hull
-                    processed = turf.convex(processed, { concavity: concavity });
-                    
+                    processed = turf.convex(processed, {
+                        concavity: concavity,
+                    });
+
                     if (!processed) {
-                        console.warn('[OsmGeojsonGenerator] Convex hull returned null');
+                        console.warn(
+                            '[OsmGeojsonGenerator] Convex hull returned null'
+                        );
                         // Fallback: try pure convex
                         processed = turf.convex(feature);
                     }
                 } catch (e) {
-                    console.warn('[OsmGeojsonGenerator] Convex hull failed:', e.message);
+                    console.warn(
+                        '[OsmGeojsonGenerator] Convex hull failed:',
+                        e.message
+                    );
                     // Keep original processed value
                 }
             }
-            
+
             processedGeojson = processed;
-            
+
             // Remove existing preview layer
             if (previewLayer) {
                 map.removeLayer(previewLayer);
             }
-            
+
             // Add preview layer
             previewLayer = L.geoJSON(processed, {
                 style: {
                     color: '#3388ff',
                     weight: 3,
                     fillColor: '#3388ff',
-                    fillOpacity: 0.2
-                }
+                    fillOpacity: 0.2,
+                },
             }).addTo(map);
-            
+
             // Fit bounds
             map.fitBounds(previewLayer.getBounds());
-            
+
             // Update point count
             const count = countGeojsonPoints(processed);
             elements.pointsCount.textContent = `Points: ${count}`;
-            
         } catch (error) {
-            console.error('[OsmGeojsonGenerator] Error processing GeoJSON:', error);
+            console.error(
+                '[OsmGeojsonGenerator] Error processing GeoJSON:',
+                error
+            );
             showError(`Error processing: ${error.message}`);
         }
     }
@@ -365,44 +409,53 @@ function initOsmGeojsonGenerator(options = {}) {
     function applyProcessedGeojson() {
         if (!processedGeojson) {
             if (typeof showToast === 'function') {
-                showToast('Warning', 'No processed GeoJSON to apply', 'warning');
+                showToast(
+                    'Warning',
+                    'No processed GeoJSON to apply',
+                    'warning'
+                );
             }
             return;
         }
-        
+
         const map = mapEditor.map;
-        
+
         // Extract geometry
         const geometry = processedGeojson.geometry || processedGeojson;
-        
+
         // Remove preview layer
         if (previewLayer) {
             map.removeLayer(previewLayer);
             previewLayer = null;
         }
-        
+
         // Remove original boundary layer
         if (originalBoundaryLayer) {
             map.removeLayer(originalBoundaryLayer);
             originalBoundaryLayer = null;
         }
-        
+
         // Call the onApply callback
         if (onApply) {
             onApply(geometry);
         }
-        
+
         // Hide controls and reset state
         elements.controls.style.display = 'none';
         elements.resultsContainer.style.display = 'none';
         elements.searchInput.value = '';
-        elements.resultsSelect.innerHTML = '<option value="">Select a place...</option>';
+        elements.resultsSelect.innerHTML =
+            '<option value="">Select a place...</option>';
         originalOsmGeojson = null;
         processedGeojson = null;
         osmSearchResults = [];
-        
+
         if (typeof showToast === 'function') {
-            showToast('Success', 'GeoJSON applied. You can now edit the polygon on the map.', 'success');
+            showToast(
+                'Success',
+                'GeoJSON applied. You can now edit the polygon on the map.',
+                'success'
+            );
         }
     }
 
@@ -410,7 +463,7 @@ function initOsmGeojsonGenerator(options = {}) {
     if (elements.searchBtn) {
         elements.searchBtn.addEventListener('click', searchOSM);
     }
-    
+
     if (elements.searchInput) {
         elements.searchInput.addEventListener('keypress', (e) => {
             if (e.key === 'Enter') {
@@ -419,33 +472,36 @@ function initOsmGeojsonGenerator(options = {}) {
             }
         });
     }
-    
+
     if (elements.resultsSelect) {
         elements.resultsSelect.addEventListener('change', onSearchResultSelect);
     }
-    
+
     if (elements.simplifySlider) {
-        elements.simplifySlider.addEventListener('input', function() {
+        elements.simplifySlider.addEventListener('input', function () {
             const tolerance = sliderToTolerance(parseFloat(this.value));
             elements.simplifyValue.textContent = formatTolerance(tolerance);
             processAndPreviewGeojson();
         });
     }
-    
+
     if (elements.bufferSlider) {
-        elements.bufferSlider.addEventListener('input', function() {
+        elements.bufferSlider.addEventListener('input', function () {
             elements.bufferValue.textContent = this.value;
             processAndPreviewGeojson();
         });
     }
-    
+
     if (elements.showOriginalBoundary) {
-        elements.showOriginalBoundary.addEventListener('change', updateOriginalBoundaryLayer);
+        elements.showOriginalBoundary.addEventListener(
+            'change',
+            updateOriginalBoundaryLayer
+        );
     }
-    
+
     // Mega simplify checkbox
     if (elements.megaSimplifyCheckbox) {
-        elements.megaSimplifyCheckbox.addEventListener('change', function() {
+        elements.megaSimplifyCheckbox.addEventListener('change', function () {
             // Enable/disable tightness slider based on checkbox
             if (elements.tightnessSlider) {
                 elements.tightnessSlider.disabled = !this.checked;
@@ -453,10 +509,10 @@ function initOsmGeojsonGenerator(options = {}) {
             processAndPreviewGeojson();
         });
     }
-    
+
     // Tightness slider
     if (elements.tightnessSlider) {
-        elements.tightnessSlider.addEventListener('input', function() {
+        elements.tightnessSlider.addEventListener('input', function () {
             const val = parseInt(this.value);
             if (elements.tightnessValue) {
                 elements.tightnessValue.textContent = formatTightness(val);
@@ -464,7 +520,7 @@ function initOsmGeojsonGenerator(options = {}) {
             processAndPreviewGeojson();
         });
     }
-    
+
     if (elements.applyBtn) {
         elements.applyBtn.addEventListener('click', applyProcessedGeojson);
     }
@@ -488,7 +544,7 @@ function initOsmGeojsonGenerator(options = {}) {
             originalOsmGeojson = null;
             processedGeojson = null;
             osmSearchResults = [];
-        }
+        },
     };
 }
 

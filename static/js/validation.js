@@ -8,7 +8,11 @@ function validateKey(key, existingKeys) {
         return { isValid: false, message: 'Key already exists' };
     }
     if (!/^[a-zA-Z][a-zA-Z0-9_:]*$/.test(key)) {
-        return { isValid: false, message: 'Key must start with a letter and contain only letters, numbers, underscores, and colons' };
+        return {
+            isValid: false,
+            message:
+                'Key must start with a letter and contain only letters, numbers, underscores, and colons',
+        };
     }
     return { isValid: true };
 }
@@ -19,10 +23,13 @@ function validateNumericValue(value, type) {
     }
 
     value = value.toString().trim();
-    
+
     if (type === 'integer') {
         if (!/^\d+$/.test(value)) {
-            return { isValid: false, message: 'Value must be a valid integer (no decimal points)' };
+            return {
+                isValid: false,
+                message: 'Value must be a valid integer (no decimal points)',
+            };
         }
         const num = parseInt(value, 10);
         if (num < 0) {
@@ -31,7 +38,11 @@ function validateNumericValue(value, type) {
         return { isValid: true, value: num };
     } else if (type === 'number') {
         if (!/^\d*\.?\d*$/.test(value)) {
-            return { isValid: false, message: 'Value must contain only digits and at most one decimal point' };
+            return {
+                isValid: false,
+                message:
+                    'Value must contain only digits and at most one decimal point',
+            };
         }
         const num = parseFloat(value);
         if (isNaN(num)) {
@@ -56,7 +67,10 @@ function validateValue(value, requirements) {
             return validateNumericValue(value, requirements.type);
         } else if (requirements.allowed_values) {
             if (!requirements.allowed_values.includes(value)) {
-                return { isValid: false, message: `Value must be one of: ${requirements.allowed_values.join(', ')}` };
+                return {
+                    isValid: false,
+                    message: `Value must be one of: ${requirements.allowed_values.join(', ')}`,
+                };
             }
         }
     }
