@@ -1,0 +1,26 @@
+{
+	"$schema": "https://biomejs.dev/schemas/1.9.0/schema.json",
+	"organizeImports": {
+		"enabled": true
+	},
+	"linter": {
+		"rules": {
+			"recommended": true,
+			"complexity": {
+				"noForEach": "off"
+			},
+			"style": {
+				"noUselessElse": "off",
+				"useExponentiationOperator": "off",
+				"noParameterAssign": "off"
+			},
+			"suspicious": {
+				"noAssignInExpressions": "off"
+			}
+		},
+		"ignore": ["**/.venv/**", "**/node_modules/**", "**/__pycache__/**"]
+	},
+	"formatter": {
+		"ignore": ["**/.venv/**", "**/node_modules/**", "**/__pycache__/**"]
+	}
+}

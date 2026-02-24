@@ -1,80 +1,80 @@
 body {
-    padding-top: 5rem;
+	padding-top: 5rem;
 }
 
 .starter-template {
-    padding: 3rem 1.5rem;
-    text-align: center;
+	padding: 3rem 1.5rem;
+	text-align: center;
 }
 
 .form-signin {
-    width: 100%;
-    max-width: 330px;
-    padding: 15px;
-    margin: auto;
+	width: 100%;
+	max-width: 330px;
+	padding: 15px;
+	margin: auto;
 }
 
 .form-signin .form-control {
-    position: relative;
-    box-sizing: border-box;
-    height: auto;
-    padding: 10px;
-    font-size: 16px;
+	position: relative;
+	box-sizing: border-box;
+	height: auto;
+	padding: 10px;
+	font-size: 16px;
 }
 
 .form-signin .form-control:focus {
-    z-index: 2;
+	z-index: 2;
 }
 
 .form-signin input[type="password"] {
-    margin-bottom: 10px;
-    border-top-left-radius: 0;
-    border-top-right-radius: 0;
+	margin-bottom: 10px;
+	border-top-left-radius: 0;
+	border-top-right-radius: 0;
 }
 
 /* Area details table - prevent field value overflow */
 #tags-table {
-    table-layout: fixed;
-    width: 100%;
+	table-layout: fixed;
+	width: 100%;
 }
 
 #tags-table th:first-child,
 #tags-table td:first-child {
-    width: 15%;
+	width: 15%;
 }
 
 #tags-table th:nth-child(2),
 #tags-table td:nth-child(2) {
-    width: 65%;
+	width: 65%;
 }
 
 #tags-table th:last-child,
 #tags-table td:last-child {
-    width: 20%;
-    white-space: nowrap;
+	width: 20%;
+	white-space: nowrap;
 }
 
 /* Action buttons - standalone with spacing */
 #tags-table .btn-group {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.25rem;
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.25rem;
 }
 
 #tags-table .btn-group .btn {
-    border-radius: 0.25rem !important;
+	border-radius: 0.25rem !important;
 }
 
 #tags-table .tag-value-cell {
-    overflow-wrap: break-word;
-    word-wrap: break-word;
-    word-break: break-word;
+	overflow-wrap: break-word;
+	word-wrap: break-word;
+	word-break: break-word;
 }
 
 #tags-table .tag-value-content {
-    display: block;
-    overflow-wrap: break-word;
-    word-wrap: break-word;
-    word-break: break-word;
-    white-space: normal;
+	display: block;
+	overflow-wrap: break-word;
+	word-wrap: break-word;
+	word-break: break-word;
+	white-space: normal;
 }
