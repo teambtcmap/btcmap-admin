@@ -260,7 +260,6 @@ document.addEventListener('DOMContentLoaded', function() {
         if (!isRequired) {
             row.querySelector('.remove-field').addEventListener('click', function() {
                 row.remove();
-                updateOptionalFieldSelect();
             });
         }
 
@@ -326,8 +325,6 @@ document.addEventListener('DOMContentLoaded', function() {
                         requirements.allowed_values
                     ));
                 });
-        }
-        updateOptionalFieldSelect();
     }
 
     function addOptionalField() {
@@ -380,12 +377,10 @@ document.addEventListener('DOMContentLoaded', function() {
                 requirements.allowed_values
             );
             tagsTable.replaceChild(row, newRow);
-            updateOptionalFieldSelect();
         });
 
         newRow.querySelector('.remove-field').addEventListener('click', function() {
             newRow.remove();
-            updateOptionalFieldSelect();
         });
 
         tagsTable.appendChild(newRow);
