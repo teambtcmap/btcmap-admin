@@ -79,13 +79,25 @@ pytest tests/test_linting.py::test_lint_area
 
 ### Linting/Formatting
 
-No automated linting is configured. If adding:
+Python linting with Ruff:
 
 ```bash
-# Recommended: ruff for linting + formatting
-uv add ruff
-ruff check .
-ruff format .
+# Install dependencies
+uv sync --dev
+
+# Run linting
+uv run ruff check .
+
+# Auto-fix issues
+uv run ruff check . --fix
+```
+
+Frontend linting with Biome (JavaScript/CSS):
+
+```bash
+npm install
+npm run lint
+npm run format
 ```
 
 ## Code Style Guidelines

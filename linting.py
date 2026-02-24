@@ -6,13 +6,14 @@ Provides lint rules and checks for area maintenance.
 
 import fnmatch
 import re
-import requests
+from dataclasses import asdict, dataclass
 from datetime import datetime, timedelta
-from typing import Optional
-from dataclasses import dataclass, asdict
 from enum import Enum
-from shapely.geometry import shape, Point
+from typing import Optional
+
+import requests
 from shapely import STRtree
+from shapely.geometry import shape
 
 
 class Severity(Enum):
@@ -122,7 +123,7 @@ def check_icon_legacy_url(area: dict) -> Optional[LintResult]:
     if not re.match(expected_pattern, icon_url):
         return LintResult(
             rule=LINT_RULES['icon-legacy-url'],
-            message=f'Icon URL does not match expected format',
+            message='Icon URL does not match expected format',
             current_value=icon_url
         )
     
