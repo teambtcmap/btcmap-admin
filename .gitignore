@@ -34,3 +34,4 @@ replit.nix
 # Others
 *.log
 *.sqlite
+opencode.json
