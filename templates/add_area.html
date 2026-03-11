@@ -401,43 +401,54 @@ document.addEventListener('DOMContentLoaded', async function() {
      * @returns {Promise<Object>} The issue body data as a parsed object with the main properties 
      * @throws {} 
      */
-    async function parseIssueData(issueText){
-        const issueData = {}
+    async function parseIssueData(issueText) {
+        const issueData = {};
         const issueTemplate = {
-              "Community name: ": "communityName",
-              "Location: ": "location",
-              "Associated areas: ": "associatedAreas",
-              "GeoJSON: ": "geoJSON",
-              "Icon URL: ": "icon",
-              "Lightning: ": "lightningTips",
-              "Social links: ": "contact",
-              "Community leader contact: ": "leaderContact",
-              "Notes: ": "description"
-        }
-        
-        const keys = Object.keys(issueTemplate)
-        
-        for (let i = 0; i < keys.length; i++) {
-            const startKey = keys[i]
-            const endKey = keys[i + 1] || "Created at: "
-            const fieldName = issueTemplate[startKey]
-             
-            const startIdx = issueText.indexOf(startKey)
-            if (startIdx === -1) {
-                console.warn(`Issue template missing field: ${startKey}`)
-                issueData[fieldName] = ""
-                continue
-            }
-              
-            const endIdx = issueText.indexOf(endKey, startIdx + startKey.length)
-            if (endIdx === -1) {
-                issueData[fieldName] = issueText.substring(startIdx + startKey.length).trim()
+            "Community name: ": "communityName",
+            "Location: ": "location",
+            "Associated areas: ": "associatedAreas",
+            "GeoJSON: ": "geoJSON",
+            "Icon URL: ": "icon",
+            "Lightning: ": "lightningTips",
+            "Social links: ": "contact",
+            "Community leader contact: ": "leaderContact",
+            "Notes: ": "description"
+        };
+
+        const escapeRegExp = (string) => string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        Object.values(issueTemplate).forEach(val => issueData[val] = "");
+
+        const foundKeys = [];
+        for (const [key, fieldName] of Object.entries(issueTemplate)) {
+            // Regex ensures the key is at the start of the string or preceded by a newline.
+            const regex = new RegExp(`(^|\\n)${escapeRegExp(key)}`);
+            const match = issueText.match(regex);
+
+            if (match) {
+                // Adjust index if the match included the preceding newline
+                const actualIndex = match[0].startsWith('\n') ? match.index + 1 : match.index;
+                foundKeys.push({ key, fieldName, index: actualIndex });
             } else {
-                issueData[fieldName] = issueText.substring(startIdx + startKey.length, endIdx).trim()
+                console.warn(`Issue template missing field: ${key}`);
             }
         }
-          
-        return issueData
+
+        foundKeys.sort((a, b) => a.index - b.index);
+        for (let i = 0; i < foundKeys.length; i++) {
+            const current = foundKeys[i];
+            const startIdx = current.index + current.key.length;
+
+            let endIdx;
+            if (i < foundKeys.length - 1) {
+                endIdx = foundKeys[i + 1].index;
+            } else {
+                const createdMatch = issueText.match(/(^|\n)Created at: /);
+                endIdx = createdMatch ? (createdMatch[0].startsWith('\n') ? createdMatch.index + 1 : createdMatch.index) : issueText.length;
+            }
+
+            issueData[current.fieldName] = issueText.substring(startIdx, endIdx).trim();
+        }
+        return issueData;
     }
     /**
      * Fetches issue data from Gitea API
