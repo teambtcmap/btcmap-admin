@@ -229,89 +229,114 @@ document.addEventListener('DOMContentLoaded', async function() {
     }
 
     function createTagRow(key, value = '', isRequired = false, isCustom = false, allowedValues = null) {
-        const row = document.createElement('tr');
-        const isNumericField = key === 'population' || key === 'area_km2';
-        
-        row.innerHTML = `
-            <td>
-                ${isCustom ? 
-                  `<input type="text" id="${key}" class="form-control custom-key" placeholder="Tag Name" required>
-                     <div class="invalid-feedback">Please enter a valid key</div>` 
-                    : key}
-            </td>
-            <td>
-                ${allowedValues ? `
-                    <select class="form-control" name="${key}" ${isRequired ? 'required' : ''}>
-                        <option value="">Select ${key}</option>
-                        ${allowedValues.map(val => `<option value="${val}">${val}</option>`).join('')}
-                    </select>
-                    <div class="invalid-feedback">Please select a value</div>
-                ` : `
-                    <input type="${isNumericField ? 'number' : 'text'}" 
-                           class="form-control${isNumericField ? ' numeric-field' : ''}" 
-                           name="${key}" 
-                           value="${value}" 
-                           ${isRequired ? 'required' : ''} 
-                           ${isNumericField ? `min="0" step="${key === 'population' ? '1' : '0.01'}"` : ''}>
-                    <div class="invalid-feedback">Please enter a valid value</div>
-                `}
-            </td>
-            <td>
-                ${!isRequired ? '<button type="button" class="btn btn-danger btn-sm remove-field">Remove</button>' : ''}
-            </td>
-        `;
+      const row = document.createElement('tr');
+      const isNumericField = key === 'population' || key === 'area_km2';
 
-        if (!isRequired) {
-            row.querySelector('.remove-field').addEventListener('click', function() {
-                row.remove();
-            });
-        }
+      const createElement = (tag, classNames = '', attributes = {}) => {
+          const el = document.createElement(tag);
+          if (classNames) el.className = classNames;
+          for (const [k, v] of Object.entries(attributes)) {
+              if (v !== false && v !== null && v !== undefined) {
+                  el.setAttribute(k, v === true ? '' : v);
+              }
+          }
+          return el;
+      };
 
-        if (isCustom) {
-            const keyInput = row.querySelector('.custom-key');
-            
-            keyInput.addEventListener('input', function() {
-                this.classList.remove('is-invalid');
-                const feedback = this.nextElementSibling;
-                if (feedback && feedback.classList.contains('invalid-feedback')) {
-                    feedback.style.display = 'none';
-                }
-            });
-            keyInput.addEventListener('blur', function() {
-                validateCustomKey(this);
-            });
+      const tdKey = document.createElement('td');
+      if (isCustom) {
+          const keyInput = createElement('input', 'form-control custom-key', {
+              type: 'text', id: key, placeholder: 'Tag Name', required: true
+          });
+          const feedback = createElement('div', 'invalid-feedback');
+          feedback.textContent = 'Please enter a valid key';
 
-            // Add validation on focus out
-            keyInput.addEventListener('focusout', function() {
-                validateCustomKey(this);
-            });
-        }
+          keyInput.addEventListener('input', function() {
+              this.classList.remove('is-invalid');
+              feedback.style.display = 'none';
+          });
+          
+          const validate = function() { validateCustomKey(this); };
+          keyInput.addEventListener('blur', validate);
+          keyInput.addEventListener('focusout', validate);
 
-        if (isNumericField) {
-            const input = row.querySelector('input.numeric-field');
-            input.addEventListener('input', function() {
-                const validation = validateNumericValue(this.value, key === 'population' ? 'integer' : 'number');
-                const feedback = this.nextElementSibling;
-                
-                if (!validation.isValid) {
-                    this.classList.add('is-invalid');
-                    if (feedback) {
-                        feedback.textContent = validation.message;
-                        feedback.style.display = 'block';
-                    }
-                    this.setCustomValidity(validation.message);
-                } else {
-                    this.classList.remove('is-invalid');
-                    if (feedback) {
-                        feedback.style.display = 'none';
-                    }
-                    this.setCustomValidity('');
-                }
-            });
-        }
+          tdKey.append(keyInput, feedback);
+      } else {
+          tdKey.textContent = key; // textContent is intrinsically safe from XSS
+      }
+      row.appendChild(tdKey);
 
-        return row;
-    }
+
+      const tdValue = document.createElement('td');
+      if (allowedValues) {
+          const select = createElement('select', 'form-control', {
+              name: key, required: isRequired
+          });
+          
+          const defaultOpt = createElement('option', '', { value: '' });
+          defaultOpt.textContent = `Select ${key}`;
+          select.appendChild(defaultOpt);
+
+          allowedValues.forEach(val => {
+              const opt = createElement('option', '', { value: val });
+              opt.textContent = val;
+              if (val === value) opt.selected = true; 
+              select.appendChild(opt);
+          });
+
+          const feedback = createElement('div', 'invalid-feedback');
+          feedback.textContent = 'Please select a value';
+          tdValue.append(select, feedback);
+          
+      } else {
+          const inputProps = {
+              type: isNumericField ? 'number' : 'text',
+              name: key,
+              required: isRequired
+          };
+          if (isNumericField) {
+              inputProps.min = '0';
+              inputProps.step = key === 'population' ? '1' : '0.01';
+          }
+          
+          const input = createElement('input', `form-control${isNumericField ? ' numeric-field' : ''}`, inputProps);
+          input.value = value;
+          const feedback = createElement('div', 'invalid-feedback');
+          feedback.textContent = 'Please enter a valid value';
+
+          if (isNumericField) {
+              input.addEventListener('input', function() {
+                  const validation = validateNumericValue(this.value, key === 'population' ? 'integer' : 'number');
+                  if (!validation.isValid) {
+                      this.classList.add('is-invalid');
+                      feedback.textContent = validation.message;
+                      feedback.style.display = 'block';
+                      this.setCustomValidity(validation.message);
+                  } else {
+                      this.classList.remove('is-invalid');
+                      feedback.style.display = 'none';
+                      this.setCustomValidity('');
+                  }
+              });
+          }
+          tdValue.append(input, feedback);
+      }
+      row.appendChild(tdValue);
+
+
+      const tdAction = document.createElement('td');
+      if (!isRequired) {
+          const removeBtn = createElement('button', 'btn btn-danger btn-sm remove-field', { type: 'button' });
+          removeBtn.textContent = 'Remove';
+          
+          removeBtn.addEventListener('click', () => row.remove()); 
+          
+          tdAction.appendChild(removeBtn);
+      }
+      row.appendChild(tdAction);
+
+      return row;
+  }
 
     function updateFields() {
         const selectedType = typeSelect.value;
