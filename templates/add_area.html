@@ -315,7 +315,6 @@ document.addEventListener('DOMContentLoaded', async function() {
 
     function updateFields() {
         const selectedType = typeSelect.value;
-        tagsTable.innerHTML = '';
 
         if (selectedType && areaTypeRequirements[selectedType]) {
             Object.entries(areaTypeRequirements[selectedType])
