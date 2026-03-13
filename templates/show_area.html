@@ -16,9 +16,9 @@
         </div>
         <div class="position-relative area-icon-container">
             {% if area.tags.get('icon:square') %}
-            <img id="area-icon" src="{{ area.tags.get('icon:square') }}" alt="{{ area.tags.get('name', 'Area') }} logo" style="width: 80px; height: 80px; object-fit: contain; display: block;">
+            <img id="area-icon" src="{{ area.tags.get('icon:square') }}" alt="{{ area.tags.get('name', 'Area') }} logo" style="width: 80px; height: 80px; object-fit: contain; display: block; border-radius: 50%;">
             {% else %}
-            <div id="area-icon-placeholder" class="d-flex align-items-center justify-content-center bg-secondary text-white" style="width: 80px; height: 80px;">
+            <div id="area-icon-placeholder" class="d-flex align-items-center justify-content-center bg-secondary text-white" style="width: 80px; height: 80px; border-radius: 50%;">
                 <span>No Icon</span>
             </div>
             {% endif %}
@@ -52,7 +52,7 @@
                     <!-- Current Icon Display -->
                     <div id="currentIconContainer" class="mb-4 text-center" {% if not area.tags.get('icon:square') %}style="display: none;"{% endif %}>
                         <label class="form-label d-block">Current Icon</label>
-                        <img id="currentIconDisplay" src="{{ area.tags.get('icon:square', '') }}" alt="Current icon" style="width: 128px; height: 128px; object-fit: contain; border: 1px solid #dee2e6; border-radius: 8px;">
+                        <img id="currentIconDisplay" src="{{ area.tags.get('icon:square', '') }}" alt="Current icon" style="width: 128px; height: 128px; object-fit: contain; border: 1px solid #dee2e6; border-radius: 50%;">
                     </div>
 
                     <div class="mb-3">
@@ -93,11 +93,11 @@
                         <label class="form-label">New Icon Preview</label>
                         <div class="d-flex align-items-center gap-3">
                             <div>
-                                <img id="iconPreview" style="width: 80px; height: 80px; object-fit: cover; border: 1px solid #dee2e6;">
+                                <img id="iconPreview" style="width: 80px; height: 80px; object-fit: cover; border: 1px solid #dee2e6; border-radius: 50%;">
                                 <div class="form-text text-center">80px</div>
                             </div>
                             <div>
-                                <img id="iconPreviewLarge" style="width: 128px; height: 128px; object-fit: cover; border: 1px solid #dee2e6;">
+                                <img id="iconPreviewLarge" style="width: 128px; height: 128px; object-fit: cover; border: 1px solid #dee2e6; border-radius: 50%;">
                                 <div class="form-text text-center">128px</div>
                             </div>
                         </div>
