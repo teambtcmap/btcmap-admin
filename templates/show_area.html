@@ -1161,6 +1161,14 @@ function initializeCropper(imageSrc) {
         ready: function() {
             updatePreview();
             iconElements.saveIconBtn.disabled = false;
+            // Add circular overlay to crop box
+            const cropBox = document.querySelector('.cropper-crop-box');
+            if (cropBox && !document.getElementById('circularOverlay')) {
+                const overlay = document.createElement('div');
+                overlay.id = 'circularOverlay';
+                overlay.style.cssText = 'position: absolute; top: 0; left: 0; right: 0; bottom: 0; border: 2px solid white; border-radius: 50%; pointer-events: none; box-shadow: 0 0 0 9999px rgba(0,0,0,0.5);';
+                cropBox.appendChild(overlay);
+            }
         },
         crop: function() {
             updatePreview();
