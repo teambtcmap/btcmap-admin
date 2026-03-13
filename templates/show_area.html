@@ -899,6 +899,40 @@ window.addEventListener('beforeunload', () => {
 // Icon Editor Functionality
 // ============================================
 
+// Shared helper for creating cropper with circular overlay
+function createCropperWithOverlay(cropperImage, container, options = {}) {
+    const cropper = new Cropper(cropperImage, {
+        aspectRatio: 1,
+        viewMode: 1,
+        dragMode: 'move',
+        autoCropArea: 1,
+        restore: false,
+        guides: true,
+        center: true,
+        highlight: false,
+        cropBoxMovable: true,
+        cropBoxResizable: true,
+        toggleDragModeOnDblclick: false,
+        minCropBoxWidth: options.minSize || ICON_MIN_SIZE,
+        minCropBoxHeight: options.minSize || ICON_MIN_SIZE,
+        ready: function() {
+            if (options.onReady) options.onReady();
+            // Add circular overlay
+            const cropBox = document.querySelector('.cropper-crop-box');
+            if (cropBox && !document.getElementById('circularOverlay')) {
+                const overlay = document.createElement('div');
+                overlay.id = 'circularOverlay';
+                overlay.style.cssText = 'position: absolute; top: 0; left: 0; right: 0; bottom: 0; border: 2px solid white; border-radius: 50%; pointer-events: none; box-shadow: 0 0 0 9999px rgba(0,0,0,0.5);';
+                cropBox.appendChild(overlay);
+            }
+        },
+        crop: function() {
+            if (options.onCrop) options.onCrop();
+        }
+    });
+    return cropper;
+}
+
 const ICON_MIN_SIZE = 128;
 const ICON_MAX_SIZE = 1024;
 const ICON_OUTPUT_SIZE = 256; // Output size for the cropped image
@@ -1144,33 +1178,12 @@ function initializeCropper(imageSrc) {
     iconElements.cropperImage.src = imageSrc;
     iconElements.cropperContainer.style.display = 'block';
 
-    cropper = new Cropper(iconElements.cropperImage, {
-        aspectRatio: 1, // Force square
-        viewMode: 1,
-        dragMode: 'move',
-        autoCropArea: 1,
-        restore: false,
-        guides: true,
-        center: true,
-        highlight: false,
-        cropBoxMovable: true,
-        cropBoxResizable: true,
-        toggleDragModeOnDblclick: false,
-        minCropBoxWidth: ICON_MIN_SIZE,
-        minCropBoxHeight: ICON_MIN_SIZE,
-        ready: function() {
+    cropper = createCropperWithOverlay(iconElements.cropperImage, iconElements.cropperContainer, {
+        onReady: function() {
             updatePreview();
             iconElements.saveIconBtn.disabled = false;
-            // Add circular overlay to crop box
-            const cropBox = document.querySelector('.cropper-crop-box');
-            if (cropBox && !document.getElementById('circularOverlay')) {
-                const overlay = document.createElement('div');
-                overlay.id = 'circularOverlay';
-                overlay.style.cssText = 'position: absolute; top: 0; left: 0; right: 0; bottom: 0; border: 2px solid white; border-radius: 50%; pointer-events: none; box-shadow: 0 0 0 9999px rgba(0,0,0,0.5);';
-                cropBox.appendChild(overlay);
-            }
         },
-        crop: function() {
+        onCrop: function() {
             updatePreview();
         }
     });
