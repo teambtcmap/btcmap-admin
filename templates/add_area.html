@@ -12,9 +12,9 @@
             {% endif %}
         </div>
         <div class="position-relative area-icon-container">
-            <div id="icon-placeholder" class="d-flex align-items-center justify-content-center bg-light border" style="width: 80px; height: 80px; cursor: pointer;" data-bs-toggle="modal" data-bs-target="#editIconModal">
+            <div id="icon-placeholder" class="d-flex align-items-center justify-content-center bg-light border rounded-circle" style="width: 80px; height: 80px; cursor: pointer; overflow: hidden;" data-bs-toggle="modal" data-bs-target="#editIconModal">
                 <span id="icon-placeholder-text" class="text-muted text-center" style="font-size: 0.7rem;">Click to<br>add icon</span>
-                <img id="icon-preview-display" style="display: none; width: 100%; height: 100%; object-fit: contain;">
+                <img id="icon-preview-display" class="rounded-circle" style="display: none; width: 100%; height: 100%; object-fit: contain;">
             </div>
             <button type="button" class="btn btn-sm btn-primary position-absolute edit-icon-btn" style="bottom: -8px; right: -8px; padding: 2px 6px; font-size: 0.7rem;" data-bs-toggle="modal" data-bs-target="#editIconModal">
                 Edit
@@ -69,11 +69,11 @@
                         <label class="form-label">Preview</label>
                         <div class="d-flex align-items-center gap-3">
                             <div>
-                                <img id="iconPreview" style="width: 80px; height: 80px; object-fit: cover; border: 1px solid #dee2e6;">
+                                <img id="iconPreview" class="rounded-circle" style="width: 80px; height: 80px; object-fit: cover; border: 1px solid #dee2e6;">
                                 <div class="form-text text-center">80px</div>
                             </div>
                             <div>
-                                <img id="iconPreviewLarge" style="width: 128px; height: 128px; object-fit: cover; border: 1px solid #dee2e6;">
+                                <img id="iconPreviewLarge" class="rounded-circle" style="width: 128px; height: 128px; object-fit: cover; border: 1px solid #dee2e6;">
                                 <div class="form-text text-center">128px</div>
                             </div>
                         </div>
@@ -732,25 +732,12 @@ function initializeIconCropper(imageSrc) {
     iconElements.cropperImage.src = imageSrc;
     iconElements.cropperContainer.style.display = 'block';
 
-    iconCropper = new Cropper(iconElements.cropperImage, {
-        aspectRatio: 1,
-        viewMode: 1,
-        dragMode: 'move',
-        autoCropArea: 1,
-        restore: false,
-        guides: true,
-        center: true,
-        highlight: false,
-        cropBoxMovable: true,
-        cropBoxResizable: true,
-        toggleDragModeOnDblclick: false,
-        minCropBoxWidth: ICON_MIN_SIZE,
-        minCropBoxHeight: ICON_MIN_SIZE,
-        ready: function() {
+    iconCropper = createCropperWithOverlay(iconElements.cropperImage, iconElements.cropperContainer, {
+        onReady: function() {
             updateIconPreview();
             iconElements.confirmIconBtn.disabled = false;
         },
-        crop: function() {
+        onCrop: function() {
             updateIconPreview();
         }
     });
