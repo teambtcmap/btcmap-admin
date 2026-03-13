@@ -16,7 +16,7 @@
         </div>
         <div class="position-relative area-icon-container">
             {% if area.tags.get('icon:square') %}
-            <img id="area-icon" src="{{ area.tags.get('icon:square') }}" alt="{{ area.tags.get('name', 'Area') }} logo" style="max-width: 80px; max-height: 80px; object-fit: contain;">
+            <img id="area-icon" src="{{ area.tags.get('icon:square') }}" alt="{{ area.tags.get('name', 'Area') }} logo" style="width: 80px; height: 80px; object-fit: contain;">
             {% else %}
             <div id="area-icon-placeholder" class="d-flex align-items-center justify-content-center bg-secondary text-white" style="width: 80px; height: 80px;">
                 <span>No Icon</span>
@@ -1282,7 +1282,7 @@ async function saveIcon() {
             const newImg = document.createElement('img');
             newImg.id = 'area-icon';
             newImg.alt = '{{ area.tags.get("name", "Area") }} logo';
-            newImg.style.cssText = 'max-width: 80px; max-height: 80px; object-fit: contain;';
+            newImg.style.cssText = 'width: 80px; height: 80px; object-fit: contain;';
             newImg.src = newSrc;
             iconPlaceholder.parentNode.replaceChild(newImg, iconPlaceholder);
         }
