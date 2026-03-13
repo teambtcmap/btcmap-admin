@@ -52,7 +52,10 @@
                     <!-- Current Icon Display -->
                     <div id="currentIconContainer" class="mb-4 text-center" {% if not area.tags.get('icon:square') %}style="display: none;"{% endif %}>
                         <label class="form-label d-block">Current Icon</label>
-                        <img id="currentIconDisplay" class="rounded-circle" src="{{ area.tags.get('icon:square', '') }}" alt="Current icon" style="width: 128px; height: 128px; object-fit: contain; border: 1px solid #dee2e6;">
+                        <div class="d-inline-block position-relative">
+                            <img id="currentIconDisplay" class="rounded-circle" src="{{ area.tags.get('icon:square', '') }}" alt="Current icon" style="width: 128px; height: 128px; object-fit: contain; border: 1px solid #dee2e6;">
+                            <button type="button" class="btn btn-sm btn-primary position-absolute" style="bottom: -8px; left: 50%; transform: translateX(-50%);" id="editCurrentIconBtn">Edit</button>
+                        </div>
                     </div>
 
                     <div class="mb-3">
@@ -977,12 +980,23 @@ function initializeIconEditor() {
     iconElements.currentIconDisplay = document.getElementById('currentIconDisplay');
     iconElements.urlInput = document.getElementById('iconUrlInput');
     iconElements.loadUrlBtn = document.getElementById('loadIconUrlBtn');
+    iconElements.editCurrentIconBtn = document.getElementById('editCurrentIconBtn');
 
     if (!iconElements.fileInput) return;
 
     iconElements.fileInput.addEventListener('change', handleFileSelect);
     iconElements.saveIconBtn.addEventListener('click', saveIcon);
     iconElements.loadUrlBtn.addEventListener('click', () => loadImageFromUrl(iconElements.urlInput.value));
+    
+    // Edit current icon button
+    if (iconElements.editCurrentIconBtn) {
+        iconElements.editCurrentIconBtn.addEventListener('click', function() {
+            const currentSrc = iconElements.currentIconDisplay?.src;
+            if (currentSrc) {
+                loadImageFromUrl(currentSrc);
+            }
+        });
+    }
 
     // Reset modal state when closed
     iconElements.modal.addEventListener('hidden.bs.modal', resetIconEditor);
