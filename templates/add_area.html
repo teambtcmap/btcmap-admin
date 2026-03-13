@@ -12,9 +12,9 @@
             {% endif %}
         </div>
         <div class="position-relative area-icon-container">
-            <div id="icon-placeholder" class="d-flex align-items-center justify-content-center bg-light border rounded-circle" style="width: 80px; height: 80px; cursor: pointer;" data-bs-toggle="modal" data-bs-target="#editIconModal">
+            <div id="icon-placeholder" class="d-flex align-items-center justify-content-center bg-light border rounded-circle" style="width: 80px; height: 80px; cursor: pointer; overflow: hidden;" data-bs-toggle="modal" data-bs-target="#editIconModal">
                 <span id="icon-placeholder-text" class="text-muted text-center" style="font-size: 0.7rem;">Click to<br>add icon</span>
-                <img id="icon-preview-display" style="display: none; width: 100%; height: 100%; object-fit: contain;">
+                <img id="icon-preview-display" class="rounded-circle" style="display: none; width: 100%; height: 100%; object-fit: contain;">
             </div>
             <button type="button" class="btn btn-sm btn-primary position-absolute edit-icon-btn" style="bottom: -8px; right: -8px; padding: 2px 6px; font-size: 0.7rem;" data-bs-toggle="modal" data-bs-target="#editIconModal">
                 Edit
@@ -546,10 +546,10 @@ function createCropperWithOverlay(cropperImage, container, options = {}) {
         ready: function() {
             if (options.onReady) options.onReady();
             // Add circular overlay
-            const cropBox = document.querySelector('.cropper-crop-box');
-            if (cropBox && !document.getElementById('circularOverlay')) {
+            const cropBox = container?.querySelector('.cropper-crop-box');
+            if (cropBox && !cropBox.querySelector('.circular-overlay')) {
                 const overlay = document.createElement('div');
-                overlay.id = 'circularOverlay';
+                overlay.className = 'circular-overlay';
                 overlay.style.cssText = 'position: absolute; top: 0; left: 0; right: 0; bottom: 0; border: 2px solid white; border-radius: 50%; pointer-events: none; box-shadow: 0 0 0 9999px rgba(0,0,0,0.5);';
                 cropBox.appendChild(overlay);
             }

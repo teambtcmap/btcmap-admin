@@ -921,10 +921,10 @@ function createCropperWithOverlay(cropperImage, container, options = {}) {
         ready: function() {
             if (options.onReady) options.onReady();
             // Add circular overlay
-            const cropBox = document.querySelector('.cropper-crop-box');
-            if (cropBox && !document.getElementById('circularOverlay')) {
+            const cropBox = container?.querySelector('.cropper-crop-box');
+            if (cropBox && !cropBox.querySelector('.circular-overlay')) {
                 const overlay = document.createElement('div');
-                overlay.id = 'circularOverlay';
+                overlay.className = 'circular-overlay';
                 overlay.style.cssText = 'position: absolute; top: 0; left: 0; right: 0; bottom: 0; border: 2px solid white; border-radius: 50%; pointer-events: none; box-shadow: 0 0 0 9999px rgba(0,0,0,0.5);';
                 cropBox.appendChild(overlay);
             }
@@ -1317,7 +1317,8 @@ async function saveIcon() {
             const newImg = document.createElement('img');
             newImg.id = 'area-icon';
             newImg.alt = '{{ area.tags.get("name", "Area") }} logo';
-            newImg.style.cssText = 'width: 80px; height: 80px; object-fit: contain; display: block; border-radius: 50%;';
+            newImg.classList.add('rounded-circle');
+            newImg.style.cssText = 'width: 80px; height: 80px; object-fit: contain; display: block;';
             newImg.src = newSrc;
             iconPlaceholder.parentNode.replaceChild(newImg, iconPlaceholder);
         }
