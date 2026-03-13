@@ -2,8 +2,6 @@
 // Shared Icon Cropper Module
 // ============================================
 
-const ICON_MIN_SIZE = 128;
-
 function createCropperWithOverlay(cropperImage, container, options = {}) {
     const cropper = new Cropper(cropperImage, {
         aspectRatio: 1,
@@ -17,8 +15,8 @@ function createCropperWithOverlay(cropperImage, container, options = {}) {
         cropBoxMovable: true,
         cropBoxResizable: true,
         toggleDragModeOnDblclick: false,
-        minCropBoxWidth: options.minSize || ICON_MIN_SIZE,
-        minCropBoxHeight: options.minSize || ICON_MIN_SIZE,
+        minCropBoxWidth: options.minSize || window.ICON_MIN_SIZE || 128,
+        minCropBoxHeight: options.minSize || window.ICON_MIN_SIZE || 128,
         ready: function() {
             if (options.onReady) options.onReady();
             // Add circular overlay
