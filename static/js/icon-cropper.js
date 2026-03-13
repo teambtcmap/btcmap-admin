@@ -2,6 +2,8 @@
 // Shared Icon Cropper Module
 // ============================================
 
+const ICON_MIN_SIZE = 128;
+
 function createCropperWithOverlay(cropperImage, container, options = {}) {
     const cropper = new Cropper(cropperImage, {
         aspectRatio: 1,
