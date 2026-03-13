@@ -751,8 +751,6 @@ function updateTag(row) {
         }
     }
 
-    console.log("Tag data to be sent:", {id: "{{ area.id }}", name: key, value: finalValue}); //Added console log
-
     apiFetch('/api/set_area_tag', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1282,7 +1280,7 @@ async function saveIcon() {
             const newImg = document.createElement('img');
             newImg.id = 'area-icon';
             newImg.alt = '{{ area.tags.get("name", "Area") }} logo';
-            newImg.style.cssText = 'width: 80px; height: 80px; object-fit: contain;';
+            newImg.style.cssText = 'width: 80px; height: 80px; object-fit: contain; display: block;';
             newImg.src = newSrc;
             iconPlaceholder.parentNode.replaceChild(newImg, iconPlaceholder);
         }
