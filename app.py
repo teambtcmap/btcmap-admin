@@ -167,6 +167,22 @@ AREA_TYPE_REQUIREMENTS = {
             'required': False,
             'type': 'url'
         },
+        'contact:eventbrite': {
+            'required': False,
+            'type': 'url'
+        },
+        'contact:reddit': {
+            'required': False,
+            'type': 'url'
+        },
+        'contact:simplex': {
+            'required': False,
+            'type': 'url'
+        },
+        'contact:satlantis': {
+            'required': False,
+            'type': 'url'
+        },
         'tips:lightning_address': {
             'required': False,
             'type': 'text'
@@ -568,6 +584,13 @@ def search_osm():
         return jsonify(relations)
     except requests.exceptions.Timeout:
         return jsonify({'error': 'Search request timed out'}), 408
+    except requests.exceptions.HTTPError as e:
+        status_code = e.response.status_code if e.response is not None else 500
+        if status_code == 429:
+            app.logger.warning(f"Nominatim rate limit reached for query '{query}'")
+            return jsonify({'error': 'OpenStreetMap search is temporarily rate-limited. Please try again in a minute.'}), 429
+        app.logger.error(f"HTTP error searching OSM: {str(e)}")
+        return jsonify({'error': f'Search failed: {str(e)}'}), status_code
     except requests.exceptions.RequestException as e:
         app.logger.error(f"Error searching OSM: {str(e)}")
         return jsonify({'error': f'Search failed: {str(e)}'}), 500

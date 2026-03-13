@@ -3,13 +3,14 @@ __pycache__/
 *.py[cod]
 *$py.class
 
-# Flask
-instance/
-.webassets-cache
+# uv virtual environment
+.venv/
 
-# Virtual environment
-venv/
-env/
+# Node.js
+node_modules/
+
+# Ruff
+.ruff_cache/
 
 # IDEs and editors
 .vscode/
@@ -37,3 +38,6 @@ replit.nix
 # Others
 *.log
 *.sqlite
+opencode.json
+.env
+users.json

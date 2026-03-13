@@ -16,9 +16,9 @@
         </div>
         <div class="position-relative area-icon-container">
             {% if area.tags.get('icon:square') %}
-            <img id="area-icon" src="{{ area.tags.get('icon:square') }}" alt="{{ area.tags.get('name', 'Area') }} logo" style="max-width: 80px; max-height: 80px; object-fit: contain;">
+            <img id="area-icon" class="rounded-circle" src="{{ area.tags.get('icon:square') }}" alt="{{ area.tags.get('name', 'Area') }} logo" style="width: 80px; height: 80px; object-fit: contain; display: block;">
             {% else %}
-            <div id="area-icon-placeholder" class="d-flex align-items-center justify-content-center bg-secondary text-white" style="width: 80px; height: 80px;">
+            <div id="area-icon-placeholder" class="d-flex align-items-center justify-content-center bg-secondary text-white rounded-circle" style="width: 80px; height: 80px;">
                 <span>No Icon</span>
             </div>
             {% endif %}
@@ -52,7 +52,10 @@
                     <!-- Current Icon Display -->
                     <div id="currentIconContainer" class="mb-4 text-center" {% if not area.tags.get('icon:square') %}style="display: none;"{% endif %}>
                         <label class="form-label d-block">Current Icon</label>
-                        <img id="currentIconDisplay" src="{{ area.tags.get('icon:square', '') }}" alt="Current icon" style="width: 128px; height: 128px; object-fit: contain; border: 1px solid #dee2e6; border-radius: 8px;">
+                        <div class="d-inline-block position-relative">
+                            <img id="currentIconDisplay" class="rounded-circle" src="{{ area.tags.get('icon:square', '') }}" alt="Current icon" style="width: 128px; height: 128px; object-fit: contain; border: 1px solid #dee2e6;">
+                            <button type="button" class="btn btn-sm btn-primary position-absolute" style="bottom: -8px; left: 50%; transform: translateX(-50%);" id="editCurrentIconBtn">Edit</button>
+                        </div>
                     </div>
 
                     <div class="mb-3">
@@ -93,11 +96,11 @@
                         <label class="form-label">New Icon Preview</label>
                         <div class="d-flex align-items-center gap-3">
                             <div>
-                                <img id="iconPreview" style="width: 80px; height: 80px; object-fit: cover; border: 1px solid #dee2e6;">
+                                <img id="iconPreview" class="rounded-circle" style="width: 80px; height: 80px; object-fit: cover; border: 1px solid #dee2e6;">
                                 <div class="form-text text-center">80px</div>
                             </div>
                             <div>
-                                <img id="iconPreviewLarge" style="width: 128px; height: 128px; object-fit: cover; border: 1px solid #dee2e6;">
+                                <img id="iconPreviewLarge" class="rounded-circle" style="width: 128px; height: 128px; object-fit: cover; border: 1px solid #dee2e6;">
                                 <div class="form-text text-center">128px</div>
                             </div>
                         </div>
@@ -302,9 +305,9 @@
 {% endblock %}
 
 {% block scripts %}
-<script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
-<script src="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/Turf.js/6.5.0/turf.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/leaflet-draw@1.0.4/dist/leaflet.draw.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@turf/turf@6.5.0/turf.min.js"></script>
 <script src="{{ url_for('static', filename='js/validation.js') }}"></script>
 <script src="{{ url_for('static', filename='js/map-editor.js') }}"></script>
 <script src="{{ url_for('static', filename='js/osm-geojson-generator.js') }}"></script>
@@ -751,8 +754,6 @@ function updateTag(row) {
         }
     }
 
-    console.log("Tag data to be sent:", {id: "{{ area.id }}", name: key, value: finalValue}); //Added console log
-
     apiFetch('/api/set_area_tag', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -945,12 +946,23 @@ function initializeIconEditor() {
     iconElements.currentIconDisplay = document.getElementById('currentIconDisplay');
     iconElements.urlInput = document.getElementById('iconUrlInput');
     iconElements.loadUrlBtn = document.getElementById('loadIconUrlBtn');
+    iconElements.editCurrentIconBtn = document.getElementById('editCurrentIconBtn');
 
     if (!iconElements.fileInput) return;
 
     iconElements.fileInput.addEventListener('change', handleFileSelect);
     iconElements.saveIconBtn.addEventListener('click', saveIcon);
     iconElements.loadUrlBtn.addEventListener('click', () => loadImageFromUrl(iconElements.urlInput.value));
+    
+    // Edit current icon button
+    if (iconElements.editCurrentIconBtn) {
+        iconElements.editCurrentIconBtn.addEventListener('click', function() {
+            const currentSrc = iconElements.currentIconDisplay?.src;
+            if (currentSrc) {
+                loadImageFromUrl(currentSrc);
+            }
+        });
+    }
 
     // Reset modal state when closed
     iconElements.modal.addEventListener('hidden.bs.modal', resetIconEditor);
@@ -1146,25 +1158,12 @@ function initializeCropper(imageSrc) {
     iconElements.cropperImage.src = imageSrc;
     iconElements.cropperContainer.style.display = 'block';
 
-    cropper = new Cropper(iconElements.cropperImage, {
-        aspectRatio: 1, // Force square
-        viewMode: 1,
-        dragMode: 'move',
-        autoCropArea: 1,
-        restore: false,
-        guides: true,
-        center: true,
-        highlight: false,
-        cropBoxMovable: true,
-        cropBoxResizable: true,
-        toggleDragModeOnDblclick: false,
-        minCropBoxWidth: ICON_MIN_SIZE,
-        minCropBoxHeight: ICON_MIN_SIZE,
-        ready: function() {
+    cropper = createCropperWithOverlay(iconElements.cropperImage, iconElements.cropperContainer, {
+        onReady: function() {
             updatePreview();
             iconElements.saveIconBtn.disabled = false;
         },
-        crop: function() {
+        onCrop: function() {
             updatePreview();
         }
     });
@@ -1266,34 +1265,39 @@ async function saveIcon() {
 
         // Success - close modal and update the displayed icon
         const modal = bootstrap.Modal.getInstance(iconElements.modal);
-        modal.hide();
-
+        
+        // Get the new icon URL from API response
+        const newIconUrl = data.result?.tags?.['icon:square'];
+        
+        // Get the data URL from the canvas for immediate preview update
+        const newSrc = canvas ? canvas.toDataURL('image/png') : null;
+        
         // Update the icon on the page
         const areaIcon = document.getElementById('area-icon');
         const iconPlaceholder = document.getElementById('area-icon-placeholder');
-        const newIconUrl = data.result?.tags?.['icon:square'];
-        const newSrc = newIconUrl || (areaIcon?.src?.split('?')[0] + '?t=' + Date.now());
         
         if (areaIcon) {
-            // Add cache-busting parameter
             areaIcon.src = newSrc;
-        } else if (iconPlaceholder) {
+        } else if (iconPlaceholder && newSrc) {
             // Replace placeholder with actual image
             const newImg = document.createElement('img');
             newImg.id = 'area-icon';
             newImg.alt = '{{ area.tags.get("name", "Area") }} logo';
-            newImg.style.cssText = 'max-width: 80px; max-height: 80px; object-fit: contain;';
+            newImg.classList.add('rounded-circle');
+            newImg.style.cssText = 'width: 80px; height: 80px; object-fit: contain; display: block;';
             newImg.src = newSrc;
             iconPlaceholder.parentNode.replaceChild(newImg, iconPlaceholder);
         }
         
         // Update the current icon display in the modal for next time
-        if (iconElements.currentIconDisplay) {
+        if (iconElements.currentIconDisplay && newSrc) {
             iconElements.currentIconDisplay.src = newSrc;
         }
         if (iconElements.currentIconContainer) {
             iconElements.currentIconContainer.style.display = 'block';
         }
+        
+        modal.hide();
         
         // Update the icon:square value in the tags table
         if (newIconUrl) {
