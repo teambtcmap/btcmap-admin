@@ -1285,34 +1285,38 @@ async function saveIcon() {
 
         // Success - close modal and update the displayed icon
         const modal = bootstrap.Modal.getInstance(iconElements.modal);
-        modal.hide();
-
+        
+        // Get the new icon URL from API response
+        const newIconUrl = data.result?.tags?.['icon:square'];
+        
+        // Get the data URL from the canvas for immediate preview update
+        const newSrc = canvas ? canvas.toDataURL('image/png') : null;
+        
         // Update the icon on the page
         const areaIcon = document.getElementById('area-icon');
         const iconPlaceholder = document.getElementById('area-icon-placeholder');
-        const newIconUrl = data.result?.tags?.['icon:square'];
-        const newSrc = newIconUrl || (areaIcon?.src?.split('?')[0] + '?t=' + Date.now());
         
         if (areaIcon) {
-            // Add cache-busting parameter
             areaIcon.src = newSrc;
-        } else if (iconPlaceholder) {
+        } else if (iconPlaceholder && newSrc) {
             // Replace placeholder with actual image
             const newImg = document.createElement('img');
             newImg.id = 'area-icon';
             newImg.alt = '{{ area.tags.get("name", "Area") }} logo';
-            newImg.style.cssText = 'width: 80px; height: 80px; object-fit: contain; display: block;';
+            newImg.style.cssText = 'width: 80px; height: 80px; object-fit: contain; display: block; border-radius: 50%;';
             newImg.src = newSrc;
             iconPlaceholder.parentNode.replaceChild(newImg, iconPlaceholder);
         }
         
         // Update the current icon display in the modal for next time
-        if (iconElements.currentIconDisplay) {
+        if (iconElements.currentIconDisplay && newSrc) {
             iconElements.currentIconDisplay.src = newSrc;
         }
         if (iconElements.currentIconContainer) {
             iconElements.currentIconContainer.style.display = 'block';
         }
+        
+        modal.hide();
         
         // Update the icon:square value in the tags table
         if (newIconUrl) {
