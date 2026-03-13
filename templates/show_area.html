@@ -16,7 +16,7 @@
         </div>
         <div class="position-relative area-icon-container">
             {% if area.tags.get('icon:square') %}
-            <img id="area-icon" src="{{ area.tags.get('icon:square') }}" alt="{{ area.tags.get('name', 'Area') }} logo" style="width: 80px; height: 80px; object-fit: contain;">
+            <img id="area-icon" src="{{ area.tags.get('icon:square') }}" alt="{{ area.tags.get('name', 'Area') }} logo" style="width: 80px; height: 80px; object-fit: contain; display: block;">
             {% else %}
             <div id="area-icon-placeholder" class="d-flex align-items-center justify-content-center bg-secondary text-white" style="width: 80px; height: 80px;">
                 <span>No Icon</span>
