@@ -21,8 +21,8 @@ Successfully migrated BTC Map Admin from password-based authentication to Nostr-
 ## New Files Created
 
 1. **`auth.py`** - Nostr authentication blueprint
-   - `/auth/challenge` - Issues time-limited nonces
-   - `/auth/verify` - Validates signed Nostr events
+   - `/auth/nostr/login` - Validates signed NIP-98 events and logs in
+   - `/auth/btcmap/login` - Creates API key with BTC Map credentials and logs in
    - `/auth/logout` - Clears user session
 
 2. **`models.py`** - User model for Flask-Login
@@ -55,6 +55,7 @@ Successfully migrated BTC Map Admin from password-based authentication to Nostr-
 - Added `@login_required` decorators to protected routes
 - Added `check_token()` middleware for token validation
 - New routes: `/profile`, `/profile/delete-token`
+- New route: `/profile/token/btcmap/create` (always overwrites token)
 
 ### `templates/login.html`
 - Complete redesign for Nostr authentication

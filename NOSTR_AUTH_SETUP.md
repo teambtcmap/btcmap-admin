@@ -95,14 +95,15 @@ python app.py
 ### API Endpoints
 
 #### Authentication
-- `GET /login` - NIP-98 Nostr login page
-- `GET /auth/login-url` - Get URL and method for NIP-98 signing
-- `POST /auth/verify` - Verify NIP-98 signed event
+- `GET /login` - Login page (Nostr + BTC Map credentials)
+- `POST /auth/nostr/login` - Verify NIP-98 signed event and login
+- `POST /auth/btcmap/login` - Login by creating a fresh BTC Map API key
 - `GET /auth/logout` - Logout current user
 
 #### Profile
 - `GET /profile` - View/edit profile and RPC token
 - `POST /profile` - Update RPC token
+- `POST /profile/token/btcmap/create` - Create and overwrite token from BTC Map credentials
 - `POST /profile/delete-token` - Remove RPC token
 
 ## Migration from Password Auth

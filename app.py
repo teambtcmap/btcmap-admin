@@ -13,7 +13,7 @@ from shapely.ops import transform
 import pyproj
 from linting import lint_area_dict, lint_cache, LINT_RULES, FIX_ACTIONS, fix_migrate_icon, fix_bump_verified
 from models import User
-from auth import auth_bp
+from auth import auth_bp, create_btcmap_api_key
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev-secret-key-change-in-production')
@@ -197,12 +197,18 @@ AREA_TYPE_REQUIREMENTS = {
 
 @app.before_request
 def check_token():
-    """Check if user has RPC token set for API requests."""
-    # Skip check for auth, static, health, login, and profile routes
+    """Require auth and ensure authenticated users have RPC tokens."""
+    # Skip check for public/auth endpoints
     if request.endpoint and request.endpoint not in [
             'login', 'static', 'health', 'profile', 'profile_delete_token',
-            'auth.challenge', 'auth.verify', 'auth.logout'
+            'profile_create_btcmap_token',
+            'auth.nostr_login', 'auth.btcmap_login', 'auth.logout'
     ]:
+        if not current_user.is_authenticated:
+            if request.path.startswith('/api/') or request.is_json or request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                return jsonify({'error': 'Session expired', 'session_expired': True}), 401
+            return redirect(url_for('login', next=request.url))
+
         # Only check for authenticated users
         if current_user.is_authenticated and not current_user.has_rpc_token:
             # For API requests, return JSON error
@@ -283,6 +289,40 @@ def profile_delete_token():
         flash('API token removed successfully', 'success')
     except Exception as e:
         flash(f'Error removing token: {str(e)}', 'danger')
+    return redirect(url_for('profile'))
+
+
+@app.route('/profile/token/btcmap/create', methods=['POST'])
+@login_required
+def profile_create_btcmap_token():
+    """Create and overwrite token using BTC Map credentials."""
+    username = request.form.get('btcmap_username', '').strip()
+    password = request.form.get('btcmap_password', '')
+
+    if not username or not password:
+        flash('BTC Map username and password are required', 'danger')
+        return redirect(url_for('profile'))
+
+    label = f'btcmap-admin:profile-create:{datetime.utcnow().isoformat()}Z'
+    try:
+        token = create_btcmap_api_key(username=username, password=password, label=label)
+        current_user.update_token(token)
+
+        # Persist btcmap username metadata when available
+        user_data = current_user.data.copy()
+        user_data['pubkey'] = current_user.pubkey
+        user_data['btcmap_username'] = username
+        user_data['last_login_method'] = user_data.get('last_login_method', 'nostr')
+        from user_store import get_user_store
+        get_user_store().save_user(current_user.pubkey, user_data)
+        current_user._data = None
+
+        flash('New BTC Map API token created and saved', 'success')
+    except requests.exceptions.RequestException:
+        flash('Unable to reach BTC Map API', 'danger')
+    except ValueError as e:
+        flash(f'Failed to create token: {str(e)}', 'danger')
+
     return redirect(url_for('profile'))
 
 
@@ -1072,22 +1112,11 @@ def get_area(area_id):
     return None
 
 def rpc_call(method, params):
-    """Make an RPC call to the BTC Map API using the current user's token."""
-    # Get token from current user
-    if not current_user.is_authenticated:
-        error_msg = "User not authenticated"
-        app.logger.error(error_msg)
-        return {"error": {"message": error_msg}}
-    
-    token = current_user.rpc_token
+    token = current_user.rpc_token if current_user.is_authenticated else None
     if not token:
-        error_msg = "RPC token not set. Please add your API token in your profile."
-        app.logger.error(error_msg)
-        return {"error": {"message": error_msg}}
-    
-    headers = {
-        'Authorization': f'Bearer {token}'
-    }
+        return {"error": {"message": "RPC token not set. Please add your API token in your profile."}}
+
+    headers = {'Authorization': f'Bearer {token}'}
     payload = {
         "jsonrpc": "2.0",
         "method": method,

@@ -39,17 +39,16 @@ Server validates the event by checking:
 #### Frontend (login.html)
 
 ```javascript
-// 1. Get login URL and method
-const loginUrlResp = await fetch('/auth/login-url');
-const loginUrlData = await loginUrlResp.json();
+// 1. Build canonical login URL
+const loginUrl = `${window.location.origin}/auth/nostr/login`;
 
 // 2. Create NIP-98 event
 const event = {
     kind: 27235,
     created_at: Math.floor(Date.now() / 1000),
     tags: [
-        ['u', loginUrlData.url],
-        ['method', loginUrlData.method]
+        ['u', loginUrl],
+        ['method', 'POST']
     ],
     content: '',
     pubkey: await window.nostr.getPublicKey()
@@ -59,7 +58,7 @@ const event = {
 const signedEvent = await window.nostr.signEvent(event);
 
 // 4. Submit to server
-await fetch('/auth/verify', {
+await fetch('/auth/nostr/login', {
     method: 'POST',
     body: JSON.stringify({ event: signedEvent })
 });
@@ -74,7 +73,7 @@ event_data = request.json.get('event')
 # 2. Verify NIP-98 compliance
 is_valid, error_msg = verify_nip98_event(
     event_data,
-    url_for('auth.verify', _external=True),
+    request.url,
     'POST',
     max_age_seconds=60
 )
@@ -82,7 +81,7 @@ is_valid, error_msg = verify_nip98_event(
 # 3. Extract pubkey and create/load user
 pubkey = event_data['pubkey']
 user = User(pubkey)
-login_user(user, remember=True)
+login_user(user)
 ```
 
 ### Verification Module (nostr_utils.py)
