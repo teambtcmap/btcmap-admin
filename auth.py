@@ -32,7 +32,7 @@ def external_request_url(req: Request) -> str:
 
     scheme = forwarded_proto or req.scheme
     host = forwarded_host or req.host
-    path = req.full_path if req.query_string or req.full_path.endswith('?') else req.path
+    path = req.full_path if req.query_string else req.path
     return f'{scheme}://{host}{path}'
 
 
