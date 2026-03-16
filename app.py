@@ -395,6 +395,9 @@ def show_area(area_id):
         if isinstance(tags, str):
             try:
                 tags = json.loads(tags)
+                if not isinstance(tags, dict):
+                    app.logger.error(f"Tags parsed to non-dict type in area {area_id}: {type(tags)}")
+                    tags = {}
             except json.JSONDecodeError:
                 app.logger.error(f"Invalid JSON string for tags in area {area_id}")
                 tags = {}
