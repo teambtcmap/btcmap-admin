@@ -7,7 +7,7 @@ from datetime import datetime
 import logging
 
 import requests
-from flask import Blueprint, jsonify, redirect, request, url_for
+from flask import Blueprint, Request, jsonify, redirect, request, url_for
 from flask_login import login_required, login_user, logout_user
 from nostr_sdk import Event
 
@@ -25,16 +25,14 @@ def _utc_now_iso() -> str:
     return datetime.utcnow().isoformat() + 'Z'
 
 
-def external_request_url(req) -> str:
+def external_request_url(req: Request) -> str:
     """Build request URL honoring reverse-proxy forwarded proto/host headers."""
     forwarded_proto = (req.headers.get('X-Forwarded-Proto') or '').split(',')[0].strip()
     forwarded_host = (req.headers.get('X-Forwarded-Host') or '').split(',')[0].strip()
 
     scheme = forwarded_proto or req.scheme
     host = forwarded_host or req.host
-    path = req.full_path if req.query_string else req.path
-    if path.endswith('?'):
-        path = path[:-1]
+    path = req.full_path if req.query_string or req.full_path.endswith('?') else req.path
     return f'{scheme}://{host}{path}'
 
 
