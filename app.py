@@ -29,6 +29,11 @@ app.config['SESSION_FILE_DIR'] = os.path.join(os.path.dirname(__file__), 'flask_
 app.config['SESSION_PERMANENT'] = True
 app.config['SESSION_USE_SIGNER'] = True
 
+# Ensure session directory exists (required for Railway deployment)
+session_dir = app.config['SESSION_FILE_DIR']
+if not os.path.exists(session_dir):
+    os.makedirs(session_dir, exist_ok=True)
+
 # Initialize Flask-Session
 Session(app)
 
