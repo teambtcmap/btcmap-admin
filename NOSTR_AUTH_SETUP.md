@@ -49,7 +49,8 @@ python app.py
 
 3. **Add BTC Map API Token**
    - Go to Profile (nav bar or automatic redirect on first login)
-   - Enter your BTC Map API token (npub or hex format)
+   - Enter your BTC Map API token (raw token string)
+   - Or create a token using BTC Map account credentials on the same page
    - Token is encrypted before storage
    - Save
 

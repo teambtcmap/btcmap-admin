@@ -58,10 +58,9 @@ Successfully migrated BTC Map Admin from password-based authentication to Nostr-
 - New route: `/profile/token/btcmap/create` (always overwrites token)
 
 ### `templates/login.html`
-- Complete redesign for Nostr authentication
+- Complete redesign for Nostr + BTC Map authentication
 - NIP-07 extension integration JavaScript
-- Challenge/verify flow implementation
-- Fallback instructions for manual authentication
+- Direct provider-scoped login flow (`/auth/nostr/login`, `/auth/btcmap/login`)
 - Progressive status messaging
 
 ### `templates/base.html`
@@ -72,7 +71,7 @@ Successfully migrated BTC Map Admin from password-based authentication to Nostr-
 ### `requirements.txt`
 - Added `flask-login` - User session management
 - Added `cryptography` - Token encryption
-- Added `nostr` - Nostr event verification
+- Added `nostr-sdk` - Nostr event verification (Rust bindings)
 
 ### `.gitignore`
 - Added `users.json` - User data with encrypted tokens
@@ -81,7 +80,7 @@ Successfully migrated BTC Map Admin from password-based authentication to Nostr-
 ## Security Improvements
 
 1. **No Readable Credentials**: RPC tokens encrypted at rest with Fernet
-2. **Challenge-Response Auth**: Time-limited nonces prevent replay attacks
+2. **NIP-98 Timestamp Validation**: Events must be within the configured time window
 3. **Server-Side Sessions**: Auth data never sent to client
 4. **Per-User Tokens**: Individual access control vs shared password
 5. **Cryptographic Signatures**: Nostr key pairs for authentication
@@ -110,7 +109,7 @@ Successfully migrated BTC Map Admin from password-based authentication to Nostr-
 ## Testing Checklist
 
 - [ ] Login flow with Nostr extension
-- [ ] Challenge expiry (2 minutes)
+- [ ] Event timestamp window enforcement (60 seconds)
 - [ ] Profile token save/update/delete
 - [ ] RPC calls with encrypted token
 - [ ] Session persistence across page reloads
