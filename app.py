@@ -396,10 +396,20 @@ def show_area(area_id):
         area['updated_at'] = format_date(area.get('updated_at'))
         area['last_sync'] = format_date(area.get('last_sync'))
 
-        area_type = area['tags'].get('type', '')
+        tags = area.get('tags', {})
+        if isinstance(tags, str):
+            try:
+                tags = json.loads(tags)
+                if not isinstance(tags, dict):
+                    app.logger.error(f"Tags parsed to non-dict type in area {area_id}: {type(tags)}")
+                    tags = {}
+            except json.JSONDecodeError:
+                app.logger.error(f"Invalid JSON string for tags in area {area_id}")
+                tags = {}
+        area_type = tags.get('type', '')
         type_requirements = AREA_TYPE_REQUIREMENTS.get(area_type, {})
 
-        geo_json = area['tags'].get('geo_json')
+        geo_json = tags.get('geo_json')
         if geo_json and isinstance(geo_json, str):
             try:
                 geo_json = json.loads(geo_json)
@@ -505,6 +515,9 @@ def add_area():
         if 'error' not in result:
             # Return the area ID so client can upload icon
             area_result = result.get('result', {})
+            if not isinstance(area_result, dict):
+                app.logger.warning(f"Unexpected result format from add_area RPC: {type(area_result)}")
+                return jsonify({'error': {'message': 'Invalid response from server'}}), 500
             area_id = area_result.get('id') or area_result.get('tags', {}).get('url_alias')
             return jsonify({'success': True, 'area_id': area_id})
         app.logger.error(f"Error from RPC call: {result['error']}")
