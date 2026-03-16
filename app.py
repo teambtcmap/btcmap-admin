@@ -520,8 +520,8 @@ def add_area():
                            template_area=template_area)
 
 
-@login_required
 @app.route('/api/set_area_tag', methods=['POST'])
+@login_required
 def set_area_tag():
     data = request.json
     if not data:
@@ -582,8 +582,8 @@ def set_area_tag():
     return jsonify({'success': True})
 
 
-@login_required
 @app.route('/api/set_area_icon', methods=['POST'])
+@login_required
 def set_area_icon():
     data = request.json
     if not data:
@@ -619,8 +619,8 @@ def set_area_icon():
     return jsonify({'success': True, 'result': result.get('result')})
 
 
-@login_required
 @app.route('/api/search_osm')
+@login_required
 def search_osm():
     """Search OpenStreetMap via Nominatim and return places with GeoJSON polygons."""
     query = request.args.get('q', '')
@@ -668,8 +668,8 @@ def search_osm():
         return jsonify({'error': f'Search failed: {str(e)}'}), 500
 
 
-@login_required
 @app.route('/api/proxy_image', methods=['POST'])
+@login_required
 def proxy_image():
     """Proxy endpoint to fetch images from URLs (avoids CORS issues)."""
     data = request.json
@@ -721,8 +721,8 @@ def proxy_image():
         return jsonify({'error': f'Error: {str(e)}'}), 500
 
 
-@login_required
 @app.route('/api/remove_area_tag', methods=['POST'])
+@login_required
 def remove_area_tag():
     data = request.json
     if not data:
@@ -748,8 +748,8 @@ def remove_area_tag():
     return jsonify({'success': True})
 
 
-@login_required
 @app.route('/api/remove_area', methods=['POST'])
+@login_required
 def remove_area():
     data = request.json
     if not data:
@@ -761,8 +761,8 @@ def remove_area():
     return jsonify({'success': True})
 
 
-@login_required
 @app.route('/api/search_areas', methods=['POST'])
+@login_required
 def search_areas():
     try:
         data = request.get_json()
@@ -821,15 +821,15 @@ def search_areas():
 # Linting Routes
 # ============================================
 
-@login_required
 @app.route('/maintenance')
+@login_required
 def maintenance():
     """Render the global linting dashboard."""
     return render_template('maintenance.html')
 
 
-@login_required
 @app.route('/api/lint/area/<string:area_id>')
+@login_required
 def lint_single_area(area_id):
     """Get lint results for a single area."""
     area = get_area(area_id)
@@ -843,8 +843,8 @@ def lint_single_area(area_id):
     })
 
 
-@login_required
 @app.route('/api/lint/sync', methods=['POST'])
+@login_required
 def lint_sync():
     """Sync areas from API and run lint checks.
     
@@ -993,8 +993,8 @@ def lint_sync():
         lint_cache.is_syncing = False
 
 
-@login_required
 @app.route('/api/lint/results')
+@login_required
 def lint_results():
     """Get cached lint results with optional filters."""
     rule_filter = request.args.get('rule')
@@ -1036,8 +1036,8 @@ def lint_results():
     })
 
 
-@login_required
 @app.route('/api/lint/summary')
+@login_required
 def lint_summary():
     """Get lint summary statistics."""
     rule_filter = request.args.get('rule')
@@ -1064,15 +1064,15 @@ def lint_summary():
     ))
 
 
-@login_required
 @app.route('/api/lint/tags')
+@login_required
 def lint_tags():
     """Get list of available tags across all cached areas."""
     return jsonify({'tags': lint_cache.get_available_tags()})
 
 
-@login_required
 @app.route('/api/lint/fix', methods=['POST'])
+@login_required
 def lint_fix():
     """Execute an auto-fix action for a lint issue."""
     data = request.json
@@ -1106,31 +1106,31 @@ def lint_fix():
         return jsonify(result), 400
 
 
-@login_required
 @app.route('/api/lint/rules')
+@login_required
 def lint_rules():
     """Get available lint rules."""
     rules = [rule.to_dict() for rule in LINT_RULES.values()]
     return jsonify({'rules': rules})
 
 
-@login_required
 @app.route('/api/lint/countries')
+@login_required
 def lint_countries():
     """Get list of countries that have at least one community in them."""
     countries = lint_cache.get_countries_with_communities()
     return jsonify({'countries': countries})
 
 
-@login_required
 @app.route('/api/lint/community-orgs')
+@login_required
 def lint_community_orgs():
     """Get list of unique community_org tag values."""
     orgs = lint_cache.get_community_orgs()
     return jsonify({'community_orgs': orgs})
 
-@login_required
 @app.route('/api/gitea/get-issue/<int:issue_id>')
+@login_required
 def get_issue_data(issue_id):
     req_data = requests.get("https://gitea.btcmap.org/api/v1/repos/teambtcmap/btcmap-data/issues/"+str(issue_id))
     return jsonify({'data':req_data.json()})
