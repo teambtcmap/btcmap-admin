@@ -7,7 +7,7 @@ from datetime import datetime
 import logging
 
 import requests
-from flask import Blueprint, jsonify, redirect, request, url_for
+from flask import Blueprint, Request, jsonify, redirect, request, url_for
 from flask_login import login_required, login_user, logout_user
 from nostr_sdk import Event
 
@@ -23,6 +23,17 @@ logger = logging.getLogger(__name__)
 
 def _utc_now_iso() -> str:
     return datetime.utcnow().isoformat() + 'Z'
+
+
+def external_request_url(req: Request) -> str:
+    """Build request URL honoring reverse-proxy forwarded proto/host headers."""
+    forwarded_proto = (req.headers.get('X-Forwarded-Proto') or '').split(',')[0].strip()
+    forwarded_host = (req.headers.get('X-Forwarded-Host') or '').split(',')[0].strip()
+
+    scheme = forwarded_proto or req.scheme
+    host = forwarded_host or req.host
+    path = req.full_path if req.query_string else req.path
+    return f'{scheme}://{host}{path}'
 
 
 def create_btcmap_api_key(username, password, label=None):
@@ -64,7 +75,12 @@ def nostr_login():
         return jsonify({'error': 'Missing event'}), 400
 
     try:
-        is_valid, error_msg = verify_nip98_event(event_data, request.url, 'POST', max_age_seconds=60)
+        is_valid, error_msg = verify_nip98_event(
+            event_data,
+            external_request_url(request),
+            'POST',
+            max_age_seconds=60,
+        )
         if not is_valid:
             return jsonify({'error': f'Invalid NIP-98 event: {error_msg}'}), 400
 

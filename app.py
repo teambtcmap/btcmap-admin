@@ -13,7 +13,7 @@ from shapely.ops import transform
 import pyproj
 from linting import lint_area_dict, lint_cache, LINT_RULES, FIX_ACTIONS, fix_migrate_icon, fix_bump_verified
 from models import User
-from auth import auth_bp, create_btcmap_api_key
+from auth import auth_bp, create_btcmap_api_key, external_request_url
 from nostr_sdk import Event
 from nostr_utils import verify_nip98_event, get_event_pubkey
 
@@ -28,6 +28,11 @@ app.config['SESSION_TYPE'] = 'filesystem'
 app.config['SESSION_FILE_DIR'] = os.path.join(os.path.dirname(__file__), 'flask_session')
 app.config['SESSION_PERMANENT'] = True
 app.config['SESSION_USE_SIGNER'] = True
+
+# Ensure session directory exists (required for Railway deployment)
+session_dir = app.config['SESSION_FILE_DIR']
+if not os.path.exists(session_dir):
+    os.makedirs(session_dir, exist_ok=True)
 
 # Initialize Flask-Session
 Session(app)
@@ -338,7 +343,7 @@ def profile_link_nostr():
 
     is_valid, error_msg = verify_nip98_event(
         signed_event,
-        request.url,
+        external_request_url(request),
         'POST',
         max_age_seconds=60,
     )
