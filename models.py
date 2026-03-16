@@ -3,7 +3,7 @@
 from datetime import datetime
 
 from flask_login import UserMixin
-from nostr_sdk import PublicKey
+from nostr_sdk import NostrSdkError, PublicKey
 
 from user_store import get_user_store
 
@@ -43,7 +43,7 @@ class User(UserMixin):
             return None
         try:
             return PublicKey.parse(pubkey).to_bech32()
-        except Exception:
+        except NostrSdkError:
             return None
 
     @property
