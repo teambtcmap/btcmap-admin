@@ -4,6 +4,8 @@ import json
 import os
 from datetime import datetime
 
+import logging
+
 import requests
 from flask import Blueprint, jsonify, redirect, request, url_for
 from flask_login import login_required, login_user, logout_user
@@ -16,6 +18,7 @@ from user_store import get_user_store
 
 auth_bp = Blueprint('auth', __name__, url_prefix='/auth')
 API_BASE_URL = os.environ.get('API_BASE_URL', 'https://api.btcmap.org')
+logger = logging.getLogger(__name__)
 
 
 def _utc_now_iso() -> str:
@@ -89,8 +92,9 @@ def nostr_login():
             'nostr_pubkey': nostr_pubkey,
             'has_token': user.has_rpc_token,
         })
-    except Exception as e:
-        return jsonify({'error': f'Verification failed: {str(e)}'}), 400
+    except Exception:
+        logger.exception('NIP-98 verification/login failed')
+        return jsonify({'error': 'Verification failed'}), 400
 
 
 @auth_bp.route('/btcmap/login', methods=['POST'])
