@@ -68,7 +68,7 @@ Successfully migrated BTC Map Admin from password-based authentication to Nostr-
 - Added Profile link with badge for missing tokens
 - Changed logout link to `auth.logout` route
 
-### `requirements.txt`
+### `pyproject.toml`
 - Added `flask-login` - User session management
 - Added `cryptography` - Token encryption
 - Added `nostr-sdk` - Nostr event verification (Rust bindings)
@@ -89,7 +89,7 @@ Successfully migrated BTC Map Admin from password-based authentication to Nostr-
 
 ### For Administrators
 1. Set `TOKEN_CIPHER_KEY` environment variable
-2. Install dependencies: `pip install -r requirements.txt`
+2. Install dependencies: `uv sync`
 3. Deploy updated code
 4. Users re-authenticate with Nostr on first visit
 

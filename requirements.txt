@@ -1,9 +1,0 @@
-flask
-flask_session
-flask-login
-requests
-geojson_rewind
-shapely
-pyproj
-cryptography
-nostr-sdk

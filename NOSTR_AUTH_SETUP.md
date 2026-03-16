@@ -7,7 +7,7 @@ This application uses **NIP-98 HTTP Auth** for Nostr-based authentication instea
 ### 1. Install Dependencies
 
 ```bash
-pip install -r requirements.txt
+uv sync
 ```
 
 ### 2. Configure Environment
