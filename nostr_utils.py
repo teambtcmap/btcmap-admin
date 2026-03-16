@@ -45,8 +45,11 @@ def verify_nip98_event(event_data: dict, url: str, method: str,
         # Check timestamp (within max_age_seconds window)
         created_at = event.created_at().as_secs()
         now = int(time.time())
-        age = abs(now - created_at)
-        
+
+        if created_at > now:
+            return False, f"Event timestamp is in the future: {created_at} > {now}"
+
+        age = now - created_at
         if age > max_age_seconds:
             return False, f"Event timestamp outside valid window ({max_age_seconds}s): age={age}s"
         
@@ -56,7 +59,8 @@ def verify_nip98_event(event_data: dict, url: str, method: str,
         for tag in tags:
             tag_vec = tag.as_vec()
             if len(tag_vec) >= 2:
-                tag_dict[tag_vec[0]] = tag_vec[1]
+                if tag_vec[0] not in tag_dict:
+                    tag_dict[tag_vec[0]] = tag_vec[1]
         
         # Verify URL tag
         if 'u' not in tag_dict:
