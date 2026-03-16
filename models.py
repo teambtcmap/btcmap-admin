@@ -1,88 +1,81 @@
-"""User models for Flask-Login integration."""
+"""User model for Flask-Login account-based identities."""
 
 from datetime import datetime
+
 from flask_login import UserMixin
+from nostr_sdk import PublicKey
+
 from user_store import get_user_store
 
 
 class User(UserMixin):
-    """User model for Flask-Login.
-    
-    Wraps user data from the JSON store.
-    """
-    
-    def __init__(self, pubkey: str):
-        """Initialize user with pubkey.
-        
-        Args:
-            pubkey: Nostr public key (hex format)
-        """
-        self.pubkey = pubkey
+    """Flask-Login user backed by internal account_id."""
+
+    def __init__(self, account_id: str):
+        self.account_id = account_id
         self._data = None
-    
+
     def get_id(self):
-        """Return the pubkey as the user ID."""
-        return self.pubkey
-    
+        return self.account_id
+
     @property
     def data(self):
-        """Lazy load user data from store."""
         if self._data is None:
-            store = get_user_store()
-            self._data = store.get_user(self.pubkey) or {}
+            self._data = get_user_store().get_account(self.account_id) or {}
         return self._data
-    
+
     @property
     def rpc_token(self):
-        """Get the decrypted RPC token."""
         return self.data.get('rpc_token')
-    
+
     @property
     def has_rpc_token(self):
-        """Check if user has an RPC token set."""
         return bool(self.rpc_token)
-    
+
+    @property
+    def nostr_pubkey(self):
+        return self.data.get('nostr_pubkey')
+
+    @property
+    def nostr_npub(self):
+        pubkey = self.nostr_pubkey
+        if not pubkey:
+            return None
+        try:
+            return PublicKey.parse(pubkey).to_bech32()
+        except Exception:
+            return None
+
+    @property
+    def btcmap_username(self):
+        return self.data.get('btcmap_username')
+
+    @property
+    def auth_type(self):
+        return self.data.get('auth_type')
+
     @property
     def last_login(self):
-        """Get last login timestamp formatted for humans."""
         timestamp = self.data.get('last_login')
         if not timestamp:
             return None
         try:
-            # Parse ISO format and convert to human-readable
             dt = datetime.fromisoformat(timestamp.replace('Z', '+00:00'))
             return dt.strftime('%B %d, %Y at %I:%M %p UTC')
         except (ValueError, AttributeError):
             return timestamp
-    
-    def update_token(self, token: str):
-        """Update the user's RPC token.
-        
-        Args:
-            token: The new RPC token
-        """
-        store = get_user_store()
-        user_data = self.data.copy()
-        user_data['pubkey'] = self.pubkey
-        user_data['rpc_token'] = token
-        store.save_user(self.pubkey, user_data)
-        # Invalidate cached data
+
+    def update_token(self, token):
+        get_user_store().set_account_token(self.account_id, token)
         self._data = None
-    
+
+    @property
+    def account_id_value(self):
+        return self.account_id
+
     @staticmethod
-    def load_user(pubkey: str):
-        """Load a user by pubkey (for Flask-Login user_loader).
-        
-        Args:
-            pubkey: Nostr public key (hex format)
-            
-        Returns:
-            User instance if found, None otherwise
-        """
-        store = get_user_store()
-        user_data = store.get_user(pubkey)
-        
-        if user_data:
-            return User(pubkey)
-        
-        return None
+    def load_user(account_id: str):
+        account = get_user_store().get_account(account_id)
+        if not account:
+            return None
+        return User(account_id)

@@ -14,6 +14,8 @@ import pyproj
 from linting import lint_area_dict, lint_cache, LINT_RULES, FIX_ACTIONS, fix_migrate_icon, fix_bump_verified
 from models import User
 from auth import auth_bp, create_btcmap_api_key
+from nostr_sdk import Event
+from nostr_utils import verify_nip98_event, get_event_pubkey
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev-secret-key-change-in-production')
@@ -34,15 +36,15 @@ Session(app)
 login_manager = LoginManager()
 login_manager.init_app(app)
 login_manager.login_view = 'login'
-login_manager.login_message = 'Please sign in with Nostr to access this page.'
+login_manager.login_message = 'Please sign in to access this page.'
 
 # Register auth blueprint
 app.register_blueprint(auth_bp)
 
 @login_manager.user_loader
-def load_user(pubkey):
-    """Load user by pubkey for Flask-Login."""
-    return User.load_user(pubkey)
+def load_user(account_id):
+    """Load user by account_id for Flask-Login."""
+    return User.load_user(account_id)
 
 # Make current_user available in templates
 @app.context_processor
@@ -201,7 +203,7 @@ def check_token():
     # Skip check for public/auth endpoints
     if request.endpoint and request.endpoint not in [
             'login', 'static', 'health', 'profile', 'profile_delete_token',
-            'profile_create_btcmap_token',
+            'profile_create_btcmap_token', 'profile_link_nostr',
             'auth.nostr_login', 'auth.btcmap_login', 'auth.logout'
     ]:
         if not current_user.is_authenticated:
@@ -308,13 +310,10 @@ def profile_create_btcmap_token():
         token = create_btcmap_api_key(username=username, password=password, label=label)
         current_user.update_token(token)
 
-        # Persist btcmap username metadata when available
-        user_data = current_user.data.copy()
-        user_data['pubkey'] = current_user.pubkey
-        user_data['btcmap_username'] = username
-        user_data['last_login_method'] = user_data.get('last_login_method', 'nostr')
+        # Do not enforce strict BTC Map username uniqueness for profile token creation.
         from user_store import get_user_store
-        get_user_store().save_user(current_user.pubkey, user_data)
+        store = get_user_store()
+        store.update_account_metadata(current_user.account_id_value, btcmap_username=username)
         current_user._data = None
 
         flash('New BTC Map API token created and saved', 'success')
@@ -324,6 +323,39 @@ def profile_create_btcmap_token():
         flash(f'Failed to create token: {str(e)}', 'danger')
 
     return redirect(url_for('profile'))
+
+
+@app.route('/profile/nostr/link', methods=['POST'])
+@login_required
+def profile_link_nostr():
+    """Link a Nostr pubkey to the current account (hard-block conflicts)."""
+    event_data = request.get_json(silent=True) or {}
+    signed_event = event_data.get('event')
+    if not signed_event:
+        return jsonify({'error': 'Missing signed event'}), 400
+
+    is_valid, error_msg = verify_nip98_event(
+        signed_event,
+        request.url,
+        'POST',
+        max_age_seconds=60,
+    )
+    if not is_valid:
+        return jsonify({'error': f'Invalid NIP-98 event: {error_msg}'}), 400
+
+    try:
+        event = Event.from_json(json.dumps(signed_event))
+        nostr_pubkey = get_event_pubkey(event)
+
+        from user_store import get_user_store
+        store = get_user_store()
+        store.link_nostr(current_user.account_id_value, nostr_pubkey)
+        current_user._data = None
+        return jsonify({'success': True, 'nostr_pubkey': nostr_pubkey})
+    except ValueError as e:
+        return jsonify({'error': str(e)}), 409
+    except Exception as e:
+        return jsonify({'error': str(e)}), 400
 
 
 @app.route('/select_area')
