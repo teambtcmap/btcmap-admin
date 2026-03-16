@@ -1132,8 +1132,18 @@ def lint_community_orgs():
 @app.route('/api/gitea/get-issue/<int:issue_id>')
 @login_required
 def get_issue_data(issue_id):
-    req_data = requests.get("https://gitea.btcmap.org/api/v1/repos/teambtcmap/btcmap-data/issues/"+str(issue_id))
-    return jsonify({'data':req_data.json()})
+    try:
+        req_data = requests.get(
+            f"https://gitea.btcmap.org/api/v1/repos/teambtcmap/btcmap-data/issues/{issue_id}",
+            timeout=15,
+        )
+        req_data.raise_for_status()
+        return jsonify({'data': req_data.json()})
+    except requests.exceptions.Timeout:
+        return jsonify({'error': 'Request to Gitea timed out'}), 408
+    except requests.exceptions.RequestException as exc:
+        app.logger.error(f"Error fetching Gitea issue {issue_id}: {exc}")
+        return jsonify({'error': 'Failed to fetch issue data'}), 502
 
 def get_area(area_id):
     result = rpc_call('get_area', {'id': area_id})
