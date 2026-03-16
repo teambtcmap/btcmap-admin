@@ -273,8 +273,9 @@ def profile():
                     current_user.update_token(rpc_token)
                     flash('API token updated successfully', 'success')
                     return redirect(url_for('profile'))
-            except Exception as e:
-                flash(f'Error updating token: {str(e)}', 'danger')
+            except Exception:
+                app.logger.exception('Failed updating API token')
+                flash('An error occurred while updating the token. Please try again.', 'danger')
         else:
             flash('Please enter a valid token', 'warning')
     
@@ -289,8 +290,9 @@ def profile_delete_token():
     try:
         current_user.update_token(None)
         flash('API token removed successfully', 'success')
-    except Exception as e:
-        flash(f'Error removing token: {str(e)}', 'danger')
+    except Exception:
+        app.logger.exception('Failed removing API token')
+        flash('An error occurred while removing the token. Please try again.', 'danger')
     return redirect(url_for('profile'))
 
 
@@ -352,10 +354,12 @@ def profile_link_nostr():
         store.link_nostr(current_user.account_id_value, nostr_pubkey)
         current_user._data = None
         return jsonify({'success': True, 'nostr_pubkey': nostr_pubkey})
-    except ValueError as e:
-        return jsonify({'error': str(e)}), 409
-    except Exception as e:
-        return jsonify({'error': str(e)}), 400
+    except ValueError:
+        app.logger.exception('Failed linking Nostr pubkey due to identity conflict')
+        return jsonify({'error': 'This Nostr pubkey is already linked to another account.'}), 409
+    except Exception:
+        app.logger.exception('Unexpected error while linking Nostr pubkey')
+        return jsonify({'error': 'An error occurred while linking Nostr. Please try again.'}), 400
 
 
 @app.route('/select_area')
