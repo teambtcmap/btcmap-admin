@@ -1,6 +1,7 @@
 import os
-from flask import Flask, render_template, request, jsonify, session, redirect, url_for
+from flask import Flask, render_template, request, jsonify, session, redirect, url_for, flash
 from flask_session import Session
+from flask_login import LoginManager, login_required, current_user, logout_user
 import requests
 import json
 from datetime import datetime, timedelta
@@ -11,13 +12,44 @@ from shapely.geometry import shape
 from shapely.ops import transform
 import pyproj
 from linting import lint_area_dict, lint_cache, LINT_RULES, FIX_ACTIONS, fix_migrate_icon, fix_bump_verified
+from models import User
+from auth import auth_bp, create_btcmap_api_key
+from nostr_sdk import Event
+from nostr_utils import verify_nip98_event, get_event_pubkey
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev-secret-key-change-in-production')
-app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(minutes=30)
 app.config['SESSION_COOKIE_SECURE'] = True
 app.config['SESSION_COOKIE_HTTPONLY'] = True
 app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
+
+# Configure server-side sessions (filesystem backend)
+app.config['SESSION_TYPE'] = 'filesystem'
+app.config['SESSION_FILE_DIR'] = os.path.join(os.path.dirname(__file__), 'flask_session')
+app.config['SESSION_PERMANENT'] = True
+app.config['SESSION_USE_SIGNER'] = True
+
+# Initialize Flask-Session
+Session(app)
+
+# Initialize Flask-Login
+login_manager = LoginManager()
+login_manager.init_app(app)
+login_manager.login_view = 'login'
+login_manager.login_message = 'Please sign in to access this page.'
+
+# Register auth blueprint
+app.register_blueprint(auth_bp)
+
+@login_manager.user_loader
+def load_user(account_id):
+    """Load user by account_id for Flask-Login."""
+    return User.load_user(account_id)
+
+# Make current_user available in templates
+@app.context_processor
+def inject_current_user():
+    return dict(current_user=current_user)
 
 API_BASE_URL = "https://api.btcmap.org"
 
@@ -166,15 +198,32 @@ AREA_TYPE_REQUIREMENTS = {
 
 
 @app.before_request
-def check_auth():
+def check_token():
+    """Require auth and ensure authenticated users have RPC tokens."""
+    # Skip check for public/auth endpoints
     if request.endpoint and request.endpoint not in [
-            'login', 'static', 'health'
-    ] and 'password' not in session:
-        # For API requests, return JSON 401 instead of redirect
-        # This allows JavaScript to detect session expiration and handle it gracefully
-        if request.path.startswith('/api/') or request.is_json or request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-            return jsonify({'error': 'Session expired', 'session_expired': True}), 401
-        return redirect(url_for('login', next=request.url))
+            'login', 'static', 'health', 'profile', 'profile_delete_token',
+            'profile_create_btcmap_token', 'profile_link_nostr',
+            'auth.nostr_login', 'auth.btcmap_login', 'auth.logout'
+    ]:
+        if not current_user.is_authenticated:
+            if request.path.startswith('/api/') or request.is_json or request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                return jsonify({'error': 'Session expired', 'session_expired': True}), 401
+            return redirect(url_for('login', next=request.url))
+
+        # Only check for authenticated users
+        if current_user.is_authenticated and not current_user.has_rpc_token:
+            # For API requests, return JSON error
+            if request.path.startswith('/api/') or request.is_json or request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                return jsonify({
+                    'error': 'RPC token not set',
+                    'message': 'Please add your BTC Map API token in your profile',
+                    'profile_url': url_for('profile')
+                }), 403
+            # For page requests, redirect to profile
+            elif request.endpoint != 'profile':
+                flash('Please add your BTC Map API token to continue', 'warning')
+                return redirect(url_for('profile'))
 
 
 @app.route('/health')
@@ -185,41 +234,142 @@ def health():
 
 @app.route('/')
 def index():
-    if 'password' in session:
+    if current_user.is_authenticated:
         return redirect(url_for('select_area'))
     return redirect(url_for('login'))
 
 
 @app.route('/home')
+@login_required
 def home():
     return redirect(url_for('select_area'))
 
 
-@app.route('/login', methods=['GET', 'POST'])
+@app.route('/login', methods=['GET'])
 def login():
-    if 'password' in session:
+    """Show Nostr login page."""
+    if current_user.is_authenticated:
         return redirect(url_for('select_area'))
-    if request.method == 'POST':
-        password = request.form.get('password')
-        session['password'] = password
-        session.permanent = True
-        next_page = request.args.get('next')
-        return redirect(next_page or url_for('select_area'))
     return render_template('login.html')
 
 
-@app.route('/logout')
-def logout():
-    session.pop('password', None)
-    return redirect(url_for('login'))
+@app.route('/profile', methods=['GET', 'POST'])
+@login_required
+def profile():
+    """User profile page for managing RPC token."""
+    if request.method == 'POST':
+        rpc_token = request.form.get('rpc_token', '').strip()
+        
+        # Skip update if placeholder value
+        if rpc_token and rpc_token != '********':
+            try:
+                # Basic validation
+                if not rpc_token:
+                    flash('Token cannot be empty', 'danger')
+                elif len(rpc_token) < 10:
+                    flash('Token appears to be too short', 'danger')
+                else:
+                    # Save the token
+                    current_user.update_token(rpc_token)
+                    flash('API token updated successfully', 'success')
+                    return redirect(url_for('profile'))
+            except Exception:
+                app.logger.exception('Failed updating API token')
+                flash('An error occurred while updating the token. Please try again.', 'danger')
+        else:
+            flash('Please enter a valid token', 'warning')
+    
+    first_login = request.args.get('first_login') == '1'
+    return render_template('profile.html', first_login=first_login)
+
+
+@app.route('/profile/delete-token', methods=['POST'])
+@login_required
+def profile_delete_token():
+    """Delete user's RPC token."""
+    try:
+        current_user.update_token(None)
+        flash('API token removed successfully', 'success')
+    except Exception:
+        app.logger.exception('Failed removing API token')
+        flash('An error occurred while removing the token. Please try again.', 'danger')
+    return redirect(url_for('profile'))
+
+
+@app.route('/profile/token/btcmap/create', methods=['POST'])
+@login_required
+def profile_create_btcmap_token():
+    """Create and overwrite token using BTC Map credentials."""
+    username = request.form.get('btcmap_username', '').strip()
+    password = request.form.get('btcmap_password', '')
+
+    if not username or not password:
+        flash('BTC Map username and password are required', 'danger')
+        return redirect(url_for('profile'))
+
+    label = f'btcmap-admin:profile-create:{datetime.utcnow().isoformat()}Z'
+    try:
+        token = create_btcmap_api_key(username=username, password=password, label=label)
+        current_user.update_token(token)
+
+        # Do not enforce strict BTC Map username uniqueness for profile token creation.
+        from user_store import get_user_store
+        store = get_user_store()
+        store.update_account_metadata(current_user.account_id_value, btcmap_username=username)
+        current_user._data = None
+
+        flash('New BTC Map API token created and saved', 'success')
+    except requests.exceptions.RequestException:
+        flash('Unable to reach BTC Map API', 'danger')
+    except ValueError as e:
+        flash(f'Failed to create token: {str(e)}', 'danger')
+
+    return redirect(url_for('profile'))
+
+
+@app.route('/profile/nostr/link', methods=['POST'])
+@login_required
+def profile_link_nostr():
+    """Link a Nostr pubkey to the current account (hard-block conflicts)."""
+    event_data = request.get_json(silent=True) or {}
+    signed_event = event_data.get('event')
+    if not signed_event:
+        return jsonify({'error': 'Missing signed event'}), 400
+
+    is_valid, error_msg = verify_nip98_event(
+        signed_event,
+        request.url,
+        'POST',
+        max_age_seconds=60,
+    )
+    if not is_valid:
+        return jsonify({'error': f'Invalid NIP-98 event: {error_msg}'}), 400
+
+    try:
+        event = Event.from_json(json.dumps(signed_event))
+        nostr_pubkey = get_event_pubkey(event)
+
+        from user_store import get_user_store
+        store = get_user_store()
+        store.link_nostr(current_user.account_id_value, nostr_pubkey)
+        current_user._data = None
+        return jsonify({'success': True, 'nostr_pubkey': nostr_pubkey})
+    except ValueError:
+        app.logger.exception('Failed linking Nostr pubkey due to identity conflict')
+        return jsonify({'error': 'This Nostr pubkey is already linked to another account.'}), 409
+    except Exception:
+        app.logger.exception('Unexpected error while linking Nostr pubkey')
+        return jsonify({'error': 'An error occurred while linking Nostr. Please try again.'}), 400
 
 
 @app.route('/select_area')
+@login_required
 def select_area():
     return render_template('select_area.html')
 
 
 @app.route('/show_area/<string:area_id>')
+@login_required
 def show_area(area_id):
     area = get_area(area_id)
     if area:
@@ -273,6 +423,7 @@ def show_area(area_id):
 
 
 @app.route('/add_area', methods=['GET', 'POST'])
+@login_required
 def add_area():
     if request.method == 'POST':
         app.logger.info(
@@ -374,6 +525,7 @@ def add_area():
 
 
 @app.route('/api/set_area_tag', methods=['POST'])
+@login_required
 def set_area_tag():
     data = request.json
     if not data:
@@ -435,6 +587,7 @@ def set_area_tag():
 
 
 @app.route('/api/set_area_icon', methods=['POST'])
+@login_required
 def set_area_icon():
     data = request.json
     if not data:
@@ -471,6 +624,7 @@ def set_area_icon():
 
 
 @app.route('/api/search_osm')
+@login_required
 def search_osm():
     """Search OpenStreetMap via Nominatim and return places with GeoJSON polygons."""
     query = request.args.get('q', '')
@@ -519,6 +673,7 @@ def search_osm():
 
 
 @app.route('/api/proxy_image', methods=['POST'])
+@login_required
 def proxy_image():
     """Proxy endpoint to fetch images from URLs (avoids CORS issues)."""
     data = request.json
@@ -571,6 +726,7 @@ def proxy_image():
 
 
 @app.route('/api/remove_area_tag', methods=['POST'])
+@login_required
 def remove_area_tag():
     data = request.json
     if not data:
@@ -597,6 +753,7 @@ def remove_area_tag():
 
 
 @app.route('/api/remove_area', methods=['POST'])
+@login_required
 def remove_area():
     data = request.json
     if not data:
@@ -609,6 +766,7 @@ def remove_area():
 
 
 @app.route('/api/search_areas', methods=['POST'])
+@login_required
 def search_areas():
     try:
         data = request.get_json()
@@ -668,12 +826,14 @@ def search_areas():
 # ============================================
 
 @app.route('/maintenance')
+@login_required
 def maintenance():
     """Render the global linting dashboard."""
     return render_template('maintenance.html')
 
 
 @app.route('/api/lint/area/<string:area_id>')
+@login_required
 def lint_single_area(area_id):
     """Get lint results for a single area."""
     area = get_area(area_id)
@@ -688,6 +848,7 @@ def lint_single_area(area_id):
 
 
 @app.route('/api/lint/sync', methods=['POST'])
+@login_required
 def lint_sync():
     """Sync areas from API and run lint checks.
     
@@ -837,6 +998,7 @@ def lint_sync():
 
 
 @app.route('/api/lint/results')
+@login_required
 def lint_results():
     """Get cached lint results with optional filters."""
     rule_filter = request.args.get('rule')
@@ -879,6 +1041,7 @@ def lint_results():
 
 
 @app.route('/api/lint/summary')
+@login_required
 def lint_summary():
     """Get lint summary statistics."""
     rule_filter = request.args.get('rule')
@@ -906,12 +1069,14 @@ def lint_summary():
 
 
 @app.route('/api/lint/tags')
+@login_required
 def lint_tags():
     """Get list of available tags across all cached areas."""
     return jsonify({'tags': lint_cache.get_available_tags()})
 
 
 @app.route('/api/lint/fix', methods=['POST'])
+@login_required
 def lint_fix():
     """Execute an auto-fix action for a lint issue."""
     data = request.json
@@ -946,6 +1111,7 @@ def lint_fix():
 
 
 @app.route('/api/lint/rules')
+@login_required
 def lint_rules():
     """Get available lint rules."""
     rules = [rule.to_dict() for rule in LINT_RULES.values()]
@@ -953,6 +1119,7 @@ def lint_rules():
 
 
 @app.route('/api/lint/countries')
+@login_required
 def lint_countries():
     """Get list of countries that have at least one community in them."""
     countries = lint_cache.get_countries_with_communities()
@@ -960,11 +1127,27 @@ def lint_countries():
 
 
 @app.route('/api/lint/community-orgs')
+@login_required
 def lint_community_orgs():
     """Get list of unique community_org tag values."""
     orgs = lint_cache.get_community_orgs()
     return jsonify({'community_orgs': orgs})
 
+@app.route('/api/gitea/get-issue/<int:issue_id>')
+@login_required
+def get_issue_data(issue_id):
+    try:
+        req_data = requests.get(
+            f"https://gitea.btcmap.org/api/v1/repos/teambtcmap/btcmap-data/issues/{issue_id}",
+            timeout=15,
+        )
+        req_data.raise_for_status()
+        return jsonify({'data': req_data.json()})
+    except requests.exceptions.Timeout:
+        return jsonify({'error': 'Request to Gitea timed out'}), 408
+    except requests.exceptions.RequestException as exc:
+        app.logger.error(f"Error fetching Gitea issue {issue_id}: {exc}")
+        return jsonify({'error': 'Failed to fetch issue data'}), 502
 
 def get_area(area_id):
     result = rpc_call('get_area', {'id': area_id})
@@ -975,9 +1158,11 @@ def get_area(area_id):
     return None
 
 def rpc_call(method, params):
-    headers = {
-        'Authorization': f'Bearer {session.get("password")}'
-    }
+    token = current_user.rpc_token if current_user.is_authenticated else None
+    if not token:
+        return {"error": {"message": "RPC token not set. Please add your API token in your profile."}}
+
+    headers = {'Authorization': f'Bearer {token}'}
     payload = {
         "jsonrpc": "2.0",
         "method": method,
@@ -1162,4 +1347,5 @@ validation_functions = {
 }
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000, debug=False)
+    debug_mode = os.environ.get('FLASK_DEBUG', 'false').lower() in ('1', 'true', 'yes', 'on')
+    app.run(host='0.0.0.0', port=5000, debug=debug_mode)
