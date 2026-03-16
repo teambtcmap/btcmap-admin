@@ -26,26 +26,38 @@ class UserStore:
 
         key = cipher_key or os.environ.get('TOKEN_CIPHER_KEY')
         if not key:
-            key = Fernet.generate_key().decode()
-            print('WARNING: Generated ephemeral cipher key. Set TOKEN_CIPHER_KEY env var for production.')
-            print(f'Generated key: {key}')
+            raise ValueError(
+                'TOKEN_CIPHER_KEY environment variable is required. '
+                'Generate one with: python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"'
+            )
         self.cipher = Fernet(key.encode())
 
-    def _read_raw(self) -> Dict[str, Any]:
+    def _load_store(self) -> Dict[str, Any]:
+        """Load store under a lock, auto-migrating legacy shape if needed."""
         if not os.path.exists(self.storage_path):
-            return {}
-        with open(self.storage_path, 'r') as f:
-            fcntl.flock(f.fileno(), fcntl.LOCK_SH)
+            return self._empty_store()
+
+        with open(self.storage_path, 'r+') as f:
+            fcntl.flock(f.fileno(), fcntl.LOCK_EX)
             try:
-                return json.load(f)
+                content = f.read().strip()
+                raw = json.loads(content) if content else {}
+                if self._is_v2(raw):
+                    return raw
+                migrated = self._migrate_legacy(raw)
+                f.seek(0)
+                f.truncate()
+                json.dump(migrated, f, indent=2)
+                return migrated
             finally:
                 fcntl.flock(f.fileno(), fcntl.LOCK_UN)
 
-    def _write_raw(self, data: Dict[str, Any]) -> None:
+    def _save_store(self, store: Dict[str, Any]) -> None:
+        """Save full store under exclusive lock."""
         with open(self.storage_path, 'w') as f:
             fcntl.flock(f.fileno(), fcntl.LOCK_EX)
             try:
-                json.dump(data, f, indent=2)
+                json.dump(store, f, indent=2)
             finally:
                 fcntl.flock(f.fileno(), fcntl.LOCK_UN)
 
@@ -55,7 +67,7 @@ class UserStore:
     def _decrypt_token(self, encrypted_token: str) -> Optional[str]:
         try:
             return self.cipher.decrypt(encrypted_token.encode()).decode()
-        except (InvalidToken, Exception):
+        except InvalidToken:
             return None
 
     def _empty_store(self) -> Dict[str, Any]:
@@ -110,16 +122,25 @@ class UserStore:
         new_store['migrated_at'] = _utc_now_iso()
         return new_store
 
-    def _load_store(self) -> Dict[str, Any]:
-        raw = self._read_raw()
-        if self._is_v2(raw):
-            return raw
-        migrated = self._migrate_legacy(raw)
-        self._write_raw(migrated)
-        return migrated
+    def with_store_update(self, updater):
+        """Run read-modify-write atomically under one exclusive file lock."""
+        if not os.path.exists(self.storage_path):
+            with open(self.storage_path, 'w') as f:
+                json.dump(self._empty_store(), f, indent=2)
 
-    def _save_store(self, store: Dict[str, Any]) -> None:
-        self._write_raw(store)
+        with open(self.storage_path, 'r+') as f:
+            fcntl.flock(f.fileno(), fcntl.LOCK_EX)
+            try:
+                content = f.read().strip()
+                raw = json.loads(content) if content else {}
+                store = raw if self._is_v2(raw) else self._migrate_legacy(raw)
+                result = updater(store)
+                f.seek(0)
+                f.truncate()
+                json.dump(store, f, indent=2)
+                return result
+            finally:
+                fcntl.flock(f.fileno(), fcntl.LOCK_UN)
 
     def _account_with_decrypted_token(self, account: Dict[str, Any]) -> Dict[str, Any]:
         data = dict(account)
@@ -135,21 +156,22 @@ class UserStore:
         return self._account_with_decrypted_token(account)
 
     def create_account(self, auth_type: str = 'nostr') -> Dict[str, Any]:
-        store = self._load_store()
-        account_id = str(uuid.uuid4())
-        account = {
-            'account_id': account_id,
-            'auth_type': auth_type,
-            'nostr_pubkey': None,
-            'btcmap_username': None,
-            'last_login': None,
-            'last_login_method': None,
-            'created_at': _utc_now_iso(),
-            'updated_at': _utc_now_iso(),
-        }
-        store['accounts'][account_id] = account
-        self._save_store(store)
-        return self._account_with_decrypted_token(account)
+        def updater(store):
+            account_id = str(uuid.uuid4())
+            account = {
+                'account_id': account_id,
+                'auth_type': auth_type,
+                'nostr_pubkey': None,
+                'btcmap_username': None,
+                'last_login': None,
+                'last_login_method': None,
+                'created_at': _utc_now_iso(),
+                'updated_at': _utc_now_iso(),
+            }
+            store['accounts'][account_id] = account
+            return self._account_with_decrypted_token(account)
+
+        return self.with_store_update(updater)
 
     def find_account_by_nostr(self, nostr_pubkey: str) -> Optional[Dict[str, Any]]:
         store = self._load_store()
@@ -168,69 +190,73 @@ class UserStore:
         return self._account_with_decrypted_token(account) if account else None
 
     def link_nostr(self, account_id: str, nostr_pubkey: str) -> None:
-        store = self._load_store()
-        mapped = store['index_nostr'].get(nostr_pubkey)
-        if mapped and mapped != account_id:
-            raise ValueError('Nostr pubkey is already linked to another account')
+        def updater(store):
+            mapped = store['index_nostr'].get(nostr_pubkey)
+            if mapped and mapped != account_id:
+                raise ValueError('Nostr pubkey is already linked to another account')
 
-        account = store['accounts'].get(account_id)
-        if not account:
-            raise ValueError('Account not found')
+            account = store['accounts'].get(account_id)
+            if not account:
+                raise ValueError('Account not found')
 
-        previous = account.get('nostr_pubkey')
-        if previous and previous != nostr_pubkey:
-            store['index_nostr'].pop(previous, None)
+            previous = account.get('nostr_pubkey')
+            if previous and previous != nostr_pubkey:
+                store['index_nostr'].pop(previous, None)
 
-        account['nostr_pubkey'] = nostr_pubkey
-        account['updated_at'] = _utc_now_iso()
-        store['index_nostr'][nostr_pubkey] = account_id
-        self._save_store(store)
+            account['nostr_pubkey'] = nostr_pubkey
+            account['updated_at'] = _utc_now_iso()
+            store['index_nostr'][nostr_pubkey] = account_id
+
+        self.with_store_update(updater)
 
     def link_btcmap(self, account_id: str, username: str) -> None:
         uname = username.strip()
         lower = uname.lower()
 
-        store = self._load_store()
-        mapped = store['index_btcmap'].get(lower)
-        if mapped and mapped != account_id:
-            raise ValueError('BTC Map username is already linked to another account')
+        def updater(store):
+            mapped = store['index_btcmap'].get(lower)
+            if mapped and mapped != account_id:
+                raise ValueError('BTC Map username is already linked to another account')
 
-        account = store['accounts'].get(account_id)
-        if not account:
-            raise ValueError('Account not found')
+            account = store['accounts'].get(account_id)
+            if not account:
+                raise ValueError('Account not found')
 
-        previous = account.get('btcmap_username')
-        if previous and previous.lower() != lower:
-            store['index_btcmap'].pop(previous.lower(), None)
+            previous = account.get('btcmap_username')
+            if previous and previous.lower() != lower:
+                store['index_btcmap'].pop(previous.lower(), None)
 
-        account['btcmap_username'] = uname
-        account['updated_at'] = _utc_now_iso()
-        store['index_btcmap'][lower] = account_id
-        self._save_store(store)
+            account['btcmap_username'] = uname
+            account['updated_at'] = _utc_now_iso()
+            store['index_btcmap'][lower] = account_id
+
+        self.with_store_update(updater)
 
     def set_account_token(self, account_id: str, token: Optional[str]) -> None:
-        store = self._load_store()
-        account = store['accounts'].get(account_id)
-        if not account:
-            raise ValueError('Account not found')
+        def updater(store):
+            account = store['accounts'].get(account_id)
+            if not account:
+                raise ValueError('Account not found')
 
-        if token:
-            account['rpc_token_encrypted'] = self._encrypt_token(token)
-        else:
-            account.pop('rpc_token_encrypted', None)
-        account['updated_at'] = _utc_now_iso()
-        self._save_store(store)
+            if token:
+                account['rpc_token_encrypted'] = self._encrypt_token(token)
+            else:
+                account.pop('rpc_token_encrypted', None)
+            account['updated_at'] = _utc_now_iso()
+
+        self.with_store_update(updater)
 
     def update_account_metadata(self, account_id: str, **updates: Any) -> None:
-        store = self._load_store()
-        account = store['accounts'].get(account_id)
-        if not account:
-            raise ValueError('Account not found')
+        def updater(store):
+            account = store['accounts'].get(account_id)
+            if not account:
+                raise ValueError('Account not found')
 
-        for key, value in updates.items():
-            account[key] = value
-        account['updated_at'] = _utc_now_iso()
-        self._save_store(store)
+            for key, value in updates.items():
+                account[key] = value
+            account['updated_at'] = _utc_now_iso()
+
+        self.with_store_update(updater)
 
 
 _user_store: Optional[UserStore] = None
