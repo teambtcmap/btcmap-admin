@@ -44,7 +44,7 @@ The app exposes a `/health` endpoint that returns `{"status": "healthy"}` for co
 
 ### Render
 1. Connect GitHub repo
-2. Set build command: `pip install -r requirements.txt` (or let it detect pyproject.toml)
+2. Set build command: `uv sync` (or let it detect `pyproject.toml`)
 3. Set start command: `gunicorn app:app`
 4. Add `SECRET_KEY` environment variable
 
