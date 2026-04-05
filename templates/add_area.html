@@ -7,7 +7,7 @@
     <div class="d-flex justify-content-between align-items-start mt-5 mb-4">
         <div>
             <h1 class="mb-0" id="add-new-area">Add New Area</h1>
-            <p class="mb-0" id="sugestions"></p>
+            <p class="mb-0" id="suggestions"></p>
             {% if template_area %}
             <p class="text-muted mb-0">Using deleted area "{{ template_area.tags.get('name', 'Unknown') }}" as template</p>
             {% endif %}
@@ -543,7 +543,7 @@ document.addEventListener('DOMContentLoaded', async function() {
           "description": cleanIssueText(issueData.description)
       }
       tagsTable.querySelector('input[name="name"]').value = prefilledCommunityData.name
-      document.getElementById("sugestions").textContent = `suggested logo: ${prefilledCommunityData.icon}`
+      document.getElementById("suggestions").textContent = `suggested logo: ${prefilledCommunityData.icon}`
       let urlAlias = prefilledCommunityData.name.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-zA-Z0-9\s]/g, "").toLowerCase().trim().replace(/\s+/g, "-");
       tagsTable.querySelector('input[name="url_alias"]').value = urlAlias
 
