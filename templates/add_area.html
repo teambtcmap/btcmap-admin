@@ -704,8 +704,50 @@ document.addEventListener('DOMContentLoaded', async function() {
   
     const issueId = getURLParameter("issue-id")
     if(issueId){
-       await fillFieldsPassingIssue(issueId) 
-    }
+        await fillFieldsPassingIssue(issueId) 
+      
+        const showIssueIdToast = (message) => {
+        const toastContainerId = 'issue-id-toast-container';
+        let toastContainer = document.getElementById(toastContainerId);
+        if (!toastContainer) {
+            toastContainer = document.createElement('div');
+            toastContainer.id = toastContainerId;
+            toastContainer.className = 'toast-container position-fixed top-0 end-0 p-3';
+            toastContainer.style.zIndex = '1080';
+            document.body.appendChild(toastContainer);
+        }
+        const toastElement = document.createElement('div');
+        toastElement.className = 'toast align-items-center text-bg-danger border-0';
+        toastElement.setAttribute('role', 'alert');
+        toastElement.setAttribute('aria-live', 'assertive');
+        toastElement.setAttribute('aria-atomic', 'true');
+        toastElement.innerHTML = `
+            <div class="d-flex">
+                <div class="toast-body">${message}</div>
+                <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+            </div>
+        `;
+        toastContainer.appendChild(toastElement);
+        if (window.bootstrap && bootstrap.Toast) {
+            const toast = new bootstrap.Toast(toastElement, { delay: 5000 });
+            toastElement.addEventListener('hidden.bs.toast', () => {
+                toastElement.remove();
+            });
+            toast.show();
+        } else {
+            alert(message);
+            toastElement.remove();
+        }
+      };
+      const issueIdParam = getURLParameter("issue-id");
+          if (issueIdParam !== null) {
+            const normalizedIssueId = String(issueIdParam).trim();
+          if (normalizedIssueId === '' || !/^\d+$/.test(normalizedIssueId)) {
+              showIssueIdToast('The issue-id in the URL is invalid. Please use a numeric issue ID.');
+          } else {
+              await fillFieldsPassingIssue(Number.parseInt(normalizedIssueId, 10));
+          }
+      }
 });
 
 // ============================================

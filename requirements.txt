@@ -6,3 +6,5 @@ geojson_rewind
 shapely
 pyproj
 typing
+nostr-sdk
+cryptography

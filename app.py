@@ -22,7 +22,7 @@ app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev-secret-key-change-i
 app.config['SESSION_COOKIE_SECURE'] = True
 app.config['SESSION_COOKIE_HTTPONLY'] = True
 app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
-app.config['GITEA_BASE_URL'] = os.environ.get('SECRET_KEY', 'https://gitea.btcmap.org')
+app.config['GITEA_BASE_URL'] = os.environ.get('GITEA_BASE_URL', 'https://gitea.btcmap.org')
 
 # Configure server-side sessions (filesystem backend)
 app.config['SESSION_TYPE'] = 'filesystem'
@@ -72,10 +72,10 @@ AREA_TYPE_REQUIREMENTS = {
         },
         'url_alias': {
             'required': True,
-            'type': 'text',
             'min_length': 2,
             'max_length': 100,
-            'pattern': r'^[a-z0-9\-]+$'
+            'pattern': r'^[a-z0-9\-]+$',
+            'type': 'text'
         },
         'continent': {
             'required': True,
@@ -185,8 +185,8 @@ AREA_TYPE_REQUIREMENTS = {
         },
         'contact:matrix': {
             'required': False,
-            'type': 'url',
-            'matrix': r'@[\w._-]+:[\w.-]+'
+            'type': 'text',
+            'pattern': r'@[\w._-]+:[\w.-]+'
         },
         'contact:geyser': {
             'required': False,

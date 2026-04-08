@@ -14,14 +14,14 @@
         name = "btcmap-admin";
 
         buildInputs = with pkgs; [
-          python310
-          python310Packages.virtualenv
+          python311
+          python311Packages.virtualenv
           geos
         ];
-        shellHook = ''
-          export LD_LIBRARY_PATH="${pkgs.lib.makeLibraryPath [ pkgs.stdenv.cc.cc.lib pkgs.geos ]}:$LD_LIBRARY_PATH"
-          echo "Environment loaded with C++ libraries for Shapely"
-        '';
+        LD_LIBRARY_PATH = pkgs.lib.makeLibraryPath [
+          pkgs.stdenv.cc.cc.lib
+          pkgs.zlib
+        ];
       };
     };
 }
