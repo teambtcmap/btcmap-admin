@@ -1,0 +1,9 @@
+flask
+flask_session
+Flask-Login
+requests
+geojson_rewind
+shapely
+pyproj
+nostr-sdk
+cryptography

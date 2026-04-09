@@ -2,6 +2,7 @@
 __pycache__/
 *.py[cod]
 *$py.class
+venv
 
 # uv virtual environment
 .venv/
@@ -38,6 +39,5 @@ replit.nix
 # Others
 *.log
 *.sqlite
-opencode.json
+.direnv
 .env
-users.json
