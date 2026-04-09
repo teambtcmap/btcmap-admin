@@ -1,10 +1,9 @@
 flask
 flask_session
+Flask-Login
 requests
-datetime
 geojson_rewind
 shapely
 pyproj
-typing
 nostr-sdk
 cryptography
