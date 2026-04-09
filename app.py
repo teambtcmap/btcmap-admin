@@ -1177,19 +1177,25 @@ def lint_community_orgs():
 @app.route('/api/gitea/get-issue/<int:issue_id>')
 @login_required
 def get_issue_data(issue_id):
-    try:
-        req_data = requests.get(
-            f"https://gitea.btcmap.org/api/v1/repos/teambtcmap/btcmap-data/issues/{issue_id}",
-            timeout=15,
-        )
-        req_data.raise_for_status()
-        return jsonify({'data': req_data.json()})
-    except requests.exceptions.Timeout:
-        return jsonify({'error': 'Request to Gitea timed out'}), 408
-    except requests.exceptions.RequestException as exc:
-        app.logger.error(f"Error fetching Gitea issue {issue_id}: {exc}")
-        return jsonify({'error': 'Failed to fetch issue data'}), 502
-
+     try:
+         base_url = app.config['GITEA_BASE_URL'].rstrip('/')
+         req_data = requests.get(
+             f"{base_url}/api/v1/repos/teambtcmap/btcmap-data/issues/{issue_id}",
+             timeout=15,
+         )
+         req_data.raise_for_status()
+         return jsonify({'data': req_data.json()})
+     except requests.exceptions.HTTPError as exc:
+         status_code = exc.response.status_code if exc.response is not None else 502
+         app.logger.error(f"Error fetching Gitea issue {issue_id}: {exc}")
+         if status_code == 404:
+             return jsonify({'error': 'Issue not found'}), 404
+         return jsonify({'error': 'Failed to fetch issue data'}), 502
+     except requests.exceptions.Timeout:
+         return jsonify({'error': 'Request to Gitea timed out'}), 408
+     except requests.exceptions.RequestException as exc:
+         app.logger.error(f"Error fetching Gitea issue {issue_id}: {exc}")
+         return jsonify({'error': 'Failed to fetch issue data'}), 502
 def get_area(area_id):
     result = rpc_call('get_area', {'id': area_id})
     if 'error' not in result:
