@@ -125,7 +125,23 @@ def btcmap_login():
     if not username or not password:
         return jsonify({'error': 'Username and password are required'}), 400
 
-    label = f'btcmap-admin:btcmap-login:{_utc_now_iso()}'
+    store = get_user_store()
+    account = store.find_account_by_btcmap(username)
+
+    npub = None
+    if account:
+        nostr_pubkey = account.get('nostr_pubkey')
+        if nostr_pubkey:
+            try:
+                from nostr_sdk import PublicKey
+                npub = PublicKey.parse(nostr_pubkey).to_bech32()
+            except Exception:
+                pass
+
+    label = f'admin-app - {username}'
+    if npub:
+        label += f' - {npub}'
+
     try:
         token = create_btcmap_api_key(username=username, password=password, label=label)
     except requests.exceptions.RequestException:
@@ -133,8 +149,6 @@ def btcmap_login():
     except ValueError as e:
         return jsonify({'error': str(e)}), 401
 
-    store = get_user_store()
-    account = store.find_account_by_btcmap(username)
     if not account:
         account = store.create_account(auth_type='btcmap')
         store.link_btcmap(account['account_id'], username)
