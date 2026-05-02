@@ -312,7 +312,9 @@ def profile_create_btcmap_token():
         flash('BTC Map username and password are required', 'danger')
         return redirect(url_for('profile'))
 
-    label = f'btcmap-admin:profile-create:{datetime.utcnow().isoformat()}Z'
+    label = f'admin-app - {username}'
+    if current_user.nostr_npub:
+        label += f' - {current_user.nostr_npub}'
     try:
         token = create_btcmap_api_key(username=username, password=password, label=label)
         current_user.update_token(token)
