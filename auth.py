@@ -44,7 +44,7 @@ def create_btcmap_api_key(username, password, label=None):
 
     payload = {
         'jsonrpc': '2.0',
-        'method': 'create_api_key',
+        'method': 'signin',
         'params': params,
         'id': 1,
     }
@@ -57,9 +57,9 @@ def create_btcmap_api_key(username, password, label=None):
         message = result['error'].get('message', 'Failed to create BTC Map API key')
         raise ValueError(message)
 
-    token = result.get('result', {}).get('token')
+    token = result.get('result', {}).get('api_key')
     if not token:
-        raise ValueError('BTC Map API key response did not include a token')
+        raise ValueError('BTC Map API key response did not include an api_key')
     return token
 
 
