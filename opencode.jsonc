@@ -1,0 +1,13 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "references": {
+    "api": {
+      "path": "../btcmap-api",
+      "description": "full source code of the api for more detailed view on available endpoints"
+    },
+    "api-docs": {
+      "path": "../btcmap-api/docs/rpc",
+      "description": "when dealing with rpc endpoints, check the latest documentation",
+    },
+  }
+}
