@@ -511,6 +511,12 @@ def add_area():
                         value, requirements.get('allowed_values'))
                     if not is_valid:
                         validation_errors.append(f'{key}: {error_message}')
+                        break
+
+                is_valid, error_message = validate_string_constraints(
+                    value, requirements)
+                if not is_valid:
+                    validation_errors.append(f'{key}: {error_message}')
 
         if validation_errors:
             app.logger.error(f"Validation errors: {validation_errors}")
@@ -591,6 +597,10 @@ def set_area_tag():
         is_valid, error_message = validation_func(value, requirements.get('allowed_values'))
         if not is_valid:
             return jsonify({'error': f'{key}: {error_message}'}), 400
+
+    is_valid, error_message = validate_string_constraints(value, requirements)
+    if not is_valid:
+        return jsonify({'error': f'{key}: {error_message}'}), 400
 
     if key == 'geo_json':
         is_valid, result = validate_geo_json(value)
@@ -1380,6 +1390,25 @@ def validate_email(value, allowed_values=None):
 def validate_phone(value, allowed_values=None):
     phone_regex = r'^\+?1?\d{9,15}$'
     return bool(re.match(phone_regex, value)), "Invalid phone number format"
+
+
+def validate_string_constraints(value, requirements):
+    """Validate pattern, min_length, and max_length constraints from field schema."""
+    value = str(value)
+    pattern = requirements.get('pattern') or requirements.get('matrix')
+    if pattern:
+        try:
+            if not re.match(pattern, value):
+                return False, f"Value does not match required pattern"
+        except re.error:
+            app.logger.warning(f"Invalid regex pattern in field schema: {pattern}")
+    min_length = requirements.get('min_length')
+    if min_length is not None and len(value) < min_length:
+        return False, f"Value must be at least {min_length} characters"
+    max_length = requirements.get('max_length')
+    if max_length is not None and len(value) > max_length:
+        return False, f"Value must be at most {max_length} characters"
+    return True, None
 
 
 validation_functions = {
