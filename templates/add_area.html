@@ -231,41 +231,77 @@ document.addEventListener('DOMContentLoaded', async function() {
     function createTagRow(key, value = '', isRequired = false, isCustom = false, allowedValues = null) {
         const row = document.createElement('tr');
         const isNumericField = key === 'population' || key === 'area_km2';
-        
-        row.innerHTML = `
-            <td>
-                ${isCustom ? 
-                    `<input type="text" class="form-control custom-key" placeholder="Tag Name" required>
-                     <div class="invalid-feedback">Please enter a valid key</div>` 
-                    : key}
-            </td>
-            <td>
-                ${allowedValues ? `
-                    <select class="form-control" name="${key}" ${isRequired ? 'required' : ''}>
-                        <option value="">Select ${key}</option>
-                        ${allowedValues.map(val => `<option value="${val}">${val}</option>`).join('')}
-                    </select>
-                    <div class="invalid-feedback">Please select a value</div>
-                ` : `
-                    <input type="${isNumericField ? 'number' : 'text'}" 
-                           class="form-control${isNumericField ? ' numeric-field' : ''}" 
-                           name="${key}" 
-                           value="${value}" 
-                           ${isRequired ? 'required' : ''} 
-                           ${isNumericField ? `min="0" step="${key === 'population' ? '1' : '0.01'}"` : ''}>
-                    <div class="invalid-feedback">Please enter a valid value</div>
-                `}
-            </td>
-            <td>
-                ${!isRequired ? '<button type="button" class="btn btn-danger btn-sm remove-field">Remove</button>' : ''}
-            </td>
-        `;
 
+        const keyTd = document.createElement('td');
+        if (isCustom) {
+            const input = document.createElement('input');
+            input.type = 'text';
+            input.className = 'form-control custom-key';
+            input.placeholder = 'Tag Name';
+            input.required = true;
+            keyTd.appendChild(input);
+            const feedback = document.createElement('div');
+            feedback.className = 'invalid-feedback';
+            feedback.textContent = 'Please enter a valid key';
+            keyTd.appendChild(feedback);
+        } else {
+            keyTd.textContent = key;
+        }
+        row.appendChild(keyTd);
+
+        const valueTd = document.createElement('td');
+        if (allowedValues) {
+            const select = document.createElement('select');
+            select.className = 'form-control';
+            select.name = key;
+            if (isRequired) select.required = true;
+            const defaultOption = document.createElement('option');
+            defaultOption.value = '';
+            defaultOption.textContent = 'Select ' + key;
+            select.appendChild(defaultOption);
+            allowedValues.forEach(function(val) {
+                const option = document.createElement('option');
+                option.value = val;
+                option.textContent = val;
+                if (val === value) option.selected = true;
+                select.appendChild(option);
+            });
+            valueTd.appendChild(select);
+            const feedback = document.createElement('div');
+            feedback.className = 'invalid-feedback';
+            feedback.textContent = 'Please select a value';
+            valueTd.appendChild(feedback);
+        } else {
+            const input = document.createElement('input');
+            input.type = isNumericField ? 'number' : 'text';
+            input.className = 'form-control' + (isNumericField ? ' numeric-field' : '');
+            input.name = key;
+            input.value = value;
+            if (isRequired) input.required = true;
+            if (isNumericField) {
+                input.min = '0';
+                input.step = key === 'population' ? '1' : '0.01';
+            }
+            valueTd.appendChild(input);
+            const feedback = document.createElement('div');
+            feedback.className = 'invalid-feedback';
+            feedback.textContent = 'Please enter a valid value';
+            valueTd.appendChild(feedback);
+        }
+        row.appendChild(valueTd);
+
+        const actionTd = document.createElement('td');
         if (!isRequired) {
-            row.querySelector('.remove-field').addEventListener('click', function() {
+            const removeBtn = document.createElement('button');
+            removeBtn.type = 'button';
+            removeBtn.className = 'btn btn-danger btn-sm remove-field';
+            removeBtn.textContent = 'Remove';
+            removeBtn.addEventListener('click', function() {
                 row.remove();
             });
+            actionTd.appendChild(removeBtn);
         }
+        row.appendChild(actionTd);
 
         if (isCustom) {
             const keyInput = row.querySelector('.custom-key');
