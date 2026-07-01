@@ -825,13 +825,12 @@ async function uploadIcon(areaId) {
     }
 
     try {
-        const response = await apiFetch('/api/set_area_icon', {
+        const response = await apiFetch('/api/set_area_image', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                id: areaId,
-                icon_base64: pendingIconBase64,
-                icon_ext: 'png'
+                area_id: areaId,
+                image_base64: pendingIconBase64,
             })
         });
 

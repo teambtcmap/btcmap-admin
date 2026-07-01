@@ -1247,13 +1247,12 @@ async function saveIcon() {
         });
 
         // Send to API
-        const response = await apiFetch('/api/set_area_icon', {
+        const response = await apiFetch('/api/set_area_image', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                id: '{{ area.id }}',
-                icon_base64: base64,
-                icon_ext: 'png'
+                area_id: '{{ area.id }}',
+                image_base64: base64,
             })
         });
 

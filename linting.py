@@ -315,11 +315,10 @@ def fix_migrate_icon(area_id: str, rpc_call_fn, get_area_fn) -> dict:
         import base64
         icon_base64 = base64.b64encode(response.content).decode('utf-8')
         
-        # Call set_area_icon RPC
-        result = rpc_call_fn('set_area_icon', {
-            'id': area_id,
-            'icon_base64': icon_base64,
-            'icon_ext': ext
+        # Call set_area_image RPC
+        result = rpc_call_fn('set_area_image', {
+            'area_id': area_id,
+            'image_base64': icon_base64,
         })
         
         if 'error' in result:
