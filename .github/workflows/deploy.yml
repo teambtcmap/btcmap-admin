@@ -1,0 +1,23 @@
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Deploy to server
+        uses: appleboy/ssh-action@v1
+        with:
+          host: 185.18.221.219
+          username: ubuntu
+          key: ${{ secrets.DEPLOY_KEY }}
+          script: |
+            cd /home/ubuntu/btcmap-admin
+            git pull origin main
+            /home/ubuntu/.local/bin/uv sync
+            sudo systemctl restart btcmap-admin
