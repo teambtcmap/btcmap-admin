@@ -29,15 +29,7 @@ flask_session/
 users.json
 .env
 
-# Replit specific
-.replit
-.breakpoints
-replit.nix
-.upm/
-
 # Others
 *.log
 *.sqlite
 opencode.json
-.env
-users.json
