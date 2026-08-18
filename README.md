@@ -83,10 +83,12 @@ gunicorn app:app
 
 | Method | Description |
 |--------|-------------|
+| `signin` | Exchange credentials for an API key (Bearer token) |
 | `search` | Search areas by query |
 | `get_area` | Retrieve area details |
 | `add_area` | Create new area |
 | `set_area_tag` | Update/add area tag |
+| `set_area_image` | Attach an image to an area |
 | `remove_area_tag` | Remove area tag |
 | `remove_area` | Delete area |
 
