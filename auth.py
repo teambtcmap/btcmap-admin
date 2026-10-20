@@ -38,11 +38,12 @@ def create_session():
         return jsonify({'error': 'That token was rejected by BTC Map API'}), 401
 
     roles = user.get('roles') or []
-    if not admin_session.has_admin_role(roles):
+    if not admin_session.has_area_edit_role(roles):
         return jsonify({
             'error': (
-                'This account has no admin role. Sign in with BTC Map '
-                'credentials, then link your Nostr key from the profile page.'
+                'This account has no area-editing role (admin, root or '
+                'area_manager). Sign in with BTC Map credentials, then link '
+                'your Nostr key from the profile page.'
             )
         }), 403
 

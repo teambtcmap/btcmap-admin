@@ -37,7 +37,7 @@
             <div class="alert alert-info text-start mb-0" style="font-size: 0.9rem;">
                 <strong>Your key must already be linked.</strong>
                 A Nostr sign-in for an unlinked key creates a new BTC Map account
-                with no admin role. If you have not linked your key yet, sign in
+                with no area-editing role. If you have not linked your key yet, sign in
                 with your username above and use <em>Link Nostr</em> on the profile page.
                 <hr class="my-2">
                 Requires a NIP-07 extension such as
@@ -94,7 +94,7 @@ document.addEventListener('DOMContentLoaded', function() {
         });
         const data = await resp.json().catch(() => ({}));
         if (!resp.ok) {
-            throw new Error(data.error || 'Sign-in was rejected');
+            throw new Error(errorText(data, 'Sign-in was rejected'));
         }
         localStorage.setItem('btcmap_token', token);
         window.location.href = redirectTarget();

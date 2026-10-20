@@ -27,6 +27,29 @@
                         <span class="text-muted">None</span>
                     {% endif %}
                 </div>
+                {% if 'area_manager' in me.roles %}
+                <p class="text-muted small mb-0 mt-2">
+                    Area managers may edit only the areas in their geofence.
+                </p>
+                {% endif %}
+            </div>
+
+            <div class="form-group mb-3">
+                <label class="mb-1">Area access</label>
+                {% if me.geofence %}
+                    <p class="text-muted small mb-2">
+                        Limited to {{ me.geofence|length }} area{{ '' if me.geofence|length == 1 else 's' }}.
+                        Any other area opens read-only, and the API refuses edits to it.
+                    </p>
+                    <div class="d-flex flex-wrap gap-1" style="max-height: 120px; overflow-y: auto;">
+                        {% for area_id in me.geofence %}
+                        <a class="badge bg-light text-dark border text-decoration-none"
+                           href="{{ url_for('show_area', area_id=area_id) }}">{{ area_id }}</a>
+                        {% endfor %}
+                    </div>
+                {% else %}
+                    <p class="text-muted mb-0">All areas.</p>
+                {% endif %}
             </div>
 
             <div class="form-group mb-0">

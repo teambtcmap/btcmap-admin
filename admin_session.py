@@ -19,10 +19,15 @@ from flask import current_app, g, jsonify, redirect, request, session, url_for
 TOKEN_COOKIE = 'btcmap_token'
 SESSION_KEY = 'identity'
 
-# The API's baseline role. On its own it grants nothing this app can use, and
+# The API's baseline role: on its own it grants nothing this app can use, and
 # an identity holding only this role is almost always a fresh account created
 # by ``POST /v4/auth/nostr`` for an npub that was never linked to a real user.
-UNPRIVILEGED_ROLE = 'user'
+#
+# Roles that may edit areas at all: ``area_manager`` is limited to the ids in
+# the account's ``geofence``, while ``admin``/``root`` normally carry an empty
+# one — but the API applies a non-empty geofence to every role, so the scope is
+# always read from the account rather than assumed from the role.
+AREA_EDIT_ROLES = frozenset({'admin', 'root', 'area_manager'})
 
 logger = logging.getLogger(__name__)
 
@@ -52,9 +57,11 @@ def identity():
 def store_identity(user: dict) -> None:
     """Persist the display-only parts of a ``GET /v4/users/me`` payload."""
     session[SESSION_KEY] = {
+        'id': user.get('id'),
         'name': user.get('name'),
         'npub': user.get('npub'),
         'roles': list(user.get('roles') or []),
+        'geofence': [int(area_id) for area_id in user.get('geofence') or []],
     }
     session.permanent = True
 
@@ -69,9 +76,13 @@ def expire_token_cookie() -> None:
     g.expire_token_cookie = True
 
 
-def has_admin_role(roles) -> bool:
-    """False when the identity holds nothing beyond the baseline ``user`` role."""
-    return bool(roles) and not set(roles) <= {UNPRIVILEGED_ROLE}
+def has_area_edit_role(roles) -> bool:
+    """True when the identity holds a role that can edit areas at all.
+
+    ``area_manager`` counts: the API scopes it to the account's geofence, and
+    that scope is enforced per area rather than at sign-in.
+    """
+    return bool(AREA_EDIT_ROLES.intersection(roles or []))
 
 
 def fetch_me(token):
@@ -105,12 +116,38 @@ class CurrentUser:
         return bool(self._data)
 
     @property
+    def id(self):
+        return self._data.get('id')
+
+    @property
     def name(self):
         return self._data.get('name')
 
     @property
     def roles(self):
         return self._data.get('roles') or []
+
+    @property
+    def geofence(self):
+        """Area ids this account may edit; empty means every area."""
+        return tuple(self._data.get('geofence') or ())
+
+    @property
+    def is_area_restricted(self):
+        return bool(self.geofence)
+
+    def can_edit_area(self, area_id):
+        """False when the account's geofence excludes this area.
+
+        Viewing is always allowed; the API refuses tag/image/deletion RPCs for
+        areas outside the geofence, so the UI should not offer them.
+        """
+        if not self.is_area_restricted:
+            return True
+        try:
+            return int(area_id) in self.geofence
+        except (TypeError, ValueError):
+            return False
 
     @property
     def npub(self):
