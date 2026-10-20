@@ -34,6 +34,9 @@
                 </svg>
                 Sign in with Nostr
             </button>
+
+            <div id="signer-panel" class="text-start mb-3"></div>
+
             <div class="alert alert-info text-start mb-0" style="font-size: 0.9rem;">
                 <strong>Your key must already be linked.</strong>
                 A Nostr sign-in for an unlinked key creates a new BTC Map account
@@ -138,8 +141,29 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
+    // The `u` tag must be this exact URL: the API verifies it against its own
+    // configured base URL, not against the origin serving this page.
+    const authUrl = `${API_BASE}/v4/auth/nostr`;
+
+    async function submitNostrEvent(signedEvent) {
+        const resp = await fetch(authUrl, {
+            method: 'POST',
+            headers: { 'Authorization': `Nostr ${base64Event(signedEvent)}` }
+        });
+
+        if (!resp.ok) {
+            throw new Error(
+                `Nostr sign-in was rejected (HTTP ${resp.status}) for ${authUrl}. ` +
+                'Check that your system clock is accurate and that the app and API share a base URL.'
+            );
+        }
+
+        const data = await resp.json();
+        await startSession(data.token);
+    }
+
     async function loginWithNostr() {
-        if (!window.nostr) {
+        if (!window.NostrSigner.isExtensionAvailable()) {
             showStatus('No Nostr extension detected. Install Alby, nos2x, or another NIP-07 extension.', 'warning');
             return;
         }
@@ -148,35 +172,9 @@ document.addEventListener('DOMContentLoaded', function() {
         nostrBtn.textContent = 'Waiting for signature...';
         hideStatus();
 
-        // The `u` tag must be this exact URL: the API verifies it against its
-        // own configured base URL, not against the origin serving this page.
-        const authUrl = `${API_BASE}/v4/auth/nostr`;
-
         try {
-            const signedEvent = await window.nostr.signEvent({
-                kind: 27235,  // NIP-98 HTTP Auth
-                created_at: Math.floor(Date.now() / 1000),
-                tags: [
-                    ['u', authUrl],
-                    ['method', 'POST']
-                ],
-                content: ''
-            });
-
-            const resp = await fetch(authUrl, {
-                method: 'POST',
-                headers: { 'Authorization': `Nostr ${base64Event(signedEvent)}` }
-            });
-
-            if (!resp.ok) {
-                throw new Error(
-                    `Nostr sign-in was rejected (HTTP ${resp.status}) for ${authUrl}. ` +
-                    'Check that your system clock is accurate and that the app and API share a base URL.'
-                );
-            }
-
-            const data = await resp.json();
-            await startSession(data.token);
+            const signedEvent = await window.NostrSigner.signWithExtension(authUrl, 'POST');
+            await submitNostrEvent(signedEvent);
         } catch (error) {
             const message = error instanceof TypeError
                 ? `Cannot reach BTC Map API at ${API_BASE}`
@@ -186,6 +184,14 @@ document.addEventListener('DOMContentLoaded', function() {
             nostrBtn.innerHTML = NOSTR_LABEL;
         }
     }
+
+    // Signer apps (NIP-46): saved pairing, bunker URI, or QR pairing.
+    window.NostrSigner.mountPanel(document.getElementById('signer-panel'), {
+        verb: 'Sign in',
+        url: authUrl,
+        method: 'POST',
+        onSigned: submitNostrEvent
+    });
 
     credentialsForm.addEventListener('submit', loginWithCredentials);
     nostrBtn.addEventListener('click', loginWithNostr);

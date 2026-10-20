@@ -98,10 +98,25 @@ accounts and no tokens. Two credentials are accepted:
 - **BTC Map username + password** — the browser mints a Bearer token with
   `POST {API_BASE_URL}/v4/users/{username}/tokens`.
 - **Nostr (NIP-98)** — the browser signs a kind 27235 event for
-  `{API_BASE_URL}/v4/auth/nostr` via a NIP-07 extension and exchanges it for a
-  Bearer token. The key must already be linked to a BTC Map account: the API
-  auto-creates a role-`user` account for an unknown npub, and this app refuses
-  those at sign-in.
+  `{API_BASE_URL}/v4/auth/nostr` and exchanges it for a Bearer token. The key
+  must already be linked to a BTC Map account: the API auto-creates a
+  role-`user` account for an unknown npub, and this app refuses those at
+  sign-in. Three signer transports are supported, all in
+  `static/js/nostr-signer.js`:
+
+  - a NIP-07 browser extension (Alby, nos2x) signing in the page;
+  - a NIP-46 signer app via a pasted `bunker://` URI or NIP-05 address;
+  - a NIP-46 signer app paired by QR: the page shows a `nostrconnect://` URI
+    to scan (Amber, Opal, nsec.app), with the URI also copyable and linkable
+    for signers on the same device.
+
+  A completed signer-app pairing is kept in `localStorage` (`btcmap_bunker`)
+  so the next visit is one click; **Forget signer** removes it. That record is
+  a credential at rest — it lets this browser ask the signer for signatures,
+  not sign without it.
+
+  nostr-tools is loaded from jsDelivr on demand, so a CDN failure only
+  disables the signer-app transports; the extension path keeps working.
 
 The token is kept in `localStorage`, sent as `Authorization: Bearer` on every
 `/api/*` call, and mirrored into a `btcmap_token` cookie so server-rendered
