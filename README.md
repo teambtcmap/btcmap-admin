@@ -155,4 +155,4 @@ Validation functions in `app.py` return `(is_valid, error_message)`. GeoJSON val
 
 ## Dependencies
 
-Core: flask, requests, geojson-rewind, shapely, pyproj
+Core: flask, requests, geojson-rewind, shapely, pyproj; gunicorn for serving
