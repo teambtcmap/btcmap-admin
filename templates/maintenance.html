@@ -222,6 +222,9 @@ document.addEventListener('DOMContentLoaded', function() {
     let allResults = [];  // Store all results for pagination
     let currentPage = 1;
     const pageSize = 25;
+    // Area ids this account may edit; empty means unrestricted. Lint fixes are
+    // area edits, so the API refuses them outside the geofence.
+    const geofence = {{ (current_user.geofence or [])|list|tojson }};
 
     function escapeHtml(text) {
         const div = document.createElement('div');
@@ -398,7 +401,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 loadOrganizations();  // Reload organizations after sync
                 loadResults();
             } else {
-                showToast('Error', data.error || 'Sync failed', 'error');
+                showToast('Error', errorText(data, 'Sync failed'), 'error');
             }
         } catch (error) {
             if (error.message === 'Session expired') return;
@@ -575,10 +578,16 @@ document.addEventListener('DOMContentLoaded', function() {
             // Action buttons
             const actionButtons = [];
             actionButtons.push(`<a href="/show_area/${area.area_id}" class="btn btn-sm btn-outline-primary">View</a>`);
-            
+
+            const outOfScope = geofence.length > 0 && !geofence.includes(Number(area.area_id));
+
             // Add fix buttons for auto-fixable issues
             const autoFixableIssues = area.issues.filter(i => i.auto_fixable);
+            if (outOfScope && autoFixableIssues.length > 0) {
+                actionButtons.push('<span class="badge bg-light text-dark border align-self-center" title="Outside your geofence — an admin must apply this fix">Outside your area</span>');
+            }
             autoFixableIssues.forEach(issue => {
+                if (outOfScope) return;
                 if (issue.fix_action === 'migrate_icon') {
                     // Link to show_area page with hash to trigger icon modal
                     actionButtons.push(`<a href="/show_area/${area.area_id}#migrate-icon" class="btn btn-sm btn-outline-success">Migrate Icon</a>`);
@@ -632,7 +641,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         loadResults();
                         loadSummary();
                     } else {
-                        showToast('Error', data.error || 'Fix failed', 'error');
+                        showToast('Error', errorText(data, 'Fix failed'), 'error');
                         this.disabled = false;
                         this.textContent = 'Retry';
                     }

@@ -14,6 +14,8 @@ from enum import Enum
 from shapely.geometry import shape, Point
 from shapely import STRtree
 
+from rpc_errors import rpc_error_message
+
 
 class Severity(Enum):
     ERROR = 'error'
@@ -322,8 +324,11 @@ def fix_migrate_icon(area_id: str, rpc_call_fn, get_area_fn) -> dict:
         })
         
         if 'error' in result:
-            return {'success': False, 'error': result['error'].get('message', 'RPC error')}
-        
+            return {
+                'success': False,
+                'error': rpc_error_message(result['error'], 'RPC error'),
+            }
+
         return {'success': True, 'message': 'Icon migrated successfully'}
     
     except requests.exceptions.RequestException as e:
@@ -353,8 +358,11 @@ def fix_bump_verified(area_id: str, rpc_call_fn) -> dict:
         })
         
         if 'error' in result:
-            return {'success': False, 'error': result['error'].get('message', 'RPC error')}
-        
+            return {
+                'success': False,
+                'error': rpc_error_message(result['error'], 'RPC error'),
+            }
+
         return {'success': True, 'message': f'Verified date set to {today}'}
     
     except Exception as e:

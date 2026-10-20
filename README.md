@@ -50,6 +50,7 @@ gunicorn app:app
 ├── app.py            # Flask application (routes, validation, RPC)
 ├── admin_session.py  # Session helpers: token transport, display identity
 ├── auth.py           # Nostr authentication blueprint
+├── rpc_errors.py     # JSON-RPC error → user-facing message
 ├── main.py           # Application entry point
 ├── linting.py        # Area linting system and cache
 ├── pyproject.toml    # Dependencies (uv)
@@ -115,6 +116,32 @@ cookie holds display-only identity and is never used for authorisation.
 - `GET /login` - Login page (credentials, then Nostr)
 - `POST /auth/session` - Validate a minted Bearer token and start the session
 - `POST /auth/logout` - End the session
+
+## Roles and area scope
+
+The API decides what an account may edit; this app only reflects that decision.
+
+- Sign-in requires one of `admin`, `root` or `area_manager`
+  (`admin_session.AREA_EDIT_ROLES`). Everything else is refused with an
+  explanation instead of failing later on an RPC call.
+- `area_manager` accounts carry a **geofence**: the list of area ids they may
+  edit (`GET /v4/users/me` → `geofence`). An empty geofence means unrestricted;
+  the API applies a non-empty one to every role, so the app reads the scope
+  from the account and never from the role name.
+- Reading is unrestricted: any area opens. Editing outside the geofence is
+  refused by the API (`Area <id> is outside your geofence (allowed areas: …)`),
+  so the area page hides its editing controls and says why, search results mark
+  such areas **Read-only**, and Maintenance disables its lint fixes for them.
+
+### Error messages
+
+The API answers a failed RPC with HTTP 200 and a JSON-RPC error whose
+`message` is usually the generic `Server error` and whose `data` carries the
+real text. `rpc_errors.rpc_error_message()` flattens both shapes into one line;
+every route returns `{"error": "<message>"}` and every page shows it through
+`errorText()` in `static/js/script.js`. A refusal such as an out-of-geofence
+edit or a missing permission therefore reaches the user verbatim, and a
+`get_area` refusal renders as an explanation rather than "Area not found".
 
 ## Area Type Requirements
 

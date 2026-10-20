@@ -4,8 +4,10 @@
 
 {% block content %}
 <div class="starter-template">
-    <h1>An error occurred</h1>
-    <p>{{ error }}</p>
-    <a href="{{ url_for('home') }}" class="btn btn-primary">Go back to home</a>
+    <div class="alert alert-danger" role="alert">
+        <h1 class="h4 mb-2">An error occurred</h1>
+        <p class="mb-0">{{ error }}</p>
+    </div>
+    <a href="{{ url_for('select_area') }}" class="btn btn-primary">Back to area search</a>
 </div>
 {% endblock %}

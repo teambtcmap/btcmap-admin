@@ -22,6 +22,15 @@
         </div>
     </div>
 
+    {% if current_user.is_area_restricted %}
+    <div class="alert alert-warning">
+        <strong>Your account is geofenced.</strong>
+        It can edit {{ current_user.geofence|length }} existing area{{ '' if current_user.geofence|length == 1 else 's' }},
+        but the API does not let geofenced accounts create new ones — ask an admin
+        if this area is needed.
+    </div>
+    {% endif %}
+
     <!-- Edit Icon Modal -->
     <div class="modal fade" id="editIconModal" tabindex="-1" aria-labelledby="editIconModalLabel" aria-hidden="true">
         <div class="modal-dialog modal-lg">
@@ -678,7 +687,7 @@ async function loadIconFromUrl(url) {
 
         if (!response.ok) {
             const data = await response.json();
-            throw new Error(data.error || 'Failed to load image');
+            throw new Error(errorText(data, 'Failed to load image'));
         }
 
         const data = await response.json();
@@ -837,7 +846,7 @@ async function uploadIcon(areaId) {
         const data = await response.json();
 
         if (!response.ok || data.error) {
-            throw new Error(data.error || 'Failed to upload icon');
+            throw new Error(errorText(data, 'Failed to upload icon'));
         }
 
         return { success: true };
@@ -936,7 +945,7 @@ document.addEventListener('DOMContentLoaded', function() {
             const data = await response.json();
 
             if (!response.ok || data.error) {
-                throw new Error(data.error?.message || data.error || 'Failed to add area');
+                throw new Error(errorText(data, 'Failed to add area'));
             }
 
             const areaId = data.area_id;

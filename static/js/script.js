@@ -16,7 +16,14 @@ async function apiFetch(url, options = {}) {
         config.headers = { ...(options.headers || {}), 'Authorization': `Bearer ${token}` };
     }
 
-    const response = await fetch(url, config);
+    let response;
+    try {
+        response = await fetch(url, config);
+    } catch (networkError) {
+        // fetch() only rejects for network-level failures; say so in words the
+        // user can act on instead of "Failed to fetch".
+        throw new Error('Network error — the server could not be reached. Please try again.');
+    }
     
     // Check for 401 status (session expired)
     if (response.status === 401) {
@@ -61,6 +68,42 @@ async function apiFetch(url, options = {}) {
     return response;
 }
 
+/**
+ * Pull a human-readable message out of an error response body.
+ *
+ * Server routes answer with `{"error": "<message>"}`; older routes and the
+ * API itself may nest it as `{"error": {"code", "message", "data"}}` where the
+ * informative text sits in `data` and `message` is the generic "Server error".
+ * Every caller gets one string either way.
+ *
+ * @param {*} body - Parsed JSON response body
+ * @param {string} fallback - Message when the body carries nothing useful
+ * @returns {string}
+ */
+function errorText(body, fallback = 'Request failed') {
+    if (!body) return fallback;
+
+    let error = body.error ?? body.message ?? body;
+    if (typeof error === 'string') {
+        return error.trim() || fallback;
+    }
+    if (typeof error === 'object') {
+        const data = error.data;
+        if (typeof data === 'string' && data.trim()) return data.trim();
+        if (data && typeof data === 'object' && typeof data.message === 'string' && data.message.trim()) {
+            return data.message.trim();
+        }
+        if (typeof error.message === 'string' && error.message.trim()
+                && error.message !== 'Server error') {
+            return error.message.trim();
+        }
+        if (typeof error.message === 'string' && error.message.trim()) {
+            return error.message.trim();
+        }
+    }
+    return fallback;
+}
+
 function editTag(areaId, tagName, tagValue) {
     const newValue = prompt(`Edit ${tagName}:`, tagValue);
     if (newValue !== null && newValue !== tagValue) {
@@ -89,14 +132,14 @@ function setAreaTag(areaId, tagName, tagValue) {
     .then(response => response.json())
     .then(data => {
         if (data.error) {
-            showToast('Error', data.error.message || 'Failed to update tag', 'error');
+            showToast('Error', errorText(data, 'Failed to update tag'), 'error');
         } else {
             location.reload();
         }
     })
     .catch(error => {
         if (error.message !== 'Session expired') {
-            showToast('Error', 'Failed to update tag', 'error');
+            showToast('Error', error.message || 'Failed to update tag', 'error');
         }
     });
 }
@@ -112,7 +155,7 @@ function removeTag(areaId, tagName) {
     .then(response => response.json())
     .then(data => {
         if (data.error) {
-            showToast('Error', data.error.message || 'Failed to remove tag', 'error');
+            showToast('Error', errorText(data, 'Failed to remove tag'), 'error');
         } else {
             showToast('Success', 'Tag removed successfully', 'success');
             setTimeout(() => location.reload(), 1000);
@@ -120,7 +163,7 @@ function removeTag(areaId, tagName) {
     })
     .catch(error => {
         if (error.message !== 'Session expired') {
-            showToast('Error', 'Failed to remove tag', 'error');
+            showToast('Error', error.message || 'Failed to remove tag', 'error');
         }
     });
 }
@@ -136,7 +179,7 @@ function removeArea(areaId) {
     .then(response => response.json())
     .then(data => {
         if (data.error) {
-            showToast('Error', data.error.message || 'Failed to remove area', 'error');
+            showToast('Error', errorText(data, 'Failed to remove area'), 'error');
         } else {
             showToast('Success', 'Area removed successfully', 'success');
             setTimeout(() => window.location.href = '/select_area', 1500);
@@ -144,7 +187,7 @@ function removeArea(areaId) {
     })
     .catch(error => {
         if (error.message !== 'Session expired') {
-            showToast('Error', 'Failed to remove area', 'error');
+            showToast('Error', error.message || 'Failed to remove area', 'error');
         }
     });
 }

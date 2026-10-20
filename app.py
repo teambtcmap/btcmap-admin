@@ -10,6 +10,7 @@ from shapely.geometry import shape
 from shapely.ops import transform
 import pyproj
 from linting import lint_area_dict, lint_cache, LINT_RULES, FIX_ACTIONS, fix_migrate_icon, fix_bump_verified
+from rpc_errors import is_not_found, is_transport_error, rpc_error_message
 from admin_session import (
     SessionExpired,
     current_user as get_current_user,
@@ -282,65 +283,76 @@ def select_area():
 @app.route('/show_area/<string:area_id>')
 @login_required
 def show_area(area_id):
-    area = get_area(area_id)
-    if area:
-        # Fetch from REST API to get deleted_at (RPC doesn't return it)
-        is_deleted = False
-        deleted_at = None
+    area, area_error = get_area_result(area_id)
+    if not area:
+        if is_not_found(area_error):
+            return render_template('error.html', error="Area not found"), 404
+        # A refusal (permission, geofence) is not a missing area: show the
+        # API's own explanation rather than pretending the area is gone.
+        return render_template(
+            'error.html',
+            error=area_error or 'This area cannot be loaded for your account'
+        ), 403
+    # Fetch from REST API to get deleted_at (RPC doesn't return it)
+    is_deleted = False
+    deleted_at = None
+    try:
+        api_response = requests.get(f"{API_BASE_URL}/v3/areas/{area_id}", timeout=10)
+        if api_response.ok:
+            api_data = api_response.json()
+            deleted_at = api_data.get('deleted_at')
+            is_deleted = bool(deleted_at)
+    except requests.exceptions.RequestException:
+        pass
+
+    area['is_deleted'] = is_deleted
+    area['deleted_at'] = format_date(deleted_at) if deleted_at else None
+    area['created_at'] = format_date(area.get('created_at'))
+    area['updated_at'] = format_date(area.get('updated_at'))
+    area['last_sync'] = format_date(area.get('last_sync'))
+
+    tags = area.get('tags', {})
+    if isinstance(tags, str):
         try:
-            api_response = requests.get(f"{API_BASE_URL}/v3/areas/{area_id}", timeout=10)
-            if api_response.ok:
-                api_data = api_response.json()
-                deleted_at = api_data.get('deleted_at')
-                is_deleted = bool(deleted_at)
-        except requests.exceptions.RequestException:
-            pass
-        
-        area['is_deleted'] = is_deleted
-        area['deleted_at'] = format_date(deleted_at) if deleted_at else None
-        area['created_at'] = format_date(area.get('created_at'))
-        area['updated_at'] = format_date(area.get('updated_at'))
-        area['last_sync'] = format_date(area.get('last_sync'))
-
-        tags = area.get('tags', {})
-        if isinstance(tags, str):
-            try:
-                tags = json.loads(tags)
-                if not isinstance(tags, dict):
-                    app.logger.error(f"Tags parsed to non-dict type in area {area_id}: {type(tags)}")
-                    tags = {}
-            except json.JSONDecodeError:
-                app.logger.error(f"Invalid JSON string for tags in area {area_id}")
+            tags = json.loads(tags)
+            if not isinstance(tags, dict):
+                app.logger.error(f"Tags parsed to non-dict type in area {area_id}: {type(tags)}")
                 tags = {}
-        area_type = tags.get('type', '')
-        type_requirements = AREA_TYPE_REQUIREMENTS.get(area_type, {})
+        except json.JSONDecodeError:
+            app.logger.error(f"Invalid JSON string for tags in area {area_id}")
+            tags = {}
+    area_type = tags.get('type', '')
+    type_requirements = AREA_TYPE_REQUIREMENTS.get(area_type, {})
 
-        geo_json = tags.get('geo_json')
-        if geo_json and isinstance(geo_json, str):
-            try:
-                geo_json = json.loads(geo_json)
-            except json.JSONDecodeError:
-                app.logger.error(
-                    f"Invalid JSON string for geo_json in area {area_id}")
-                geo_json = None
+    geo_json = tags.get('geo_json')
+    if geo_json and isinstance(geo_json, str):
+        try:
+            geo_json = json.loads(geo_json)
+        except json.JSONDecodeError:
+            app.logger.error(
+                f"Invalid JSON string for geo_json in area {area_id}")
+            geo_json = None
 
-        # Run lint checks on the area
-        lint_issues = lint_area_dict(area)
-        
-        # Include cached url-alias-clash issues from global lint cache
-        for cached_result in lint_cache.results:
-            if cached_result['area_id'] == area_id:
-                for issue in cached_result['issues']:
-                    if issue['rule_id'] == 'url-alias-clash':
-                        lint_issues.append(issue)
-                break
+    # Run lint checks on the area
+    lint_issues = lint_area_dict(area)
 
-        return render_template('show_area.html',
-                               area=area,
-                               area_type_requirements=type_requirements,
-                               geo_json=geo_json,
-                               lint_issues=lint_issues)
-    return render_template('error.html', error="Area not found"), 404
+    # Include cached url-alias-clash issues from global lint cache
+    for cached_result in lint_cache.results:
+        if cached_result['area_id'] == area_id:
+            for issue in cached_result['issues']:
+                if issue['rule_id'] == 'url-alias-clash':
+                    lint_issues.append(issue)
+            break
+
+    # A geofenced account may read any area but the API refuses its edits, so
+    # render the page without the controls that could only fail.
+    user = get_current_user()
+    return render_template('show_area.html',
+                           area=area,
+                           area_type_requirements=type_requirements,
+                           geo_json=geo_json,
+                           lint_issues=lint_issues,
+                           read_only=not user.can_edit_area(area.get('id')))
 
 
 @app.route('/add_area', methods=['GET', 'POST'])
@@ -427,7 +439,7 @@ def add_area():
             area_id = area_result.get('id') or area_result.get('tags', {}).get('url_alias')
             return jsonify({'success': True, 'area_id': area_id})
         app.logger.error(f"Error from RPC call: {result['error']}")
-        return jsonify({'error': result['error']}), 400
+        return jsonify({'error': rpc_error_text(result['error'])}), 400
 
     # Check for template parameter to pre-fill form
     template_area = None
@@ -459,9 +471,9 @@ def set_area_tag():
     key = data.get('name')
     value = data.get('value')
 
-    area = get_area(area_id)
+    area, area_error = get_area_result(area_id)
     if not area:
-        return jsonify({'error': 'Area not found'}), 404
+        return area_lookup_error(area_error)
 
     area_type = area['tags'].get('type')
     if not area_type or area_type not in AREA_TYPES:
@@ -493,20 +505,20 @@ def set_area_tag():
 
         geo_result = rpc_call('set_area_tag', {'id': area_id, 'name': 'geo_json', 'value': geo_json_with_nulls})
 
-        if isinstance(geo_result, tuple):
-            return geo_result
+        if 'error' in geo_result:
+            return jsonify({'error': rpc_error_text(geo_result['error'])}), 400
 
         area_km2 = calculate_area(geo_json)
         area_result = rpc_call('set_area_tag', {'id': area_id, 'name': 'area_km2', 'value': area_km2})
 
-        if isinstance(area_result, tuple):
-            return area_result
+        if 'error' in area_result:
+            return jsonify({'error': rpc_error_text(area_result['error'])}), 400
 
         return jsonify({'success': True, 'message': 'GeoJSON and area updated successfully'})
 
     result = rpc_call('set_area_tag', {'id': area_id, 'name': key, 'value': value})
-    if isinstance(result, tuple):
-        return result
+    if 'error' in result:
+        return jsonify({'error': rpc_error_text(result['error'])}), 400
     return jsonify({'success': True})
 
 
@@ -523,19 +535,19 @@ def set_area_image():
     if not area_id or not image_base64:
         return jsonify({'error': 'Missing required fields: area_id, image_base64'}), 400
 
-    area = get_area(area_id)
+    area, area_error = get_area_result(area_id)
     if not area:
-        return jsonify({'error': 'Area not found'}), 404
+        return area_lookup_error(area_error)
 
     result = rpc_call('set_area_image', {
         'area_id': area_id,
         'image_base64': image_base64,
     })
 
-    if isinstance(result, tuple):
-        return result
     if 'error' in result:
-        return jsonify({'error': result['error'].get('message', 'Failed to update image')}), 400
+        return jsonify({
+            'error': rpc_error_text(result['error'], 'Failed to update image')
+        }), 400
 
     return jsonify({'success': True, 'result': result.get('result')})
 
@@ -652,9 +664,9 @@ def remove_area_tag():
     area_id = data.get('id')
     tag = data.get('tag')
 
-    area = get_area(area_id)
+    area, area_error = get_area_result(area_id)
     if not area:
-        return jsonify({'error': 'Area not found'}), 404
+        return area_lookup_error(area_error)
 
     area_type = area['tags'].get('type')
     if not area_type or area_type not in AREA_TYPES:
@@ -664,8 +676,8 @@ def remove_area_tag():
         return jsonify({'error': f'Cannot remove required tag: {tag}'}), 400
 
     result = rpc_call('remove_area_tag', {'id': area_id, 'tag': tag})
-    if isinstance(result, tuple):
-        return result
+    if 'error' in result:
+        return jsonify({'error': rpc_error_text(result['error'])}), 400
     return jsonify({'success': True})
 
 
@@ -675,10 +687,10 @@ def remove_area():
     data = request.json
     if not data:
         return jsonify({'error': 'Invalid request data'}), 400
-        
+
     result = rpc_call('remove_area', {'id': data.get('id')})
-    if isinstance(result, tuple):
-        return result
+    if 'error' in result:
+        return jsonify({'error': rpc_error_text(result['error'])}), 400
     return jsonify({'success': True})
 
 
@@ -697,7 +709,7 @@ def search_areas():
 
         if 'error' in result:
             app.logger.error(f"Error in RPC call: {result['error']}")
-            return jsonify({'error': result['error']}), 400
+            return jsonify({'error': rpc_error_text(result['error'])}), 400
 
         areas = result.get('result', [])
         filtered_areas = []
@@ -756,9 +768,9 @@ def maintenance():
 @login_required
 def lint_single_area(area_id):
     """Get lint results for a single area."""
-    area = get_area(area_id)
+    area, area_error = get_area_result(area_id)
     if not area:
-        return jsonify({'error': 'Area not found'}), 404
+        return area_lookup_error(area_error)
     
     issues = lint_area_dict(area)
     return jsonify({
@@ -1069,13 +1081,41 @@ def get_issue_data(issue_id):
         app.logger.error(f"Error fetching Gitea issue {issue_id}: {exc}")
         return jsonify({'error': 'Failed to fetch issue data'}), 502
 
-def get_area(area_id):
+def rpc_error_text(error, fallback='The BTC Map API rejected this request'):
+    """Readable message for a JSON-RPC ``error`` member (see ``rpc_errors``)."""
+    return rpc_error_message(error, fallback)
+
+
+def area_lookup_error(area_error):
+    """Response for a ``get_area`` that the API refused or could not resolve."""
+    if is_not_found(area_error):
+        return jsonify({'error': 'Area not found'}), 404
+    if is_transport_error(area_error):
+        # rpc_call() turns a timeout/network failure into an error message of
+        # its own; that is the API being unreachable, not a refusal.
+        return jsonify({'error': area_error}), 502
+    return jsonify({'error': area_error or 'This area is not available to your account'}), 403
+
+
+def get_area_result(area_id):
+    """``get_area`` with the API's failure message kept.
+
+    Returns ``(area, error_message)``: ``error_message`` explains a refusal
+    such as "Area 53 is outside your geofence (allowed areas: [364])", which
+    would otherwise be flattened into "Area not found".
+    """
     result = rpc_call('get_area', {'id': area_id})
     if 'error' not in result:
-        return result.get('result')
-    # Log the error for debugging
-    app.logger.debug(f"get_area({area_id}) returned error: {result.get('error')}")
-    return None
+        return result.get('result'), None
+    error = rpc_error_text(result['error'])
+    app.logger.debug(f"get_area({area_id}) returned error: {error}")
+    return None, error
+
+
+def get_area(area_id):
+    """Area by id or alias, or ``None`` when it cannot be loaded."""
+    area, _error = get_area_result(area_id)
+    return area
 
 
 def _token_rejected(token):
