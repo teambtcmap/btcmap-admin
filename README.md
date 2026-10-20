@@ -41,18 +41,17 @@ gunicorn app:app
 - **Real-time Validation**: Client and server-side validation for area data
 - **RPC Integration**: JSON-RPC communication with BTC Map API
 - **Nostr Authentication**: NIP-98 HTTP Auth via NIP-07 browser extensions
-- **Session Management**: signed-cookie session, no server-side account store
+- **Session Management**: signed-cookie session holding display identity only; the BTC Map API is the account authority and keeps all accounts and tokens
 - **Area Linting**: Automated linting rules for area data quality
 
 ## Project Structure
 
 ```
 ├── app.py            # Flask application (routes, validation, RPC)
+├── admin_session.py  # Session helpers: token transport, display identity
 ├── auth.py           # Nostr authentication blueprint
 ├── main.py           # Application entry point
 ├── linting.py        # Area linting system and cache
-├── models.py         # User model for Flask-Login
-├── user_store.py     # Encrypted JSON user storage
 ├── pyproject.toml    # Dependencies (uv)
 ├── static/
 │   ├── css/
@@ -67,8 +66,7 @@ gunicorn app:app
 │   ├── error.html
 │   ├── maintenance.html
 │   └── components/
-├── flask_session/    # Server-side session storage (auto-generated)
-└── users.json        # Encrypted user data (auto-generated)
+└── run.sh
 ```
 
 ## API Integration
@@ -157,4 +155,4 @@ Validation functions in `app.py` return `(is_valid, error_message)`. GeoJSON val
 
 ## Dependencies
 
-Core: flask, flask-session, flask-login, requests, geojson-rewind, shapely, pyproj, cryptography, nostr-sdk
+Core: flask, requests, geojson-rewind, shapely, pyproj

@@ -22,11 +22,7 @@ node_modules/
 .DS_Store
 Thumbs.db
 
-# Flask session files
-flask_session/
-
 # User data and secrets
-users.json
 .env
 
 # Others

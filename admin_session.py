@@ -140,7 +140,7 @@ def current_user() -> CurrentUser:
 
 
 def login_required(view):
-    """Drop-in replacement for ``flask_login.login_required``."""
+    """Require a display identity: JSON callers get a 401, navigations redirect."""
 
     @wraps(view)
     def wrapped(*args, **kwargs):
