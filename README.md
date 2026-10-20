@@ -41,7 +41,7 @@ gunicorn app:app
 - **Real-time Validation**: Client and server-side validation for area data
 - **RPC Integration**: JSON-RPC communication with BTC Map API
 - **Nostr Authentication**: NIP-98 HTTP Auth via NIP-07 browser extensions
-- **Session Management**: Flask-Login with server-side filesystem sessions
+- **Session Management**: signed-cookie session, no server-side account store
 - **Area Linting**: Automated linting rules for area data quality
 
 ## Project Structure
@@ -52,7 +52,6 @@ gunicorn app:app
 ├── main.py           # Application entry point
 ├── linting.py        # Area linting system and cache
 ├── models.py         # User model for Flask-Login
-├── nostr_utils.py    # NIP-01 & NIP-98 event verification
 ├── user_store.py     # Encrypted JSON user storage
 ├── pyproject.toml    # Dependencies (uv)
 ├── static/
@@ -94,18 +93,30 @@ gunicorn app:app
 
 ## Authentication
 
-Uses NIP-98 HTTP Auth with Nostr browser extensions (Alby, nos2x, etc.):
+Sign-in happens in the browser against the BTC Map API; this app stores no
+accounts and no tokens. Two credentials are accepted:
 
-1. User signs a kind 27235 event via `window.nostr.signEvent()`
-2. Server validates event (signature, timestamp within 60s, URL/method binding)
-3. User's RPC token is stored encrypted at rest with Fernet
+- **BTC Map username + password** — the browser mints a Bearer token with
+  `POST {API_BASE_URL}/v4/users/{username}/tokens`.
+- **Nostr (NIP-98)** — the browser signs a kind 27235 event for
+  `{API_BASE_URL}/v4/auth/nostr` via a NIP-07 extension and exchanges it for a
+  Bearer token. The key must already be linked to a BTC Map account: the API
+  auto-creates a role-`user` account for an unknown npub, and this app refuses
+  those at sign-in.
+
+The token is kept in `localStorage`, sent as `Authorization: Bearer` on every
+`/api/*` call, and mirrored into a `btcmap_token` cookie so server-rendered
+pages can authenticate (a navigation cannot carry a header). The Flask session
+cookie holds display-only identity and is never used for authorisation.
+
+`API_BASE_URL` must be absolute and identical to the API's own
+`BTCMAP_API_BASE_URL`, because the NIP-98 `u` tag signs that exact origin.
 
 ### Auth Endpoints
 
-- `GET /login` - Login page
-- `POST /auth/nostr/login` - NIP-98 Nostr login
-- `POST /auth/btcmap/login` - Login with BTC Map credentials
-- `GET /auth/logout` - Logout
+- `GET /login` - Login page (credentials, then Nostr)
+- `POST /auth/session` - Validate a minted Bearer token and start the session
+- `POST /auth/logout` - End the session
 
 ## Area Type Requirements
 
