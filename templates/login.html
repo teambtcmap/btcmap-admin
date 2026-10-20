@@ -9,149 +9,98 @@
     <div id="login-status" class="alert" role="alert" style="display: none;"></div>
 
     <div class="card mb-4">
-        <div class="card-header"><strong>Nostr</strong></div>
-        <div class="card-body text-center">
-            <button id="nostr-login-btn" class="btn btn-lg btn-primary btn-block mb-3" type="button">
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor" style="vertical-align: middle; margin-right: 8px;">
-            <path d="M12 2L2 7v10c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V7l-10-5z"/>
-        </svg>
-        Sign in with Nostr
-            </button>
-            <div class="alert alert-info text-left mb-0" style="font-size: 0.9rem;">
-                <strong>Requirements:</strong>
-                <ul class="mb-0">
-                    <li>Install a Nostr browser extension (e.g., <a href="https://getalby.com" target="_blank" rel="noopener noreferrer">Alby</a>, <a href="https://github.com/fiatjaf/nos2x" target="_blank" rel="noopener noreferrer">nos2x</a>)</li>
-                    <li>Allow the extension to sign authentication requests</li>
-                </ul>
-            </div>
-        </div>
-    </div>
-
-    <div class="card">
         <div class="card-header"><strong>BTC Map Account</strong></div>
         <div class="card-body">
             <form id="btcmap-login-form" novalidate>
                 <div class="form-group mb-3">
                     <label for="btcmap_username" class="form-label">Username</label>
-                    <input type="text" id="btcmap_username" class="form-control" required>
+                    <input type="text" id="btcmap_username" class="form-control" autocomplete="username" required>
                 </div>
                 <div class="form-group mb-3">
                     <label for="btcmap_password" class="form-label">Password</label>
-                    <input type="password" id="btcmap_password" class="form-control" required>
+                    <input type="password" id="btcmap_password" class="form-control" autocomplete="current-password" required>
                 </div>
-                <button id="btcmap-login-btn" class="btn btn-outline-primary w-100" type="submit">Sign in with BTC Map credentials</button>
+                <button id="btcmap-login-btn" class="btn btn-primary w-100" type="submit">Sign in with BTC Map credentials</button>
             </form>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-header"><strong>Nostr</strong></div>
+        <div class="card-body text-center">
+            <button id="nostr-login-btn" class="btn btn-lg btn-outline-primary w-100 mb-3" type="button">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor" style="vertical-align: middle; margin-right: 8px;">
+                    <path d="M12 2L2 7v10c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V7l-10-5z"/>
+                </svg>
+                Sign in with Nostr
+            </button>
+            <div class="alert alert-info text-start mb-0" style="font-size: 0.9rem;">
+                <strong>Your key must already be linked.</strong>
+                A Nostr sign-in for an unlinked key creates a new BTC Map account
+                with no admin role. If you have not linked your key yet, sign in
+                with your username above and use <em>Link Nostr</em> on the profile page.
+                <hr class="my-2">
+                Requires a NIP-07 extension such as
+                <a href="https://getalby.com" target="_blank" rel="noopener noreferrer">Alby</a> or
+                <a href="https://github.com/fiatjaf/nos2x" target="_blank" rel="noopener noreferrer">nos2x</a>.
+            </div>
         </div>
     </div>
 </div>
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    const loginBtn = document.getElementById('nostr-login-btn');
-    const btcmapForm = document.getElementById('btcmap-login-form');
-    const btcmapBtn = document.getElementById('btcmap-login-btn');
+    // A token left over from a previous session must never outlive it: the
+    // logout redirect lands here, and /login is only reachable signed out.
+    localStorage.removeItem('btcmap_token');
+
+    const API_BASE = {{ api_base_url|tojson }};
+    const credentialsForm = document.getElementById('btcmap-login-form');
+    const credentialsBtn = document.getElementById('btcmap-login-btn');
+    const nostrBtn = document.getElementById('nostr-login-btn');
     const statusDiv = document.getElementById('login-status');
-    
+
+    const NOSTR_LABEL = nostrBtn.innerHTML;
+
     function showStatus(message, type) {
         statusDiv.textContent = message;
         statusDiv.className = `alert alert-${type}`;
         statusDiv.style.display = 'block';
     }
-    
+
     function hideStatus() {
         statusDiv.style.display = 'none';
     }
-    
-    async function performNostrLogin() {
-        try {
-            hideStatus();
-            loginBtn.disabled = true;
-            loginBtn.innerHTML = '<span class="spinner-border spinner-border-sm mr-2"></span>Connecting...';
-            
-            // Check if Nostr extension is available
-            if (!window.nostr) {
-                showStatus('No Nostr extension detected. Please install Alby, nos2x, or another NIP-07 compatible extension.', 'warning');
-                loginBtn.disabled = false;
-                loginBtn.innerHTML = '<svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor" style="vertical-align: middle; margin-right: 8px;"><path d="M12 2L2 7v10c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V7l-10-5z"/></svg>Sign in with Nostr';
-                return;
-            }
-            
-            // Get public key
-            showStatus('Getting public key from extension...', 'info');
-            const pubkey = await window.nostr.getPublicKey();
-            
-            showStatus('Preparing authentication...', 'info');
-            const loginUrl = `${window.location.origin}/auth/nostr/login`;
-            
-            // Create NIP-98 event (kind 27235)
-            showStatus('Waiting for signature from extension...', 'info');
-            const event = {
-                kind: 27235,  // NIP-98 HTTP Auth
-                created_at: Math.floor(Date.now() / 1000),
-                tags: [
-                    ['u', loginUrl],
-                    ['method', 'POST']
-                ],
-                content: '',  // Empty content for NIP-98
-                pubkey: pubkey
-            };
-            
-            // Sign the event
-            const signedEvent = await window.nostr.signEvent(event);
-            
-            // Verify with server
-            showStatus('Verifying signature...', 'info');
-            const verifyResp = await fetch('/auth/nostr/login', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    event: signedEvent
-                })
-            });
-            
-            const verifyData = await verifyResp.json();
-            
-            if (!verifyResp.ok) {
-                throw new Error(verifyData.error || 'Authentication failed');
-            }
-            
-            if (verifyData.success) {
-                showStatus('Authentication successful! Redirecting...', 'success');
-                
-                // Check if user needs to set RPC token
-                if (!verifyData.has_token) {
-                    setTimeout(() => {
-                        window.location.href = '/profile?first_login=1';
-                    }, 1000);
-                } else {
-                    setTimeout(() => {
-                        window.location.href = '/select_area';
-                    }, 1000);
-                }
-            } else {
-                throw new Error('Authentication failed');
-            }
-            
-        } catch (error) {
-            console.error('Login error:', error);
-            let errorMsg = error.message || 'Unknown error';
-            
-            // Add more context for common errors
-            if (errorMsg.includes('Failed to fetch')) {
-                errorMsg = 'Cannot connect to server. Please ensure the server is running and try again.';
-            } else if (errorMsg.includes('window.nostr')) {
-                errorMsg = 'Nostr extension error. Please check your extension settings.';
-            }
-            
-            showStatus(`Error: ${errorMsg}`, 'danger');
-            loginBtn.disabled = false;
-            loginBtn.innerHTML = '<svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor" style="vertical-align: middle; margin-right: 8px;"><path d="M12 2L2 7v10c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V7l-10-5z"/></svg>Sign in with Nostr';
+
+    function redirectTarget() {
+        const next = new URLSearchParams(window.location.search).get('next');
+        if (next && next.startsWith('/') && !next.startsWith('//')) {
+            return next;
         }
+        return '/select_area';
     }
 
-    async function performBtcmapLogin(event) {
+    function base64Event(signedEvent) {
+        const bytes = new TextEncoder().encode(JSON.stringify(signedEvent));
+        return btoa(String.fromCharCode(...bytes));
+    }
+
+    // The API mints the token; this endpoint only validates it once and starts
+    // the app session (signed cookie + the navigation cookie).
+    async function startSession(token) {
+        const resp = await fetch('/auth/session', {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const data = await resp.json().catch(() => ({}));
+        if (!resp.ok) {
+            throw new Error(data.error || 'Sign-in was rejected');
+        }
+        localStorage.setItem('btcmap_token', token);
+        window.location.href = redirectTarget();
+    }
+
+    async function loginWithCredentials(event) {
         event.preventDefault();
         const username = document.getElementById('btcmap_username').value.trim();
         const password = document.getElementById('btcmap_password').value;
@@ -161,38 +110,85 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
 
-        try {
-            btcmapBtn.disabled = true;
-            btcmapBtn.textContent = 'Signing in...';
-            showStatus('Creating BTC Map API key...', 'info');
+        credentialsBtn.disabled = true;
+        credentialsBtn.textContent = 'Signing in...';
+        hideStatus();
 
-            const resp = await fetch('/auth/btcmap/login', {
+        try {
+            const resp = await fetch(`${API_BASE}/v4/users/${encodeURIComponent(username)}/tokens`, {
                 method: 'POST',
                 headers: {
+                    'Authorization': `Bearer ${password}`,
                     'Content-Type': 'application/json'
                 },
-                body: JSON.stringify({ username, password })
+                body: JSON.stringify({ label: 'btcmap-admin' })
             });
-
-            const data = await resp.json();
+            const data = await resp.json().catch(() => ({}));
             if (!resp.ok) {
-                throw new Error(data.error || 'BTC Map login failed');
+                throw new Error(data.message || data.error || 'Invalid credentials');
             }
-
-            showStatus('Authentication successful! Redirecting...', 'success');
-            setTimeout(() => {
-                window.location.href = '/select_area';
-            }, 1000);
+            await startSession(data.token);
         } catch (error) {
-            showStatus(`Error: ${error.message || 'BTC Map login failed'}`, 'danger');
-        } finally {
-            btcmapBtn.disabled = false;
-            btcmapBtn.textContent = 'Sign in with BTC Map credentials';
+            const message = error instanceof TypeError
+                ? `Cannot reach BTC Map API at ${API_BASE}`
+                : (error.message || 'Sign-in failed');
+            showStatus(message, 'danger');
+            credentialsBtn.disabled = false;
+            credentialsBtn.textContent = 'Sign in with BTC Map credentials';
         }
     }
-    
-    loginBtn.addEventListener('click', performNostrLogin);
-    btcmapForm.addEventListener('submit', performBtcmapLogin);
+
+    async function loginWithNostr() {
+        if (!window.nostr) {
+            showStatus('No Nostr extension detected. Install Alby, nos2x, or another NIP-07 extension.', 'warning');
+            return;
+        }
+
+        nostrBtn.disabled = true;
+        nostrBtn.textContent = 'Waiting for signature...';
+        hideStatus();
+
+        // The `u` tag must be this exact URL: the API verifies it against its
+        // own configured base URL, not against the origin serving this page.
+        const authUrl = `${API_BASE}/v4/auth/nostr`;
+
+        try {
+            const signedEvent = await window.nostr.signEvent({
+                kind: 27235,  // NIP-98 HTTP Auth
+                created_at: Math.floor(Date.now() / 1000),
+                tags: [
+                    ['u', authUrl],
+                    ['method', 'POST']
+                ],
+                content: ''
+            });
+
+            const resp = await fetch(authUrl, {
+                method: 'POST',
+                headers: { 'Authorization': `Nostr ${base64Event(signedEvent)}` }
+            });
+
+            if (!resp.ok) {
+                throw new Error(
+                    `Nostr sign-in was rejected (HTTP ${resp.status}) for ${authUrl}. ` +
+                    'Check that your system clock is accurate and that the app and API share a base URL.'
+                );
+            }
+
+            const data = await resp.json();
+            await startSession(data.token);
+        } catch (error) {
+            const message = error instanceof TypeError
+                ? `Cannot reach BTC Map API at ${API_BASE}`
+                : (error.message || 'Nostr sign-in failed');
+            showStatus(message, 'danger');
+            nostrBtn.disabled = false;
+            nostrBtn.innerHTML = NOSTR_LABEL;
+        }
+    }
+
+    credentialsForm.addEventListener('submit', loginWithCredentials);
+    nostrBtn.addEventListener('click', loginWithNostr);
 });
 </script>
 {% endblock %}

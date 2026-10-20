@@ -1,7 +1,5 @@
 import os
-from flask import Flask, render_template, request, jsonify, session, redirect, url_for, flash
-from flask_session import Session
-from flask_login import LoginManager, login_required, current_user, logout_user
+from flask import Flask, g, render_template, request, jsonify, redirect, url_for
 import requests
 import json
 from datetime import datetime, timedelta
@@ -12,51 +10,58 @@ from shapely.geometry import shape
 from shapely.ops import transform
 import pyproj
 from linting import lint_area_dict, lint_cache, LINT_RULES, FIX_ACTIONS, fix_migrate_icon, fix_bump_verified
-from models import User
-from auth import auth_bp, create_btcmap_api_key, external_request_url
-from nostr_sdk import Event
-from nostr_utils import verify_nip98_event, get_event_pubkey
+from admin_session import (
+    SessionExpired,
+    current_user as get_current_user,
+    expire_token_cookie,
+    fetch_me,
+    identity,
+    login_required,
+    sign_out,
+    store_identity,
+    token_from_request,
+)
+from auth import auth_bp
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev-secret-key-change-in-production')
+# Trusted API origin. Must be absolute and identical to the API's own
+# BTCMAP_API_BASE_URL: a NIP-98 event signs this exact origin in its `u` tag.
+app.config['API_BASE_URL'] = os.environ.get('API_BASE_URL', 'https://api.btcmap.org').rstrip('/')
 app.config['SESSION_COOKIE_SECURE'] = True
 app.config['SESSION_COOKIE_HTTPONLY'] = True
 app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
-
-# Configure server-side sessions (filesystem backend)
-app.config['SESSION_TYPE'] = 'filesystem'
-app.config['SESSION_FILE_DIR'] = os.path.join(os.path.dirname(__file__), 'flask_session')
-app.config['SESSION_PERMANENT'] = True
-app.config['SESSION_USE_SIGNER'] = True
-
-# Ensure session directory exists (required for Railway deployment)
-session_dir = app.config['SESSION_FILE_DIR']
-if not os.path.exists(session_dir):
-    os.makedirs(session_dir, exist_ok=True)
-
-# Initialize Flask-Session
-Session(app)
-
-# Initialize Flask-Login
-login_manager = LoginManager()
-login_manager.init_app(app)
-login_manager.login_view = 'login'
-login_manager.login_message = 'Please sign in to access this page.'
+# Flask's signed cookie session is the storage: display-only identity, no
+# server-side session files and no account database.
+app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(days=7)
 
 # Register auth blueprint
 app.register_blueprint(auth_bp)
 
-@login_manager.user_loader
-def load_user(account_id):
-    """Load user by account_id for Flask-Login."""
-    return User.load_user(account_id)
+API_BASE_URL = app.config['API_BASE_URL']
 
-# Make current_user available in templates
+
 @app.context_processor
 def inject_current_user():
-    return dict(current_user=current_user)
+    return {'current_user': get_current_user(), 'api_base_url': API_BASE_URL}
 
-API_BASE_URL = "https://api.btcmap.org"
+
+@app.after_request
+def clear_expired_token_cookie(response):
+    """Delete the navigation cookie when a request proved the token is dead."""
+    if g.pop('expire_token_cookie', False):
+        response.delete_cookie('btcmap_token', path='/')
+    return response
+
+
+@app.errorhandler(SessionExpired)
+def handle_session_expired(_exc):
+    """Turn a rejected API token into a login redirect or a JSON 401."""
+    sign_out()
+    expire_token_cookie()
+    if request.path.startswith('/api/'):
+        return jsonify({'error': 'Session expired', 'session_expired': True}), 401
+    return redirect(url_for('login', next=request.full_path.rstrip('?')))
 
 CONTINENTS = [
     'africa', 'asia', 'europe', 'north-america', 'oceania', 'south-america'
@@ -202,33 +207,22 @@ AREA_TYPE_REQUIREMENTS = {
 }
 
 
+PUBLIC_ENDPOINTS = {'login', 'static', 'health', 'auth.create_session', 'auth.logout'}
+
+
 @app.before_request
 def check_token():
-    """Require auth and ensure authenticated users have RPC tokens."""
-    # Skip check for public/auth endpoints
-    if request.endpoint and request.endpoint not in [
-            'login', 'static', 'health', 'profile', 'profile_delete_token',
-            'profile_create_btcmap_token', 'profile_link_nostr',
-            'auth.nostr_login', 'auth.btcmap_login', 'auth.logout'
-    ]:
-        if not current_user.is_authenticated:
-            if request.path.startswith('/api/') or request.is_json or request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-                return jsonify({'error': 'Session expired', 'session_expired': True}), 401
-            return redirect(url_for('login', next=request.url))
+    """Everything outside the sign-in surface requires a session."""
+    if request.endpoint is None or request.endpoint in PUBLIC_ENDPOINTS:
+        return None
 
-        # Only check for authenticated users
-        if current_user.is_authenticated and not current_user.has_rpc_token:
-            # For API requests, return JSON error
-            if request.path.startswith('/api/') or request.is_json or request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-                return jsonify({
-                    'error': 'RPC token not set',
-                    'message': 'Please add your BTC Map API token in your profile',
-                    'profile_url': url_for('profile')
-                }), 403
-            # For page requests, redirect to profile
-            elif request.endpoint != 'profile':
-                flash('Please add your BTC Map API token to continue', 'warning')
-                return redirect(url_for('profile'))
+    if not identity():
+        if (request.path.startswith('/api/')
+                or request.is_json
+                or request.headers.get('X-Requested-With') == 'XMLHttpRequest'):
+            return jsonify({'error': 'Session expired', 'session_expired': True}), 401
+        return redirect(url_for('login', next=request.full_path.rstrip('?')))
+    return None
 
 
 @app.route('/health')
@@ -239,7 +233,7 @@ def health():
 
 @app.route('/')
 def index():
-    if current_user.is_authenticated:
+    if identity():
         return redirect(url_for('select_area'))
     return redirect(url_for('login'))
 
@@ -252,121 +246,31 @@ def home():
 
 @app.route('/login', methods=['GET'])
 def login():
-    """Show Nostr login page."""
-    if current_user.is_authenticated:
+    """Show the sign-in page. Authentication happens in the browser."""
+    if identity():
         return redirect(url_for('select_area'))
     return render_template('login.html')
 
 
-@app.route('/profile', methods=['GET', 'POST'])
+@app.route('/profile')
 @login_required
 def profile():
-    """User profile page for managing RPC token."""
-    if request.method == 'POST':
-        rpc_token = request.form.get('rpc_token', '').strip()
-        
-        # Skip update if placeholder value
-        if rpc_token and rpc_token != '********':
-            try:
-                # Basic validation
-                if not rpc_token:
-                    flash('Token cannot be empty', 'danger')
-                elif len(rpc_token) < 10:
-                    flash('Token appears to be too short', 'danger')
-                else:
-                    # Save the token
-                    current_user.update_token(rpc_token)
-                    flash('API token updated successfully', 'success')
-                    return redirect(url_for('profile'))
-            except Exception:
-                app.logger.exception('Failed updating API token')
-                flash('An error occurred while updating the token. Please try again.', 'danger')
+    """Show the account behind this session, refreshed from BTC Map API."""
+    me = dict(identity() or {})
+    token = token_from_request()
+    if token:
+        try:
+            fresh = fetch_me(token)
+        except (requests.exceptions.RequestException, TypeError):
+            app.logger.exception('Failed to refresh identity from BTC Map API')
         else:
-            flash('Please enter a valid token', 'warning')
-    
-    first_login = request.args.get('first_login') == '1'
-    return render_template('profile.html', first_login=first_login)
-
-
-@app.route('/profile/delete-token', methods=['POST'])
-@login_required
-def profile_delete_token():
-    """Delete user's RPC token."""
-    try:
-        current_user.update_token(None)
-        flash('API token removed successfully', 'success')
-    except Exception:
-        app.logger.exception('Failed removing API token')
-        flash('An error occurred while removing the token. Please try again.', 'danger')
-    return redirect(url_for('profile'))
-
-
-@app.route('/profile/token/btcmap/create', methods=['POST'])
-@login_required
-def profile_create_btcmap_token():
-    """Create and overwrite token using BTC Map credentials."""
-    username = request.form.get('btcmap_username', '').strip()
-    password = request.form.get('btcmap_password', '')
-
-    if not username or not password:
-        flash('BTC Map username and password are required', 'danger')
-        return redirect(url_for('profile'))
-
-    label = f'admin-app - {username}'
-    if current_user.nostr_npub:
-        label += f' - {current_user.nostr_npub}'
-    try:
-        token = create_btcmap_api_key(username=username, password=password, label=label)
-        current_user.update_token(token)
-
-        # Do not enforce strict BTC Map username uniqueness for profile token creation.
-        from user_store import get_user_store
-        store = get_user_store()
-        store.update_account_metadata(current_user.account_id_value, btcmap_username=username)
-        current_user._data = None
-
-        flash('New BTC Map API token created and saved', 'success')
-    except requests.exceptions.RequestException:
-        flash('Unable to reach BTC Map API', 'danger')
-    except ValueError as e:
-        flash(f'Failed to create token: {str(e)}', 'danger')
-
-    return redirect(url_for('profile'))
-
-
-@app.route('/profile/nostr/link', methods=['POST'])
-@login_required
-def profile_link_nostr():
-    """Link a Nostr pubkey to the current account (hard-block conflicts)."""
-    event_data = request.get_json(silent=True) or {}
-    signed_event = event_data.get('event')
-    if not signed_event:
-        return jsonify({'error': 'Missing signed event'}), 400
-
-    is_valid, error_msg = verify_nip98_event(
-        signed_event,
-        external_request_url(request),
-        'POST',
-        max_age_seconds=60,
-    )
-    if not is_valid:
-        return jsonify({'error': f'Invalid NIP-98 event: {error_msg}'}), 400
-
-    try:
-        event = Event.from_json(json.dumps(signed_event))
-        nostr_pubkey = get_event_pubkey(event)
-
-        from user_store import get_user_store
-        store = get_user_store()
-        store.link_nostr(current_user.account_id_value, nostr_pubkey)
-        current_user._data = None
-        return jsonify({'success': True, 'nostr_pubkey': nostr_pubkey})
-    except ValueError:
-        app.logger.exception('Failed linking Nostr pubkey due to identity conflict')
-        return jsonify({'error': 'This Nostr pubkey is already linked to another account.'}), 409
-    except Exception:
-        app.logger.exception('Unexpected error while linking Nostr pubkey')
-        return jsonify({'error': 'An error occurred while linking Nostr. Please try again.'}), 400
+            if fresh is None:
+                sign_out()
+                expire_token_cookie()
+                return redirect(url_for('login', next=url_for('profile')))
+            store_identity(fresh)
+            me = fresh
+    return render_template('profile.html', me=me)
 
 
 @app.route('/select_area')
@@ -823,6 +727,9 @@ def search_areas():
             })
 
         return jsonify(filtered_areas)
+    except SessionExpired:
+        # Must reach the app-level handler, not the catch-all below.
+        raise
     except requests.exceptions.RequestException as e:
         app.logger.error(f"Network error in search_areas: {str(e)}")
         return jsonify({'error':
@@ -1170,10 +1077,19 @@ def get_area(area_id):
     app.logger.debug(f"get_area({area_id}) returned error: {result.get('error')}")
     return None
 
+
+def _token_rejected(token):
+    """True when the API rejects the token outright (not a network failure)."""
+    try:
+        return fetch_me(token) is None
+    except (requests.exceptions.RequestException, TypeError):
+        return False
+
+
 def rpc_call(method, params):
-    token = current_user.rpc_token if current_user.is_authenticated else None
+    token = token_from_request()
     if not token:
-        return {"error": {"message": "RPC token not set. Please add your API token in your profile."}}
+        raise SessionExpired()
 
     headers = {'Authorization': f'Bearer {token}'}
     payload = {
@@ -1187,8 +1103,18 @@ def rpc_call(method, params):
                                  json=payload,
                                  headers=headers,
                                  timeout=20)
+        if response.status_code in (401, 403):
+            raise SessionExpired()
         response.raise_for_status()
-        return response.json()
+        data = response.json()
+        if data.get('error') and _token_rejected(token):
+            # A revoked or unknown token surfaces here as a JSON-RPC error with
+            # HTTP 200 ("Query returned no rows" from the token lookup), not as
+            # a 401 — confirm against /users/me before blaming the request.
+            raise SessionExpired()
+        return data
+    except SessionExpired:
+        raise
     except requests.exceptions.Timeout:
         error_msg = f"Timeout error in RPC call to {method}"
         app.logger.error(error_msg)

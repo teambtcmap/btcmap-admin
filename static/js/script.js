@@ -8,13 +8,22 @@
  * @throws {Error} - Throws an error if session expired (after redirect initiated)
  */
 async function apiFetch(url, options = {}) {
-    const response = await fetch(url, options);
+    // Every authenticated call carries the Bearer token the browser holds.
+    // The token cookie is only transport for page navigations.
+    const token = localStorage.getItem('btcmap_token');
+    const config = { ...options };
+    if (token) {
+        config.headers = { ...(options.headers || {}), 'Authorization': `Bearer ${token}` };
+    }
+
+    const response = await fetch(url, config);
     
     // Check for 401 status (session expired)
     if (response.status === 401) {
         try {
             const data = await response.clone().json();
             if (data.session_expired) {
+                localStorage.removeItem('btcmap_token');
                 showToast('Session Expired', 'Your session has expired. Redirecting to login...', 'warning');
                 setTimeout(() => {
                     window.location.href = '/login?next=' + encodeURIComponent(window.location.href);
@@ -29,6 +38,7 @@ async function apiFetch(url, options = {}) {
             // For other parse errors, check if we got redirected to login page
             const text = await response.clone().text();
             if (text.includes('Login') || response.url.includes('/login')) {
+                localStorage.removeItem('btcmap_token');
                 showToast('Session Expired', 'Your session has expired. Redirecting to login...', 'warning');
                 setTimeout(() => {
                     window.location.href = '/login?next=' + encodeURIComponent(window.location.href);
@@ -40,6 +50,7 @@ async function apiFetch(url, options = {}) {
     
     // Also check if we were redirected to login page (for cases where 401 isn't returned)
     if (response.redirected && response.url.includes('/login')) {
+        localStorage.removeItem('btcmap_token');
         showToast('Session Expired', 'Your session has expired. Redirecting to login...', 'warning');
         setTimeout(() => {
             window.location.href = '/login?next=' + encodeURIComponent(window.location.href);

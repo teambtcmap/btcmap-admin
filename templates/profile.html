@@ -5,53 +5,34 @@
 {% block content %}
 <div class="container mt-4" style="max-width: 800px;">
     <h1 class="mb-4">User Profile</h1>
-    
-    {% with messages = get_flashed_messages(with_categories=true) %}
-        {% if messages %}
-            {% for category, message in messages %}
-                <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
-                    {{ message }}
-                    <button type="button" class="close" data-dismiss="alert" aria-label="Close">
-                        <span aria-hidden="true">&times;</span>
-                    </button>
-                </div>
-            {% endfor %}
-        {% endif %}
-    {% endwith %}
-    
-    {% if first_login %}
-        <div class="alert alert-info" role="alert">
-            <strong>Welcome!</strong> Please add your BTC Map API token below to start using the admin panel.
-        </div>
-    {% endif %}
-    
+
     <div class="card mb-4">
         <div class="card-header">
-            <h5 class="mb-0">Linked Identities</h5>
+            <h5 class="mb-0">Account</h5>
         </div>
         <div class="card-body">
-            <div class="form-group mb-2">
-                <label class="mb-1">Nostr Public Key (hex)</label>
-                {% if current_user.nostr_pubkey %}
-                    <input type="text" class="form-control" value="{{ current_user.nostr_pubkey }}" readonly>
-                {% else %}
-                    <p class="text-muted mb-0">Not linked</p>
-                {% endif %}
+            <div class="form-group mb-3">
+                <label class="mb-1">Username</label>
+                <input type="text" class="form-control" value="{{ me.name or '' }}" readonly>
             </div>
 
-            <div class="form-group mb-0 mt-3">
+            <div class="form-group mb-3">
+                <label class="mb-1">Roles</label>
+                <div>
+                    {% if me.roles %}
+                        {% for role in me.roles %}
+                            <span class="badge bg-secondary me-1">{{ role }}</span>
+                        {% endfor %}
+                    {% else %}
+                        <span class="text-muted">None</span>
+                    {% endif %}
+                </div>
+            </div>
+
+            <div class="form-group mb-0">
                 <label class="mb-1">Nostr Public Key (npub)</label>
-                {% if current_user.nostr_npub %}
-                    <input type="text" class="form-control" value="{{ current_user.nostr_npub }}" readonly>
-                {% else %}
-                    <p class="text-muted mb-0">Not linked</p>
-                {% endif %}
-            </div>
-
-            <div class="form-group mb-0 mt-3">
-                <label class="mb-1">BTC Map Username</label>
-                {% if current_user.btcmap_username %}
-                    <input type="text" class="form-control" value="{{ current_user.btcmap_username }}" readonly>
+                {% if me.npub %}
+                    <input type="text" class="form-control font-monospace" value="{{ me.npub }}" readonly>
                 {% else %}
                     <p class="text-muted mb-0">Not linked</p>
                 {% endif %}
@@ -59,179 +40,144 @@
 
             <hr class="my-4">
 
-            <h6>Link Nostr to this account</h6>
-            <p class="text-muted mb-3">Sign with your Nostr extension to link a pubkey. Linking is blocked if the pubkey is already linked elsewhere.</p>
+            <h6>{% if me.npub %}Replace linked Nostr key{% else %}Link Nostr to this account{% endif %}</h6>
+            <p class="text-muted mb-3">
+                Sign with your Nostr extension to link a key. A key already linked to
+                another account is refused. Once linked, you can sign in with Nostr.
+            </p>
             <button id="link-nostr-btn" type="button" class="btn btn-outline-secondary">Link Nostr Pubkey</button>
-            <div id="link-nostr-status" class="mt-3"></div>
-            
-            {% if current_user.last_login %}
-            <div class="form-group mt-4">
-                <div class="d-flex align-items-baseline">
-                    <label class="mb-0 mr-2">Last Login:</label>&nbsp;<span class="text-muted">{{ current_user.last_login }}</span>
-                </div>
-            </div>
+            {% if me.npub %}
+                <button id="unlink-nostr-btn" type="button" class="btn btn-outline-danger">Unlink</button>
             {% endif %}
+            <div id="link-nostr-status" class="mt-3"></div>
         </div>
     </div>
-    
+
     <div class="card">
         <div class="card-header">
-            <h5 class="mb-0">BTC Map API Token</h5>
+            <h5 class="mb-0">Session</h5>
         </div>
         <div class="card-body">
-            <div class="alert alert-info">
-                <strong>Choose one option:</strong>
-                <ol class="mb-0 mt-2">
-                    <li><strong>Enter an existing token</strong> in the field below and click Save/Update.</li>
-                    <li><strong>Create a new token</strong> using your BTC Map username and password in the form below.</li>
-                </ol>
-            </div>
-
-            <form method="POST" action="{{ url_for('profile') }}">
-                <div class="form-group">
-                    <label for="rpc_token">API Token</label>
-                    <input type="password" class="form-control" id="rpc_token" name="rpc_token" 
-                           placeholder="Enter your BTC Map API token" 
-                           {% if current_user.has_rpc_token %}value="********"{% endif %}>
-                    <small class="form-text text-muted">
-                        This token is used to authenticate API requests to BTC Map. 
-                        It is encrypted before being stored.
-                        {% if not current_user.has_rpc_token %}
-                            <strong class="text-danger">You must set this token to use the admin panel.</strong>
-                        {% endif %}
-                    </small>
-                </div>
-                
-                <div class="form-group">
-                    <div class="form-check">
-                        <input type="checkbox" class="form-check-input" id="show_token" onclick="toggleTokenVisibility()">
-                        <label class="form-check-label" for="show_token">Show token</label>
-                    </div>
-                </div>
-                
-                <button type="submit" class="btn btn-primary">
-                    {% if current_user.has_rpc_token %}Update Token{% else %}Save Token{% endif %}
-                </button>
-                
-                {% if current_user.has_rpc_token %}
-                <button type="button" class="btn btn-outline-danger" onclick="confirmDeleteToken()">Remove Token</button>
-                {% endif %}
-            </form>
-            
-            <hr class="my-4">
-
-            <h6>Create Token with BTC Map credentials</h6>
-            <p class="text-muted mb-3">Use BTC Map credentials. Creates a new API key and overwrites your stored token.</p>
-
-            <form method="POST" action="{{ url_for('profile_create_btcmap_token') }}">
-                <div class="form-group mb-3">
-                    <label for="btcmap_username">BTC Map Username</label>
-                    <input type="text" class="form-control" id="btcmap_username" name="btcmap_username" required>
-                </div>
-                <div class="form-group mb-3">
-                    <label for="btcmap_password">BTC Map Password</label>
-                    <input type="password" class="form-control" id="btcmap_password" name="btcmap_password" required>
-                </div>
-                <button type="submit" class="btn btn-outline-primary">Create & Overwrite Token</button>
+            <p class="mb-2">
+                You are signed in with a BTC Map API token held by this browser.
+                Signing out clears the token from this browser only; it is not revoked on the server.
+            </p>
+            <form method="POST" action="{{ url_for('auth.logout') }}">
+                <button type="submit" class="btn btn-outline-secondary">Sign out</button>
             </form>
 
-            <div class="mt-4 alert alert-secondary">
+            <div class="mt-4 alert alert-secondary mb-0">
                 <strong>Need access?</strong>
                 <p class="mb-2">Contact <a href="mailto:infra@btcmap.org">BTC Map</a> to be provisioned with account credentials.</p>
             </div>
         </div>
     </div>
-    
-    <div class="mt-4">
-    </div>
 </div>
 
-<form id="delete-token-form" method="POST" action="{{ url_for('profile_delete_token') }}" style="display: none;">
-</form>
-
 <script>
-function toggleTokenVisibility() {
-    const tokenInput = document.getElementById('rpc_token');
-    const checkbox = document.getElementById('show_token');
-    
-    if (checkbox.checked) {
-        tokenInput.type = 'text';
-    } else {
-        tokenInput.type = 'password';
+document.addEventListener('DOMContentLoaded', function() {
+    const API_BASE = {{ api_base_url|tojson }};
+    const TOKEN = localStorage.getItem('btcmap_token');
+    const linkUrl = `${API_BASE}/v4/users/me/nostr`;
+
+    const linkBtn = document.getElementById('link-nostr-btn');
+    const unlinkBtn = document.getElementById('unlink-nostr-btn');
+    const statusDiv = document.getElementById('link-nostr-status');
+
+    function setStatus(message, type) {
+        const alertDiv = document.createElement('div');
+        alertDiv.className = `alert alert-${type} mb-0`;
+        alertDiv.textContent = message;
+        statusDiv.replaceChildren(alertDiv);
     }
-}
 
-function confirmDeleteToken() {
-    if (confirm('Are you sure you want to remove your API token? You will not be able to make API requests until you add a new token.')) {
-        document.getElementById('delete-token-form').submit();
+    function base64Event(signedEvent) {
+        const bytes = new TextEncoder().encode(JSON.stringify(signedEvent));
+        return btoa(String.fromCharCode(...bytes));
     }
-}
 
-// Clear placeholder when user starts typing
-document.getElementById('rpc_token').addEventListener('focus', function() {
-    if (this.value === '********') {
-        this.value = '';
-    }
-});
-
-const linkNostrBtn = document.getElementById('link-nostr-btn');
-const linkNostrStatus = document.getElementById('link-nostr-status');
-
-function setLinkStatus(message, type) {
-    const alertDiv = document.createElement('div');
-    alertDiv.className = `alert alert-${type} mb-0`;
-    alertDiv.textContent = message;
-    linkNostrStatus.replaceChildren(alertDiv);
-}
-
-async function linkNostr() {
-    if (!window.nostr) {
-        setLinkStatus('No Nostr extension detected.', 'warning');
+    // Without the token in localStorage the API calls below cannot be
+    // authenticated. The page itself still renders (the navigation cookie
+    // works), so say what is wrong instead of failing with a 401.
+    if (!TOKEN) {
+        linkBtn.disabled = true;
+        if (unlinkBtn) unlinkBtn.disabled = true;
+        setStatus('This browser has no API token stored. Sign out and sign in again.', 'warning');
         return;
     }
 
-    try {
-        linkNostrBtn.disabled = true;
-        linkNostrBtn.textContent = 'Linking...';
+    async function readError(resp) {
+        const data = await resp.json().catch(() => ({}));
+        return data.message || data.error || `HTTP ${resp.status}`;
+    }
 
-        const pubkey = await window.nostr.getPublicKey();
-        const linkUrl = `${window.location.origin}/profile/nostr/link`;
-        const event = {
-            kind: 27235,
-            created_at: Math.floor(Date.now() / 1000),
-            tags: [
-                ['u', linkUrl],
-                ['method', 'POST']
-            ],
-            content: '',
-            pubkey: pubkey
-        };
-
-        const signedEvent = await window.nostr.signEvent(event);
-        const resp = await fetch('/profile/nostr/link', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ event: signedEvent })
-        });
-        const data = await resp.json();
-        if (!resp.ok) {
-            throw new Error(data.error || 'Failed to link Nostr pubkey');
+    async function linkNostr() {
+        if (!window.nostr) {
+            setStatus('No Nostr extension detected.', 'warning');
+            return;
         }
 
-        setLinkStatus('Nostr pubkey linked successfully. Reloading...', 'success');
-        setTimeout(() => window.location.reload(), 800);
-    } catch (error) {
-        setLinkStatus(error.message || 'Failed to link Nostr pubkey', 'danger');
-    } finally {
-        linkNostrBtn.disabled = false;
-        linkNostrBtn.textContent = 'Link Nostr Pubkey';
-    }
-}
+        linkBtn.disabled = true;
+        linkBtn.textContent = 'Linking...';
 
-if (linkNostrBtn) {
-    linkNostrBtn.addEventListener('click', linkNostr);
-}
+        try {
+            const signedEvent = await window.nostr.signEvent({
+                kind: 27235,
+                created_at: Math.floor(Date.now() / 1000),
+                tags: [
+                    ['u', linkUrl],
+                    ['method', 'PUT']
+                ],
+                content: ''
+            });
+
+            const resp = await fetch(linkUrl, {
+                method: 'PUT',
+                headers: {
+                    'Authorization': `Bearer ${TOKEN}`,
+                    'X-Nostr-Authorization': `Nostr ${base64Event(signedEvent)}`
+                }
+            });
+
+            if (!resp.ok) {
+                throw new Error(await readError(resp));
+            }
+
+            setStatus('Nostr pubkey linked. Reloading...', 'success');
+            setTimeout(() => window.location.reload(), 800);
+        } catch (error) {
+            setStatus(error.message || 'Failed to link Nostr pubkey', 'danger');
+            linkBtn.disabled = false;
+            linkBtn.textContent = 'Link Nostr Pubkey';
+        }
+    }
+
+    async function unlinkNostr() {
+        if (!confirm('Unlink your Nostr key from this account? Signing in with Nostr will stop working until you link it again.')) {
+            return;
+        }
+
+        unlinkBtn.disabled = true;
+        try {
+            const resp = await fetch(linkUrl, {
+                method: 'DELETE',
+                headers: { 'Authorization': `Bearer ${TOKEN}` }
+            });
+            if (!resp.ok) {
+                throw new Error(await readError(resp));
+            }
+            setStatus('Nostr pubkey unlinked. Reloading...', 'success');
+            setTimeout(() => window.location.reload(), 800);
+        } catch (error) {
+            setStatus(error.message || 'Failed to unlink Nostr pubkey', 'danger');
+            unlinkBtn.disabled = false;
+        }
+    }
+
+    linkBtn.addEventListener('click', linkNostr);
+    if (unlinkBtn) {
+        unlinkBtn.addEventListener('click', unlinkNostr);
+    }
+});
 </script>
 {% endblock %}
