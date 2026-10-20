@@ -223,7 +223,7 @@
         return { event: event, pubkey: pubkey, pairing: pairing };
     }
 
-    /** Connect a bunker:// URI (or NIP-05) pasted by the user. */
+    /** Connect a bunker:// URI pasted by the user. */
     async function connectBunkerUri(input, options) {
         options = options || {};
         var nip46 = await loadNip46(options.inject);
@@ -231,7 +231,7 @@
 
         var pointer = await nip46.parseBunkerInput(input.trim());
         if (!pointer) {
-            throw new Error('That is not a bunker URI or NIP-05 address. It should start with bunker://');
+            throw new Error('That is not a bunker URI. It should start with bunker://');
         }
 
         var secretKey = pure.generateSecretKey();
@@ -411,8 +411,8 @@
         var input = el('input', {
             type: 'text',
             class: 'form-control form-control-sm font-monospace',
-            placeholder: 'bunker://... or NIP-05',
-            'aria-label': 'Bunker URI or NIP-05 address',
+            placeholder: 'bunker://...',
+            'aria-label': 'Bunker URI',
             autocomplete: 'off',
             spellcheck: 'false'
         });
@@ -707,7 +707,15 @@
         function connectWithBunker() {
             var value = input.value.trim();
             if (!value) {
-                setStatus(signer, 'Paste a bunker URI or NIP-05 address first.', 'warning');
+                setStatus(signer, 'Paste a bunker:// URI first.', 'warning');
+                input.focus();
+                return;
+            }
+            // A NIP-05 address cannot stand in for one: the well-known document
+            // rarely advertises a signer, and never carries the shared secret a
+            // bunker connection needs, so refuse it here instead of failing later.
+            if (!/^bunker:\/\//i.test(value)) {
+                setStatus(signer, 'That is a NIP-05 address, not a bunker URI. Copy the bunker:// URI from your signer app.', 'warning');
                 input.focus();
                 return;
             }

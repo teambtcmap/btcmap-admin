@@ -106,7 +106,7 @@ accounts and no tokens. Two credentials are accepted:
   `static/js/nostr-signer.js`:
 
   - a NIP-07 browser extension (Alby, nos2x) signing in the page;
-  - a NIP-46 signer app via a pasted `bunker://` URI or NIP-05 address;
+  - a NIP-46 signer app via a pasted `bunker://` URI;
   - a NIP-46 signer app paired by QR: the page shows a `nostrconnect://` URI
     to scan (Amber, Opal, nsec.app), with the URI also copyable and linkable
     for signers on the same device.
