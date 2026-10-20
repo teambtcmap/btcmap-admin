@@ -35,15 +35,14 @@
                 Sign in with Nostr
             </button>
 
-            <div id="signer-panel" class="text-start mb-3"></div>
-
             <div class="alert alert-info text-start mb-0" style="font-size: 0.9rem;">
                 <strong>Your key must already be linked.</strong>
                 A Nostr sign-in for an unlinked key creates a new BTC Map account
                 with no area-editing role. If you have not linked your key yet, sign in
                 with your username above and use <em>Link Nostr</em> on the profile page.
                 <hr class="my-2">
-                Requires a NIP-07 extension such as
+                Extension, signer app or QR code — pick one in the dialog. For an
+                extension, install
                 <a href="https://getalby.com" target="_blank" rel="noopener noreferrer">Alby</a> or
                 <a href="https://github.com/fiatjaf/nos2x" target="_blank" rel="noopener noreferrer">nos2x</a>.
             </div>
@@ -62,8 +61,6 @@ document.addEventListener('DOMContentLoaded', function() {
     const credentialsBtn = document.getElementById('btcmap-login-btn');
     const nostrBtn = document.getElementById('nostr-login-btn');
     const statusDiv = document.getElementById('login-status');
-
-    const NOSTR_LABEL = nostrBtn.innerHTML;
 
     function showStatus(message, type) {
         statusDiv.textContent = message;
@@ -162,31 +159,8 @@ document.addEventListener('DOMContentLoaded', function() {
         await startSession(data.token);
     }
 
-    async function loginWithNostr() {
-        if (!window.NostrSigner.isExtensionAvailable()) {
-            showStatus('No Nostr extension detected. Install Alby, nos2x, or another NIP-07 extension.', 'warning');
-            return;
-        }
-
-        nostrBtn.disabled = true;
-        nostrBtn.textContent = 'Waiting for signature...';
-        hideStatus();
-
-        try {
-            const signedEvent = await window.NostrSigner.signWithExtension(authUrl, 'POST');
-            await submitNostrEvent(signedEvent);
-        } catch (error) {
-            const message = error instanceof TypeError
-                ? `Cannot reach BTC Map API at ${API_BASE}`
-                : (error.message || 'Nostr sign-in failed');
-            showStatus(message, 'danger');
-            nostrBtn.disabled = false;
-            nostrBtn.innerHTML = NOSTR_LABEL;
-        }
-    }
-
-    // Signer apps (NIP-46): saved pairing, bunker URI, or QR pairing.
-    window.NostrSigner.mountPanel(document.getElementById('signer-panel'), {
+    // One button, one dialog: browser extension, signer-app URI, or QR pairing.
+    const signerDialog = window.NostrSigner.mountSignerDialog({
         verb: 'Sign in',
         url: authUrl,
         method: 'POST',
@@ -194,7 +168,7 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 
     credentialsForm.addEventListener('submit', loginWithCredentials);
-    nostrBtn.addEventListener('click', loginWithNostr);
+    nostrBtn.addEventListener('click', function () { signerDialog.open(); });
 });
 </script>
 {% endblock %}

@@ -101,7 +101,8 @@ accounts and no tokens. Two credentials are accepted:
   `{API_BASE_URL}/v4/auth/nostr` and exchanges it for a Bearer token. The key
   must already be linked to a BTC Map account: the API auto-creates a
   role-`user` account for an unknown npub, and this app refuses those at
-  sign-in. Three signer transports are supported, all in
+  sign-in. Three signer transports are offered side by side in one dialog
+  (opened from the Nostr button), all implemented in
   `static/js/nostr-signer.js`:
 
   - a NIP-07 browser extension (Alby, nos2x) signing in the page;
