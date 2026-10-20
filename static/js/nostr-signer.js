@@ -29,8 +29,14 @@
     var DEFAULT_RELAYS = ['wss://relay.nsec.app', 'wss://relay.damus.io'];
     // NIP-46 permissions this app needs: read the key, sign NIP-98 events.
     var PERMS = ['get_public_key', 'sign_event:27235'];
-    var CONNECT_TIMEOUT_MS = 90000;
+    // A saved signer has already approved this client, so a connect ack is
+    // optional and waiting on it only costs the user time. A first-time
+    // bunker URI is different: the connect is the approval prompt, so wait
+    // long enough for someone to reach for their phone.
+    var SAVED_CONNECT_MS = 3000;
+    var PASTE_CONNECT_MS = 12000;
     var PAIR_TIMEOUT_MS = 180000;
+    var SIGN_TIMEOUT_MS = 120000;
 
     // Bootstrap Icons (MIT), inlined so the dialog needs no icon font.
     var ICONS = {
@@ -96,6 +102,20 @@
         return out;
     }
 
+    /**
+     * NIP-46 connect is optional in practice. Some signers (Opal) never answer
+     * a connect on an already-paired session - they act on the request itself -
+     * so a silent connect must not block. An explicit error still fails.
+     */
+    async function connectQuietly(signer, metadata, waitMs) {
+        var marker = 'connect was not acknowledged';
+        try {
+            await withTimeout(signer.connect(metadata), waitMs, marker);
+        } catch (error) {
+            if (!error || error.message !== marker) throw error;
+        }
+    }
+
     function withTimeout(promise, ms, message) {
         return new Promise(function (resolve, reject) {
             var timer = setTimeout(function () { reject(new Error(message)); }, ms);
@@ -138,7 +158,11 @@
     }
 
     function signWithSigner(signer, url, method) {
-        return signer.signEvent(nip98Template(url, method));
+        return withTimeout(
+            signer.signEvent(nip98Template(url, method)),
+            SIGN_TIMEOUT_MS,
+            'Your signer did not return a signature. Approve the request in the signer app and try again.'
+        );
     }
 
     function loadPairing() {
@@ -192,9 +216,9 @@
         var signer = nip46.BunkerSigner.fromBunker(hexToBytes(pairing.clientSecret), pointer, {
             onauth: options.onauth
         });
-        await withTimeout(signer.connect(clientMetadata()), CONNECT_TIMEOUT_MS,
-            'Your signer did not respond. Open the signer app and try again.');
-        var pubkey = await signer.getPublicKey();
+        await connectQuietly(signer, clientMetadata(), SAVED_CONNECT_MS);
+        // The bunker pointer names the signer, so this needs no round trip.
+        var pubkey = pointer.pubkey;
         var event = await signWithSigner(signer, url, method);
         return { event: event, pubkey: pubkey, pairing: pairing };
     }
@@ -213,9 +237,9 @@
         var secretKey = pure.generateSecretKey();
         var clientSecret = bytesToHex(secretKey);
         var signer = nip46.BunkerSigner.fromBunker(secretKey, pointer, { onauth: options.onauth });
-        await withTimeout(signer.connect(clientMetadata()), CONNECT_TIMEOUT_MS,
-            'Your signer did not respond. Check the bunker URI and that the signer app is online.');
-        var pubkey = await signer.getPublicKey();
+        await connectQuietly(signer, clientMetadata(), PASTE_CONNECT_MS);
+        // The bunker pointer names the signer, so this needs no round trip.
+        var pubkey = pointer.pubkey;
         return {
             signer: signer,
             pubkey: pubkey,
@@ -248,13 +272,16 @@
         if (options.onUri) options.onUri(uri);
 
         var wait = options.signal || options.timeoutMs || PAIR_TIMEOUT_MS;
+        // fromURI resolves only after the signer answers the pairing, which
+        // both establishes the session and names the signer - so no connect()
+        // call is needed here. Sending one anyway stalls on signers that treat
+        // a repeat connect as already done and never reply (Opal does this).
         var signer = await withTimeout(
             nip46.BunkerSigner.fromURI(secretKey, uri, { onauth: options.onauth }, wait),
             options.timeoutMs || PAIR_TIMEOUT_MS,
             'No signer connected to the pairing URI.'
         );
-        await signer.connect(clientMetadata());
-        var pubkey = await signer.getPublicKey();
+        var pubkey = signer.bp.pubkey;
         return {
             signer: signer,
             pubkey: pubkey,
