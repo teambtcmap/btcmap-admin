@@ -73,6 +73,7 @@
                 <button id="unlink-nostr-btn" type="button" class="btn btn-outline-danger">Unlink</button>
             {% endif %}
             <div id="link-nostr-status" class="mt-3"></div>
+            <div id="signer-panel" class="mt-3"></div>
         </div>
     </div>
 
@@ -134,8 +135,25 @@ document.addEventListener('DOMContentLoaded', function() {
         return data.message || data.error || `HTTP ${resp.status}`;
     }
 
+    async function sendLink(signedEvent) {
+        const resp = await fetch(linkUrl, {
+            method: 'PUT',
+            headers: {
+                'Authorization': `Bearer ${TOKEN}`,
+                'X-Nostr-Authorization': `Nostr ${base64Event(signedEvent)}`
+            }
+        });
+
+        if (!resp.ok) {
+            throw new Error(await readError(resp));
+        }
+
+        setStatus('Nostr pubkey linked. Reloading...', 'success');
+        setTimeout(() => window.location.reload(), 800);
+    }
+
     async function linkNostr() {
-        if (!window.nostr) {
+        if (!window.NostrSigner.isExtensionAvailable()) {
             setStatus('No Nostr extension detected.', 'warning');
             return;
         }
@@ -144,30 +162,8 @@ document.addEventListener('DOMContentLoaded', function() {
         linkBtn.textContent = 'Linking...';
 
         try {
-            const signedEvent = await window.nostr.signEvent({
-                kind: 27235,
-                created_at: Math.floor(Date.now() / 1000),
-                tags: [
-                    ['u', linkUrl],
-                    ['method', 'PUT']
-                ],
-                content: ''
-            });
-
-            const resp = await fetch(linkUrl, {
-                method: 'PUT',
-                headers: {
-                    'Authorization': `Bearer ${TOKEN}`,
-                    'X-Nostr-Authorization': `Nostr ${base64Event(signedEvent)}`
-                }
-            });
-
-            if (!resp.ok) {
-                throw new Error(await readError(resp));
-            }
-
-            setStatus('Nostr pubkey linked. Reloading...', 'success');
-            setTimeout(() => window.location.reload(), 800);
+            const signedEvent = await window.NostrSigner.signWithExtension(linkUrl, 'PUT');
+            await sendLink(signedEvent);
         } catch (error) {
             setStatus(error.message || 'Failed to link Nostr pubkey', 'danger');
             linkBtn.disabled = false;
@@ -201,6 +197,14 @@ document.addEventListener('DOMContentLoaded', function() {
     if (unlinkBtn) {
         unlinkBtn.addEventListener('click', unlinkNostr);
     }
+
+    // Signer apps (NIP-46) can link too, for people without an extension.
+    window.NostrSigner.mountPanel(document.getElementById('signer-panel'), {
+        verb: 'Link',
+        url: linkUrl,
+        method: 'PUT',
+        onSigned: sendLink
+    });
 });
 </script>
 {% endblock %}
