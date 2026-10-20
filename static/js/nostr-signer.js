@@ -297,6 +297,11 @@
         var generation = 0;
         var abortController = null;
         var activeSigner = null;
+        var currentUri = null;
+        var qrModal = null;
+        var qrModalEl = null;
+        var qrBox = null;
+        var qrUriBox = null;
 
         var modalEl = el('div', { class: 'modal fade', tabindex: '-1', 'aria-hidden': 'true' });
         var contentEl = el('div', { class: 'modal-content' });
@@ -333,6 +338,7 @@
             forgetBtn.addEventListener('click', function () {
                 clearPairing();
                 savedRow.remove();
+                renderIdle();
             });
             bodyEl.appendChild(savedRow);
         }
@@ -361,17 +367,20 @@
         }
 
         function clearStatuses() {
-            [ext, bunker, qr].forEach(function (col) { setStatus(col, ''); });
+            [ext, signer, pair].forEach(function (col) { setStatus(col, ''); });
         }
 
         var ext = column('extension', 'Browser extension', 'Alby, nos2x or another NIP-07 extension.');
-        var bunker = column('signer', 'Signer app', 'Paste a bunker:// URI or NIP-05 address from Amber, Opal or nsec.app.');
-        var qr = column('qr', 'Signer app QR', 'Scan with a signer on your phone, or open the link on this device.');
+        var signer = column('signer', 'Signer app', 'Amber, Opal or any other NIP-46 signer.');
+        var pair = column('qr', 'NostrConnect', 'Scan a QR code or copy a connection string.');
 
         // Extension controls
         var extBtn = el('button', { type: 'button', class: 'btn btn-primary w-100', text: opts.verb });
 
-        // Bunker controls
+        // Signer app controls: hand off to a native app, or connect with a URI.
+        var openBtn = el('button', {
+            type: 'button', class: 'btn btn-outline-primary w-100', text: 'Open with signer'
+        });
         var input = el('input', {
             type: 'text',
             class: 'form-control form-control-sm font-monospace',
@@ -384,25 +393,31 @@
             type: 'button', class: 'btn btn-outline-primary w-100 mt-2', text: 'Connect'
         });
 
-        // QR controls
-        var qrBtn = el('button', { type: 'button', class: 'btn btn-outline-primary w-100', text: 'Show QR code' });
+        // NostrConnect controls: QR popup or copy the string.
+        var qrBtn = el('button', {
+            type: 'button', class: 'btn btn-outline-primary w-100', text: 'Show QR code'
+        });
+        var copyBtn = el('button', {
+            type: 'button', class: 'btn btn-outline-secondary btn-sm w-100 mt-2', text: 'Copy connection string'
+        });
 
         function setEnabled(enabled) {
-            [extBtn, connectBtn, input, qrBtn, savedBtn, forgetBtn].forEach(function (control) {
+            [extBtn, openBtn, connectBtn, input, qrBtn, copyBtn, savedBtn, forgetBtn].forEach(function (control) {
                 if (control) control.disabled = !enabled;
             });
         }
 
-        function progressBlock(message) {
+        function progressBlock(message, extra) {
             var cancel = el('button', {
                 type: 'button', class: 'btn btn-link btn-sm text-muted px-0 d-block mx-auto', text: 'Cancel'
             });
-            cancel.addEventListener('click', cancelRun);
-            return el('div', { class: 'py-2' }, [
-                el('div', { class: 'spinner-border spinner-border-sm text-primary mb-2', role: 'status' }),
-                el('div', { class: 'small text-muted', text: message || 'Waiting for your signer...' }),
-                cancel
-            ]);
+            cancel.addEventListener('click', function () { cancelRun(); });
+            var parts = [];
+            if (extra) parts.push(extra);
+            parts.push(el('div', { class: 'spinner-border spinner-border-sm text-primary mb-2', role: 'status' }));
+            parts.push(el('div', { class: 'small text-muted', text: message || 'Waiting for your signer...' }));
+            parts.push(cancel);
+            return el('div', { class: 'py-2' }, parts);
         }
 
         function renderIdle() {
@@ -418,12 +433,15 @@
                 extBtn.className = 'btn w-100 ' + (savedActions ? 'btn-outline-primary' : 'btn-primary');
             }
 
-            bunker.slot.replaceChildren(input, connectBtn);
-            qr.slot.replaceChildren(qrBtn);
+            signer.slot.replaceChildren(
+                openBtn,
+                el('div', { class: 'small text-muted my-2', text: 'or' }),
+                input,
+                connectBtn
+            );
+            pair.slot.replaceChildren(qrBtn, copyBtn);
 
-            if (savedActions) {
-                savedActions.replaceChildren(savedBtn, forgetBtn);
-            }
+            if (savedActions) savedActions.replaceChildren(savedBtn, forgetBtn);
         }
 
         function cancelRun() {
@@ -436,11 +454,12 @@
                 closeSigner(activeSigner);
                 activeSigner = null;
             }
+            hideQr();
             renderIdle();
         }
 
-        function closeSigner(signer) {
-            try { if (signer && signer.close) signer.close(); } catch (error) { /* ignore */ }
+        function closeSigner(signerInstance) {
+            try { if (signerInstance && signerInstance.close) signerInstance.close(); } catch (error) { /* ignore */ }
         }
 
         async function finish(signedEvent, pubkey, current) {
@@ -454,10 +473,6 @@
             setStatus(col, (error && error.message) || 'Signer request failed', 'danger');
         }
 
-        /**
-         * Disable everything, then let `work` take over one column's slot.
-         * A cancel, or a newer run, invalidates the promise via `generation`.
-         */
         function run(col, message, work) {
             var gen = generation;
             setEnabled(false);
@@ -474,7 +489,6 @@
             });
         }
 
-        /** Saved pairing keeps its progress inside the banner, not a column. */
         function runSaved(work) {
             var gen = generation;
             setEnabled(false);
@@ -494,7 +508,155 @@
             window.open(url, '_blank', 'noopener');
         }
 
-        // ---- Extension --------------------------------------------------------
+        // ---- QR popup ---------------------------------------------------------
+
+        function ensureQrModal() {
+            if (qrModal) return qrModal;
+
+            qrModalEl = el('div', {
+                class: 'modal fade', tabindex: '-1', 'aria-hidden': 'true', style: 'z-index: 1060;'
+            });
+            var content = el('div', { class: 'modal-content' });
+            content.appendChild(el('div', { class: 'modal-header' }, [
+                el('h5', { class: 'modal-title', text: 'Scan with your signer' }),
+                el('button', { type: 'button', class: 'btn-close', 'data-bs-dismiss': 'modal', 'aria-label': 'Close' })
+            ]));
+
+            qrBox = el('div', { class: 'd-flex justify-content-center mb-3' });
+            qrUriBox = el('textarea', {
+                class: 'form-control form-control-sm font-monospace mb-2',
+                rows: '3',
+                readonly: 'readonly',
+                'aria-label': 'NostrConnect URI'
+            });
+            var copy = el('button', {
+                type: 'button', class: 'btn btn-outline-secondary btn-sm', text: 'Copy connection string'
+            });
+            copy.addEventListener('click', function () {
+                if (!currentUri) return;
+                copyText(currentUri);
+                copy.textContent = 'Copied';
+            });
+
+            content.appendChild(el('div', { class: 'modal-body text-center' }, [
+                qrBox,
+                qrUriBox,
+                copy,
+                el('div', {
+                    class: 'small text-muted mt-2',
+                    text: 'The code stays valid while this dialog is open.'
+                })
+            ]));
+            qrModalEl.appendChild(el('div', { class: 'modal-dialog modal-sm modal-dialog-centered' }, [content]));
+            document.body.appendChild(qrModalEl);
+            qrModal = new bootstrap.Modal(qrModalEl);
+            return qrModal;
+        }
+
+        function copyText(text) {
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(text).catch(function () { /* ignore */ });
+            }
+        }
+
+        function showQr(uri) {
+            ensureQrModal();
+            qrUriBox.value = uri;
+            qrBox.replaceChildren(el('div', { class: 'spinner-border text-muted' }));
+            loadQr(opts.inject).then(function (QRCode) {
+                qrBox.replaceChildren();
+                new QRCode(qrBox, {
+                    text: uri,
+                    width: 220,
+                    height: 220,
+                    correctLevel: QRCode.CorrectLevel.M
+                });
+            }, function () {
+                qrBox.replaceChildren(el('div', {
+                    class: 'small text-warning',
+                    text: 'QR code unavailable - copy the connection string instead.'
+                }));
+            });
+            qrModal.show();
+        }
+
+        function hideQr() {
+            if (qrModal) qrModal.hide();
+        }
+
+        // ---- Pairing actions --------------------------------------------------
+
+        /**
+         * Create (or reuse) a nostrconnect session, then follow it by the
+         * chosen route: hand off to a native signer, show the QR, or copy the
+         * string. All three keep listening for the signer's answer.
+         */
+        function beginPairing(mode) {
+            run(pair, mode === 'open'
+                ? 'Waiting for your signer to approve...'
+                : 'Waiting for a signer to connect...', async function (current) {
+                var controller = new AbortController();
+                abortController = controller;
+
+                var result = await window.NostrSigner.startNostrConnect({
+                    signal: controller.signal,
+                    onUri: function (uri) {
+                        currentUri = uri;
+                        if (mode === 'qr') showQr(uri);
+                        if (mode === 'open') openWithSigner(uri);
+                        if (mode === 'copy') copyText(uri);
+                        pair.slot.replaceChildren(progressBlock(
+                            mode === 'copy'
+                                ? 'Connection string copied - paste it into your signer.'
+                                : (mode === 'open' ? 'Waiting for your signer to approve...' : 'Waiting for a signer to connect...'),
+                            el('div', { class: 'small text-muted mb-2' }, [
+                                el('a', { href: '#', text: 'Show QR code', 'data-role': 'qr' }),
+                                el('span', { text: ' · ' }),
+                                el('a', { href: '#', text: 'Copy string', 'data-role': 'copy' })
+                            ])
+                        ));
+                        var links = pair.slot.querySelectorAll('a[data-role]');
+                        links.forEach(function (link) {
+                            link.addEventListener('click', function (event) {
+                                event.preventDefault();
+                                if (link.getAttribute('data-role') === 'qr') showQr(currentUri);
+                                else copyText(currentUri);
+                            });
+                        });
+                    },
+                    onauth: openAuthUrl,
+                    inject: opts.inject
+                });
+
+                abortController = null;
+                if (!current()) {
+                    closeSigner(result.signer);
+                    return;
+                }
+                activeSigner = result.signer;
+                savePairing(result.pairing);
+                hideQr();
+                var event = await signWithSigner(result.signer, opts.url, opts.method);
+                await finish(event, result.pubkey, current);
+            });
+        }
+
+        /**
+         * Hand the nostrconnect URI to a native signer (Amber, Opal). Browsers
+         * silently ignore a scheme with no handler, so warn if nothing happened.
+         */
+        function openWithSigner(uri) {
+            window.location.href = uri;
+            // If nothing handles the scheme the browser stays put and logs
+            // nothing the user can see, so point at the alternatives. When a
+            // signer does open, this tab is in the background and the hint is
+            // never read.
+            setTimeout(function () {
+                setStatus(pair, 'No app opened? Use the QR code or copy the connection string.', 'warning');
+            }, 1800);
+        }
+
+        // ---- Wiring -----------------------------------------------------------
 
         extBtn.addEventListener('click', function () {
             run(ext, 'Waiting for your extension...', async function (current) {
@@ -502,8 +664,6 @@
                 await finish(signedEvent, null, current);
             });
         });
-
-        // ---- Saved pairing ----------------------------------------------------
 
         if (savedBtn) {
             savedBtn.addEventListener('click', function () {
@@ -517,16 +677,14 @@
             });
         }
 
-        // ---- Bunker URI -------------------------------------------------------
-
         function connectWithBunker() {
             var value = input.value.trim();
             if (!value) {
-                setStatus(bunker, 'Paste a bunker URI or NIP-05 address first.', 'warning');
+                setStatus(signer, 'Paste a bunker URI or NIP-05 address first.', 'warning');
                 input.focus();
                 return;
             }
-            run(bunker, 'Connecting to your signer...', async function (current) {
+            run(signer, 'Connecting to your signer...', async function (current) {
                 var result = await window.NostrSigner.connectBunkerUri(value, {
                     onauth: openAuthUrl,
                     inject: opts.inject
@@ -550,78 +708,12 @@
             }
         });
 
-        // ---- Nostrconnect / QR ------------------------------------------------
-
-        function waitingQr(uri) {
-            var box = el('div', { class: 'd-flex justify-content-center mb-2' });
-            var uriBox = el('textarea', {
-                class: 'form-control form-control-sm font-monospace mb-2',
-                rows: '2',
-                readonly: 'readonly'
-            });
-            uriBox.value = uri;
-            var openLink = el('a', {
-                class: 'btn btn-sm btn-outline-secondary w-100 mb-1',
-                href: uri,
-                target: '_blank',
-                rel: 'noopener',
-                text: 'Open in signer app'
-            });
-            var copyBtn = el('button', { type: 'button', class: 'btn btn-link btn-sm', text: 'Copy URI' });
-            copyBtn.addEventListener('click', function () {
-                if (navigator.clipboard) {
-                    navigator.clipboard.writeText(uri).then(function () {
-                        copyBtn.textContent = 'Copied';
-                    }, function () { uriBox.select(); });
-                } else {
-                    uriBox.select();
-                }
-            });
-
-            loadQr(opts.inject).then(function (QRCode) {
-                box.replaceChildren();
-                new QRCode(box, {
-                    text: uri,
-                    width: 200,
-                    height: 200,
-                    correctLevel: QRCode.CorrectLevel.M
-                });
-            }, function () {
-                box.replaceChildren(el('div', {
-                    class: 'small text-warning',
-                    text: 'QR code unavailable - copy the URI instead.'
-                }));
-            });
-
-            return el('div', {}, [box, uriBox, openLink, copyBtn]);
-        }
-
-        qrBtn.addEventListener('click', function () {
-            run(qr, 'Waiting for a signer to connect...', async function (current) {
-                var controller = new AbortController();
-                abortController = controller;
-                var result = await window.NostrSigner.startNostrConnect({
-                    signal: controller.signal,
-                    onUri: function (uri) {
-                        qr.slot.replaceChildren(waitingQr(uri), progressBlock('Waiting for a signer to connect...'));
-                    },
-                    onauth: openAuthUrl,
-                    inject: opts.inject
-                });
-                abortController = null;
-                if (!current()) {
-                    closeSigner(result.signer);
-                    return;
-                }
-                activeSigner = result.signer;
-                savePairing(result.pairing);
-                var event = await signWithSigner(result.signer, opts.url, opts.method);
-                await finish(event, result.pubkey, current);
-            });
-        });
+        openBtn.addEventListener('click', function () { beginPairing('open'); });
+        qrBtn.addEventListener('click', function () { beginPairing('qr'); });
+        copyBtn.addEventListener('click', function () { beginPairing('copy'); });
 
         bodyEl.appendChild(el('div', { class: 'row row-cols-1 row-cols-md-3 g-3' }, [
-            ext.root, bunker.root, qr.root
+            ext.root, signer.root, pair.root
         ]));
         bodyEl.appendChild(el('p', {
             class: 'small text-secondary mt-3 mb-0',
@@ -635,6 +727,9 @@
         var modal = new bootstrap.Modal(modalEl, { backdrop: true, keyboard: true });
         modalEl.addEventListener('hidden.bs.modal', function () {
             cancelRun();
+            if (qrModalEl) qrModalEl.remove();
+            qrModal = null;
+            qrModalEl = null;
             modalEl.remove();
         });
 
