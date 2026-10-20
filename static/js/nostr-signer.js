@@ -6,8 +6,9 @@
  * verifies it itself, so nothing here is trusted by the server and no backend
  * change is needed to add a transport.
  *
- * nostr-tools is fetched from jsDelivr on demand, so a CDN failure only
- * disables the signer-app paths - extension sign-in keeps working.
+ * All three transports are offered side by side in one modal, opened from the
+ * page's Nostr button. nostr-tools and the QR library are fetched from jsDelivr
+ * on demand, so a CDN failure disables only the signer-app paths.
  *
  * A bunker pairing (client secret + bunker:// URL) is kept in localStorage so
  * the next visit is one click. That is a credential at rest: it lets this
@@ -30,6 +31,13 @@
     var PERMS = ['get_public_key', 'sign_event:27235'];
     var CONNECT_TIMEOUT_MS = 90000;
     var PAIR_TIMEOUT_MS = 180000;
+
+    // Bootstrap Icons (MIT), inlined so the dialog needs no icon font.
+    var ICONS = {
+        extension: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width="26" height="26" fill="currentColor" aria-hidden="true"><path d="M3.112 3.645A1.5 1.5 0 0 1 4.605 2H7a.5.5 0 0 1 .5.5v.382c0 .696-.497 1.182-.872 1.469a.5.5 0 0 0-.115.118l-.012.025L6.5 4.5v.003l.003.01q.005.015.036.053a.9.9 0 0 0 .27.194C7.09 4.9 7.51 5 8 5c.492 0 .912-.1 1.19-.24a.9.9 0 0 0 .271-.194.2.2 0 0 0 .039-.063v-.009l-.012-.025a.5.5 0 0 0-.115-.118c-.375-.287-.872-.773-.872-1.469V2.5A.5.5 0 0 1 9 2h2.395a1.5 1.5 0 0 1 1.493 1.645L12.645 6.5h.237c.195 0 .42-.147.675-.48.21-.274.528-.52.943-.52.568 0 .947.447 1.154.862C15.877 6.807 16 7.387 16 8s-.123 1.193-.346 1.638c-.207.415-.586.862-1.154.862-.415 0-.733-.246-.943-.52-.255-.333-.48-.48-.675-.48h-.237l.243 2.855A1.5 1.5 0 0 1 11.395 14H9a.5.5 0 0 1-.5-.5v-.382c0-.696.497-1.182.872-1.469a.5.5 0 0 0 .115-.118l.012-.025.001-.006v-.003a.2.2 0 0 0-.039-.064.9.9 0 0 0-.27-.193C8.91 11.1 8.49 11 8 11s-.912.1-1.19.24a.9.9 0 0 0-.271.194.2.2 0 0 0-.039.063v.003l.001.006.012.025c.016.027.05.068.115.118.375.287.872.773.872 1.469v.382a.5.5 0 0 1-.5.5H4.605a1.5 1.5 0 0 1-1.493-1.645L3.356 9.5h-.238c-.195 0-.42.147-.675.48-.21.274-.528.52-.943.52-.568 0-.947-.447-1.154-.862C.123 9.193 0 8.613 0 8s.123-1.193.346-1.638C.553 5.947.932 5.5 1.5 5.5c.415 0 .733.246.943.52.255.333.48.48.675.48h.238zM4.605 3a.5.5 0 0 0-.498.55l.001.007.29 3.4A.5.5 0 0 1 3.9 7.5h-.782c-.696 0-1.182-.497-1.469-.872a.5.5 0 0 0-.118-.115l-.025-.012L1.5 6.5h-.003a.2.2 0 0 0-.064.039.9.9 0 0 0-.193.27C1.1 7.09 1 7.51 1 8s.1.912.24 1.19c.07.14.14.225.194.271a.2.2 0 0 0 .063.039H1.5l.006-.001.025-.012a.5.5 0 0 0 .118-.115c.287-.375.773-.872 1.469-.872H3.9a.5.5 0 0 1 .498.542l-.29 3.408a.5.5 0 0 0 .497.55h1.878c-.048-.166-.195-.352-.463-.557-.274-.21-.52-.528-.52-.943 0-.568.447-.947.862-1.154C6.807 10.123 7.387 10 8 10s1.193.123 1.638.346c.415.207.862.586.862 1.154 0 .415-.246.733-.52.943-.268.205-.415.39-.463.557h1.878a.5.5 0 0 0 .498-.55l-.001-.007-.29-3.4A.5.5 0 0 1 12.1 8.5h.782c.696 0 1.182.497 1.469.872.05.065.091.099.118.115l.025.012.006.001h.003a.2.2 0 0 0 .064-.039.9.9 0 0 0 .193-.27c.14-.28.24-.7.24-1.191s-.1-.912-.24-1.19a.9.9 0 0 0-.194-.271.2.2 0 0 0-.063-.039H14.5l-.006.001-.025.012a.5.5 0 0 0-.118.115c-.287.375-.773.872-1.469.872H12.1a.5.5 0 0 1-.498-.543l.29-3.407a.5.5 0 0 0-.497-.55H9.517c.048.166.195.352.463.557.274.21.52.528.52.943 0 .568-.447.947-.862 1.154C9.193 5.877 8.613 6 8 6s-1.193-.123-1.638-.346C5.947 5.447 5.5 5.068 5.5 4.5c0-.415.246-.733.52-.943.268-.205.415-.39.463-.557z"/></svg>',
+        signer: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width="26" height="26" fill="currentColor" aria-hidden="true"><path d="M11 1a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1zM5 0a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2V2a2 2 0 0 0-2-2z"/><path d="M8 14a1 1 0 1 0 0-2 1 1 0 0 0 0 2"/></svg>',
+        qr: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width="26" height="26" fill="currentColor" aria-hidden="true"><path d="M2 2h2v2H2z"/><path d="M6 0v6H0V0zM5 1H1v4h4zM4 12H2v2h2z"/><path d="M6 10v6H0v-6zm-5 1v4h4v-4zm11-9h2v2h-2z"/><path d="M10 0v6h6V0zm5 1v4h-4V1zM8 1V0h1v2H8v2H7V1zm0 5V4h1v2zM6 8V7h1V6h1v2h1V7h5v1h-4v1H7V8zm0 0v1H2V8H1v1H0V7h3v1zm10 1h-1V7h1zm-1 0h-1v2h2v-1h-1zm-4 0h2v1h-1v1h-1zm2 3v-1h-1v1h-1v1H9v1h3v-2zm0 0h3v1h-2v1h-1zm-4-1v1h1v-2H7v1z"/><path d="M7 12h1v3h4v1H7zm9 2v2h-3v-1h2v-1z"/></svg>'
+    };
 
     var nip46Promise = null;
     var purePromise = null;
@@ -218,7 +226,7 @@
     /**
      * Client-initiated pairing: build a nostrconnect:// URI, show it, and wait
      * for a signer to connect. onUri fires as soon as the URI exists so the
-     * page can render a QR code.
+     * dialog can render a QR code. options.signal aborts the wait.
      */
     async function startNostrConnect(options) {
         options = options || {};
@@ -239,8 +247,9 @@
 
         if (options.onUri) options.onUri(uri);
 
+        var wait = options.signal || options.timeoutMs || PAIR_TIMEOUT_MS;
         var signer = await withTimeout(
-            nip46.BunkerSigner.fromURI(secretKey, uri, { onauth: options.onauth }),
+            nip46.BunkerSigner.fromURI(secretKey, uri, { onauth: options.onauth }, wait),
             options.timeoutMs || PAIR_TIMEOUT_MS,
             'No signer connected to the pairing URI.'
         );
@@ -258,6 +267,7 @@
         Object.keys(attrs || {}).forEach(function (key) {
             if (key === 'class') node.className = attrs[key];
             else if (key === 'text') node.textContent = attrs[key];
+            else if (key === 'html') node.innerHTML = attrs[key];
             else node.setAttribute(key, attrs[key]);
         });
         (children || []).forEach(function (child) {
@@ -266,8 +276,16 @@
         return node;
     }
 
+    function icon(name) {
+        return el('div', {
+            class: 'rounded-circle bg-primary-subtle text-primary d-inline-flex align-items-center justify-content-center mx-auto mb-2',
+            style: 'width:56px;height:56px;',
+            html: ICONS[name]
+        });
+    }
+
     /**
-     * Render the signer-app controls into `root`.
+     * Build the sign-in modal and return a handle to open it.
      *
      * opts.verb    - 'Sign in' or 'Link'
      * opts.url     - absolute URL the NIP-98 event must sign
@@ -275,176 +293,357 @@
      * opts.onSigned(signedEvent, pubkey) - called after a successful signature
      * opts.inject  - optional {nip46, pure, nip19, qr} overrides (tests)
      */
-    function mountPanel(root, opts) {
-        if (!root) return null;
+    function mountSignerDialog(opts) {
+        var generation = 0;
+        var abortController = null;
+        var activeSigner = null;
 
-        var status = el('div', { class: 'small mt-2' });
-        var controls = [];
+        var modalEl = el('div', { class: 'modal fade', tabindex: '-1', 'aria-hidden': 'true' });
+        var contentEl = el('div', { class: 'modal-content' });
 
-        function setStatus(message, type) {
-            status.className = 'small mt-2' + (type ? ' text-' + type : ' text-muted');
-            status.textContent = message || '';
-        }
+        var closeBtn = el('button', {
+            type: 'button', class: 'btn-close', 'data-bs-dismiss': 'modal', 'aria-label': 'Close'
+        });
+        contentEl.appendChild(el('div', { class: 'modal-header' }, [
+            el('h5', { class: 'modal-title', text: opts.verb + ' with Nostr' }),
+            closeBtn
+        ]));
 
-        function setBusy(busy, message) {
-            controls.forEach(function (control) { control.disabled = busy; });
-            if (busy) setStatus(message || 'Waiting for your signer...');
-        }
+        var bodyEl = el('div', { class: 'modal-body' });
 
-        async function run(work, busyMessage) {
-            setBusy(true, busyMessage);
-            try {
-                await work();
-            } catch (error) {
-                setStatus(error && error.message ? error.message : 'Signer request failed', 'danger');
-                setBusy(false);
-            }
-        }
-
-        async function useSignedEvent(signedEvent, pubkey) {
-            setStatus('Signer approved. Continuing...');
-            await opts.onSigned(signedEvent, pubkey);
-        }
-
+        // Saved pairing banner -------------------------------------------------
         var saved = loadPairing();
+        var savedActions = null;
+        var savedBtn = null;
+        var forgetBtn = null;
         if (saved) {
-            var label = saved.npub || (saved.pubkey ? saved.pubkey.slice(0, 12) + '...' : 'saved key');
-            var savedButton = el('button', {
-                type: 'button',
-                class: 'btn btn-sm btn-outline-primary',
-                text: opts.verb + ' with saved signer (' + label + ')'
-            });
-            controls.push(savedButton);
-            var forget = el('button', {
-                type: 'button',
-                class: 'btn btn-sm btn-link text-muted',
-                text: 'Forget signer'
-            });
-            controls.push(forget);
-            savedButton.addEventListener('click', function () {
-                run(async function () {
-                    var result = await window.NostrSigner.signWithPairing(saved, opts.url, opts.method, opts.inject);
-                    await useSignedEvent(result.event, result.pubkey);
-                }, 'Waiting for your signer to approve...');
-            });
-            forget.addEventListener('click', function () {
+            var savedLabel = saved.npub || (saved.pubkey ? 'key ' + saved.pubkey.slice(0, 10) + '...' : 'saved key');
+            savedBtn = el('button', { type: 'button', class: 'btn btn-primary btn-sm', text: opts.verb });
+            forgetBtn = el('button', { type: 'button', class: 'btn btn-link btn-sm text-muted', text: 'Forget signer' });
+            savedActions = el('div', { class: 'd-flex gap-2' }, [savedBtn, forgetBtn]);
+            var savedRow = el('div', {
+                class: 'alert alert-primary d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3'
+            }, [
+                el('div', {}, [
+                    el('div', { class: 'fw-semibold', text: 'Saved signer' }),
+                    el('div', { class: 'small font-monospace text-break', text: savedLabel })
+                ]),
+                savedActions
+            ]);
+            forgetBtn.addEventListener('click', function () {
                 clearPairing();
-                root.replaceChildren();
-                mountPanel(root, opts);
+                savedRow.remove();
             });
-            root.appendChild(el('div', { class: 'mb-2' }, [savedButton, forget]));
+            bodyEl.appendChild(savedRow);
         }
 
+        // Columns --------------------------------------------------------------
+        function column(iconName, title, description) {
+            var slot = el('div', { class: 'mt-auto' });
+            var status = el('div', { class: 'small mt-2' });
+            var root = el('div', { class: 'col' }, [
+                el('div', { class: 'card h-100 text-center' }, [
+                    el('div', { class: 'card-body d-flex flex-column' }, [
+                        icon(iconName),
+                        el('h6', { class: 'card-title mb-1', text: title }),
+                        el('p', { class: 'card-text small text-muted mb-3', text: description }),
+                        slot,
+                        status
+                    ])
+                ])
+            ]);
+            return { root: root, slot: slot, status: status };
+        }
+
+        function setStatus(col, message, type) {
+            col.status.className = 'small mt-2' + (type ? ' text-' + type : ' text-muted');
+            col.status.textContent = message || '';
+        }
+
+        function clearStatuses() {
+            [ext, bunker, qr].forEach(function (col) { setStatus(col, ''); });
+        }
+
+        var ext = column('extension', 'Browser extension', 'Alby, nos2x or another NIP-07 extension.');
+        var bunker = column('signer', 'Signer app', 'Paste a bunker:// URI or NIP-05 address from Amber, Opal or nsec.app.');
+        var qr = column('qr', 'Signer app QR', 'Scan with a signer on your phone, or open the link on this device.');
+
+        // Extension controls
+        var extBtn = el('button', { type: 'button', class: 'btn btn-primary w-100', text: opts.verb });
+
+        // Bunker controls
         var input = el('input', {
             type: 'text',
             class: 'form-control form-control-sm font-monospace',
-            placeholder: 'bunker://... or name@domain.com',
+            placeholder: 'bunker://... or NIP-05',
+            'aria-label': 'Bunker URI or NIP-05 address',
             autocomplete: 'off',
             spellcheck: 'false'
         });
-        var connectButton = el('button', {
-            type: 'button',
-            class: 'btn btn-sm btn-outline-secondary',
-            text: 'Connect'
+        var connectBtn = el('button', {
+            type: 'button', class: 'btn btn-outline-primary w-100 mt-2', text: 'Connect'
         });
-        controls.push(input, connectButton);
 
-        connectButton.addEventListener('click', function () {
+        // QR controls
+        var qrBtn = el('button', { type: 'button', class: 'btn btn-outline-primary w-100', text: 'Show QR code' });
+
+        function setEnabled(enabled) {
+            [extBtn, connectBtn, input, qrBtn, savedBtn, forgetBtn].forEach(function (control) {
+                if (control) control.disabled = !enabled;
+            });
+        }
+
+        function progressBlock(message) {
+            var cancel = el('button', {
+                type: 'button', class: 'btn btn-link btn-sm text-muted px-0 d-block mx-auto', text: 'Cancel'
+            });
+            cancel.addEventListener('click', cancelRun);
+            return el('div', { class: 'py-2' }, [
+                el('div', { class: 'spinner-border spinner-border-sm text-primary mb-2', role: 'status' }),
+                el('div', { class: 'small text-muted', text: message || 'Waiting for your signer...' }),
+                cancel
+            ]);
+        }
+
+        function renderIdle() {
+            clearStatuses();
+            setEnabled(true);
+
+            ext.slot.replaceChildren(extBtn);
+            if (!isExtensionAvailable()) {
+                extBtn.disabled = true;
+                extBtn.className = 'btn btn-outline-secondary w-100';
+                setStatus(ext, 'No extension detected - install Alby or nos2x.');
+            } else {
+                extBtn.className = 'btn w-100 ' + (savedActions ? 'btn-outline-primary' : 'btn-primary');
+            }
+
+            bunker.slot.replaceChildren(input, connectBtn);
+            qr.slot.replaceChildren(qrBtn);
+
+            if (savedActions) {
+                savedActions.replaceChildren(savedBtn, forgetBtn);
+            }
+        }
+
+        function cancelRun() {
+            generation += 1;
+            if (abortController) {
+                abortController.abort();
+                abortController = null;
+            }
+            if (activeSigner) {
+                closeSigner(activeSigner);
+                activeSigner = null;
+            }
+            renderIdle();
+        }
+
+        function closeSigner(signer) {
+            try { if (signer && signer.close) signer.close(); } catch (error) { /* ignore */ }
+        }
+
+        async function finish(signedEvent, pubkey, current) {
+            if (current && !current()) return;
+            await opts.onSigned(signedEvent, pubkey);
+            modal.hide();
+        }
+
+        function fail(col, error) {
+            renderIdle();
+            setStatus(col, (error && error.message) || 'Signer request failed', 'danger');
+        }
+
+        /**
+         * Disable everything, then let `work` take over one column's slot.
+         * A cancel, or a newer run, invalidates the promise via `generation`.
+         */
+        function run(col, message, work) {
+            var gen = generation;
+            setEnabled(false);
+            clearStatuses();
+            col.slot.replaceChildren(progressBlock(message));
+            work(function current() { return gen === generation; }).then(function () {
+                // finish() handles the success path
+            }, function (error) {
+                if (gen !== generation) return;
+                generation += 1;
+                abortController = null;
+                activeSigner = null;
+                fail(col, error);
+            });
+        }
+
+        /** Saved pairing keeps its progress inside the banner, not a column. */
+        function runSaved(work) {
+            var gen = generation;
+            setEnabled(false);
+            clearStatuses();
+            savedActions.replaceChildren(progressBlock('Waiting for your saved signer...'));
+            work(function current() { return gen === generation; }).then(function () {
+                // finish() handles the success path
+            }, function (error) {
+                if (gen !== generation) return;
+                generation += 1;
+                activeSigner = null;
+                fail(ext, error);
+            });
+        }
+
+        function openAuthUrl(url) {
+            window.open(url, '_blank', 'noopener');
+        }
+
+        // ---- Extension --------------------------------------------------------
+
+        extBtn.addEventListener('click', function () {
+            run(ext, 'Waiting for your extension...', async function (current) {
+                var signedEvent = await signWithExtension(opts.url, opts.method);
+                await finish(signedEvent, null, current);
+            });
+        });
+
+        // ---- Saved pairing ----------------------------------------------------
+
+        if (savedBtn) {
+            savedBtn.addEventListener('click', function () {
+                runSaved(async function (current) {
+                    var pairing = loadPairing();
+                    if (!pairing) throw new Error('The saved pairing is gone. Reload the page.');
+                    var result = await window.NostrSigner.signWithPairing(
+                        pairing, opts.url, opts.method, opts.inject);
+                    await finish(result.event, result.pubkey, current);
+                });
+            });
+        }
+
+        // ---- Bunker URI -------------------------------------------------------
+
+        function connectWithBunker() {
             var value = input.value.trim();
             if (!value) {
-                setStatus('Paste a bunker URI or NIP-05 address first.', 'warning');
+                setStatus(bunker, 'Paste a bunker URI or NIP-05 address first.', 'warning');
+                input.focus();
                 return;
             }
-            run(async function () {
+            run(bunker, 'Connecting to your signer...', async function (current) {
                 var result = await window.NostrSigner.connectBunkerUri(value, {
                     onauth: openAuthUrl,
                     inject: opts.inject
                 });
+                if (!current()) {
+                    closeSigner(result.signer);
+                    return;
+                }
+                activeSigner = result.signer;
                 savePairing(result.pairing);
                 var event = await signWithSigner(result.signer, opts.url, opts.method);
-                await useSignedEvent(event, result.pubkey);
-            }, 'Connecting to your signer...');
-        });
-
-        root.appendChild(el('div', { class: 'mb-2' }, [
-            el('label', { class: 'form-label small mb-1', text: 'Signer app (NIP-46 bunker)' }),
-            el('div', { class: 'input-group input-group-sm' }, [input, connectButton])
-        ]));
-
-        var pairButton = el('button', {
-            type: 'button',
-            class: 'btn btn-sm btn-link px-0',
-            text: 'Pair a signer app instead (QR code)'
-        });
-        controls.push(pairButton);
-
-        var pairArea = el('div', { class: 'border rounded p-3 mt-2', style: 'display:none;' });
-        var qrBox = el('div', { class: 'text-center mb-2' });
-        var uriBox = el('textarea', {
-            class: 'form-control form-control-sm font-monospace mb-2',
-            rows: '2',
-            readonly: 'readonly'
-        });
-        var openLink = el('a', {
-            class: 'btn btn-sm btn-outline-secondary mb-2',
-            target: '_blank',
-            rel: 'noopener',
-            text: 'Open in signer app'
-        });
-        pairArea.appendChild(qrBox);
-        pairArea.appendChild(uriBox);
-        pairArea.appendChild(openLink);
-        pairArea.appendChild(el('div', {
-            class: 'small text-muted',
-            text: 'Scan with Amber, Opal, nsec.app or another NIP-46 signer.'
-        }));
-
-        function openAuthUrl(url) {
-            setStatus('Approve the request in your signer, then come back to this tab.', 'warning');
-            window.open(url, '_blank', 'noopener');
+                await finish(event, result.pubkey, current);
+            });
         }
 
-        pairButton.addEventListener('click', function () {
-            pairArea.style.display = '';
-            controls.forEach(function (control) { control.disabled = true; });
-            setStatus('Waiting for a signer to connect...');
-            run(async function () {
+        connectBtn.addEventListener('click', connectWithBunker);
+        input.addEventListener('keydown', function (event) {
+            if (event.key === 'Enter') {
+                event.preventDefault();
+                connectWithBunker();
+            }
+        });
+
+        // ---- Nostrconnect / QR ------------------------------------------------
+
+        function waitingQr(uri) {
+            var box = el('div', { class: 'd-flex justify-content-center mb-2' });
+            var uriBox = el('textarea', {
+                class: 'form-control form-control-sm font-monospace mb-2',
+                rows: '2',
+                readonly: 'readonly'
+            });
+            uriBox.value = uri;
+            var openLink = el('a', {
+                class: 'btn btn-sm btn-outline-secondary w-100 mb-1',
+                href: uri,
+                target: '_blank',
+                rel: 'noopener',
+                text: 'Open in signer app'
+            });
+            var copyBtn = el('button', { type: 'button', class: 'btn btn-link btn-sm', text: 'Copy URI' });
+            copyBtn.addEventListener('click', function () {
+                if (navigator.clipboard) {
+                    navigator.clipboard.writeText(uri).then(function () {
+                        copyBtn.textContent = 'Copied';
+                    }, function () { uriBox.select(); });
+                } else {
+                    uriBox.select();
+                }
+            });
+
+            loadQr(opts.inject).then(function (QRCode) {
+                box.replaceChildren();
+                new QRCode(box, {
+                    text: uri,
+                    width: 200,
+                    height: 200,
+                    correctLevel: QRCode.CorrectLevel.M
+                });
+            }, function () {
+                box.replaceChildren(el('div', {
+                    class: 'small text-warning',
+                    text: 'QR code unavailable - copy the URI instead.'
+                }));
+            });
+
+            return el('div', {}, [box, uriBox, openLink, copyBtn]);
+        }
+
+        qrBtn.addEventListener('click', function () {
+            run(qr, 'Waiting for a signer to connect...', async function (current) {
+                var controller = new AbortController();
+                abortController = controller;
                 var result = await window.NostrSigner.startNostrConnect({
-                    onUri: async function (uri) {
-                        uriBox.value = uri;
-                        openLink.href = uri;
-                        try {
-                            var QRCode = await loadQr(opts.inject);
-                            qrBox.replaceChildren();
-                            new QRCode(qrBox, {
-                                text: uri,
-                                width: 220,
-                                height: 220,
-                                correctLevel: QRCode.CorrectLevel.M
-                            });
-                        } catch (error) {
-                            qrBox.replaceChildren(el('div', {
-                                class: 'small text-warning',
-                                text: 'QR code unavailable - copy the URI below instead.'
-                            }));
-                        }
+                    signal: controller.signal,
+                    onUri: function (uri) {
+                        qr.slot.replaceChildren(waitingQr(uri), progressBlock('Waiting for a signer to connect...'));
                     },
                     onauth: openAuthUrl,
                     inject: opts.inject
                 });
+                abortController = null;
+                if (!current()) {
+                    closeSigner(result.signer);
+                    return;
+                }
+                activeSigner = result.signer;
                 savePairing(result.pairing);
                 var event = await signWithSigner(result.signer, opts.url, opts.method);
-                await useSignedEvent(event, result.pubkey);
-            }, 'Waiting for a signer to connect...');
+                await finish(event, result.pubkey, current);
+            });
         });
 
-        root.appendChild(pairButton);
-        root.appendChild(pairArea);
-        root.appendChild(status);
+        bodyEl.appendChild(el('div', { class: 'row row-cols-1 row-cols-md-3 g-3' }, [
+            ext.root, bunker.root, qr.root
+        ]));
+        bodyEl.appendChild(el('p', {
+            class: 'small text-secondary mt-3 mb-0',
+            text: 'Your Nostr key must already be linked to a BTC Map account. To link one, sign in with your username, then use Link Nostr on the profile page.'
+        }));
+
+        contentEl.appendChild(bodyEl);
+        modalEl.appendChild(el('div', { class: 'modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable' }, [contentEl]));
+        document.body.appendChild(modalEl);
+
+        var modal = new bootstrap.Modal(modalEl, { backdrop: true, keyboard: true });
+        modalEl.addEventListener('hidden.bs.modal', function () {
+            cancelRun();
+            modalEl.remove();
+        });
+
+        renderIdle();
 
         return {
-            setStatus: setStatus,
-            clearPairing: clearPairing
+            open: function () { modal.show(); },
+            close: function () { modal.hide(); },
+            element: modalEl
         };
     }
 
@@ -459,7 +658,7 @@
         savePairing: savePairing,
         clearPairing: clearPairing,
         nip98Template: nip98Template,
-        mountPanel: mountPanel,
+        mountSignerDialog: mountSignerDialog,
         DEFAULT_RELAYS: DEFAULT_RELAYS
     };
 })();
