@@ -248,6 +248,22 @@
         }
     }
 
+    /**
+     * The bunker URI names the signer service; the key that actually signs is
+     * whatever comes back on the event. On Amber/Opal they are the same key, on
+     * a hosted signer (nsec.app) they are not - so the record must be written
+     * from the signature, never from the pointer.
+     */
+    async function savePairingForEvent(pairing, event) {
+        if (!pairing || !event || !event.pubkey) return null;
+        return savePairing({
+            clientSecret: pairing.clientSecret,
+            bunkerUrl: pairing.bunkerUrl,
+            pubkey: event.pubkey,
+            npub: await npubFor(event.pubkey)
+        });
+    }
+
     function savePairing(pairing) {
         try {
             var record = {
@@ -291,7 +307,9 @@
         // The bunker pointer names the signer, so this needs no round trip.
         var pubkey = pointer.pubkey;
         var event = await signWithSigner(signer, url, method);
-        return { event: event, pubkey: pubkey, pairing: pairing };
+        // The event carries the key that signed, which is the identity - the
+        // pointer's pubkey is the signer service.
+        return { event: event, pubkey: event.pubkey, pairing: pairing };
     }
 
     /** Connect a bunker:// URI pasted by the user. */
@@ -763,10 +781,10 @@
                     return;
                 }
                 activeSigner = result.signer;
-                savePairing(result.pairing);
                 hideQr();
                 var event = await signWithSigner(result.signer, opts.url, opts.method);
-                await finish(event, result.pubkey, current);
+                await savePairingForEvent(result.pairing, event);
+                await finish(event, event.pubkey, current);
             });
         }
 
@@ -801,7 +819,10 @@
                     if (!pairing) throw new Error('The saved pairing is gone. Reload the page.');
                     var result = await window.NostrSigner.signWithPairing(
                         pairing, opts.url, opts.method, opts.inject);
-                    await finish(result.event, result.pubkey, current);
+                    if (pairing.pubkey !== result.event.pubkey || !pairing.npub) {
+                        await savePairingForEvent(pairing, result.event);
+                    }
+                    await finish(result.event, result.event.pubkey, current);
                 });
             });
         }
@@ -831,9 +852,9 @@
                     return;
                 }
                 activeSigner = result.signer;
-                savePairing(result.pairing);
                 var event = await signWithSigner(result.signer, opts.url, opts.method);
-                await finish(event, result.pubkey, current);
+                await savePairingForEvent(result.pairing, event);
+                await finish(event, event.pubkey, current);
             });
         }
 
