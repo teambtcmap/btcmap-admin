@@ -219,6 +219,19 @@
         return typeof window.nostr !== 'undefined' && window.nostr !== null;
     }
 
+    /**
+     * A native signer app cannot be detected from a page - browsers do not let
+     * you enumerate installed apps or probe a custom scheme. The device is the
+     * honest signal: on a phone "Open with signer" is the path people use, on a
+     * desktop it usually does nothing.
+     */
+    function isMobileDevice() {
+        var ua = navigator.userAgent || '';
+        if (/Android|iPhone|iPod|Mobile/i.test(ua)) return true;
+        // iPadOS 13+ sends a Mac user agent; a touch-capable "Mac" is an iPad.
+        return /Macintosh/.test(ua) && navigator.maxTouchPoints > 1;
+    }
+
     function signWithExtension(url, method) {
         if (!isExtensionAvailable()) {
             return Promise.reject(new Error(
@@ -571,14 +584,24 @@
             clearStatuses();
             setEnabled(true);
 
+            // Exactly one filled button, following the path this device can
+            // actually take: the saved pairing if there is one, else the
+            // extension, else the handoff on a phone or the QR on a desktop.
+            var primary = savedActions
+                ? 'saved'
+                : (isExtensionAvailable() ? 'extension' : (isMobileDevice() ? 'signer' : 'qr'));
+
             ext.slot.replaceChildren(extBtn);
             if (!isExtensionAvailable()) {
                 extBtn.disabled = true;
                 extBtn.className = 'btn btn-outline-secondary w-100';
                 setStatus(ext, 'No extension detected - install Alby or nos2x.');
             } else {
-                extBtn.className = 'btn w-100 ' + (savedActions ? 'btn-outline-primary' : 'btn-primary');
+                extBtn.className = 'btn w-100 ' + (primary === 'extension' ? 'btn-primary' : 'btn-outline-primary');
             }
+
+            openBtn.className = 'btn w-100 ' + (primary === 'signer' ? 'btn-primary' : 'btn-outline-primary');
+            qrBtn.className = 'btn w-100 ' + (primary === 'qr' ? 'btn-primary' : 'btn-outline-primary');
 
             signer.slot.replaceChildren(
                 openBtn,
