@@ -21,12 +21,25 @@
     var PURE_CDN = 'https://cdn.jsdelivr.net/npm/nostr-tools@2.25.2/pure/+esm';
     var NIP19_CDN = 'https://cdn.jsdelivr.net/npm/nostr-tools@2.25.2/nip19/+esm';
     var QR_CDN = 'https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js';
+    var POOL_CDN = 'https://cdn.jsdelivr.net/npm/nostr-tools@2.25.2/pool/+esm';
 
     var PAIRING_KEY = 'btcmap_bunker';
+    // Session-lifetime caches: one pool import, one name per pubkey.
+    var poolPromise = null;
+    var profileNames = {};
     var CLIENT_NAME = 'BTC Map Admin';
     // Relays the signer app listens on while pairing. Amber and nsec.app both
     // accept arbitrary relay lists in the nostrconnect URI.
     var DEFAULT_RELAYS = ['wss://relay.nsec.app', 'wss://relay.damus.io'];
+    // Profile metadata (kind 0) lives on the general relays, not the signer
+    // relays, so the saved-signer row can show a name instead of a key.
+    var PROFILE_RELAYS = [
+        'wss://relay.damus.io',
+        'wss://nos.lol',
+        'wss://relay.primal.net',
+        'wss://ditto.pub/relay'
+    ];
+    var PROFILE_WAIT_MS = 3000;
     // NIP-46 permissions this app needs: read the key, sign NIP-98 events.
     var PERMS = ['get_public_key', 'sign_event:27235'];
     // A saved signer has already approved this client, so a connect ack is
@@ -86,6 +99,56 @@
         return (inject && inject.nip19 ? Promise.resolve(inject.nip19) : nip19Promise)
             .then(function (nip19) { return nip19.npubEncode(pubkey); })
             .catch(function () { return null; });
+    }
+
+    function loadPool(inject) {
+        if (inject && inject.pool) return Promise.resolve(inject.pool);
+        if (!poolPromise) poolPromise = import(POOL_CDN);
+        return poolPromise;
+    }
+
+    /**
+     * A kind-0 name for a pubkey, or null. Best effort: a missing profile, a
+     * dead relay or a CDN failure all just leave the caller showing the key.
+     */
+    function profileNameFor(pubkey, inject) {
+        if (!pubkey) return Promise.resolve(null);
+        if (Object.prototype.hasOwnProperty.call(profileNames, pubkey)) {
+            return Promise.resolve(profileNames[pubkey]);
+        }
+        return loadPool(inject).then(function (mod) {
+            var pool = new mod.SimplePool();
+            return pool
+                .get(PROFILE_RELAYS, { kinds: [0], authors: [pubkey] }, { maxWait: PROFILE_WAIT_MS })
+                .then(function (event) {
+                    pool.close(PROFILE_RELAYS);
+                    var name = null;
+                    if (event) {
+                        try {
+                            var meta = JSON.parse(event.content);
+                            name = (typeof meta.display_name === 'string' && meta.display_name.trim())
+                                || (typeof meta.name === 'string' && meta.name.trim())
+                                || null;
+                        } catch (error) {
+                            name = null;
+                        }
+                    }
+                    profileNames[pubkey] = name;
+                    return name;
+                }, function () {
+                    pool.close(PROFILE_RELAYS);
+                    return null;
+                });
+        }, function () {
+            return null;
+        });
+    }
+
+    /** npub1abc…xyz - enough of a key to recognise, not a wall of bech32. */
+    function shortenKey(value) {
+        if (!value) return '';
+        if (value.length <= 20) return value;
+        return value.slice(0, 12) + '\u2026' + value.slice(-6);
     }
 
     function bytesToHex(bytes) {
@@ -352,19 +415,30 @@
             // Always name the signer by its npub. Pairings stored before the
             // npub was saved have only the hex key, so encode it here and put
             // it back in localStorage - showing hex to the user is noise.
+            var savedName = el('div', { class: 'small fw-semibold d-none' });
             var savedLabel = el('div', {
-                class: 'small font-monospace text-break',
-                text: saved.npub || (saved.pubkey ? 'key ' + saved.pubkey.slice(0, 10) + '...' : 'saved key')
+                class: 'small font-monospace text-muted',
+                text: shortenKey(saved.npub || saved.pubkey || 'saved key'),
+                title: saved.npub || saved.pubkey || ''
             });
-            if (!saved.npub && saved.pubkey) {
-                npubFor(saved.pubkey).then(function (npub) {
-                    if (!npub) return;
-                    savedLabel.textContent = npub;
-                    var record = loadPairing();
-                    if (record && record.pubkey === saved.pubkey && !record.npub) {
-                        record.npub = npub;
-                        savePairing(record);
+            if (saved.pubkey) {
+                // Resolve the key to its npub (old pairings stored only hex),
+                // then to the profile name if one is published.
+                (saved.npub ? Promise.resolve(saved.npub) : npubFor(saved.pubkey)).then(function (npub) {
+                    if (npub) {
+                        savedLabel.textContent = shortenKey(npub);
+                        savedLabel.title = npub;
+                        var record = loadPairing();
+                        if (record && record.pubkey === saved.pubkey && !record.npub) {
+                            record.npub = npub;
+                            savePairing(record);
+                        }
                     }
+                    return profileNameFor(saved.pubkey, opts.inject);
+                }).then(function (name) {
+                    if (!name) return;
+                    savedName.textContent = name;
+                    savedName.classList.remove('d-none');
                 });
             }
             savedBtn = el('button', { type: 'button', class: 'btn btn-primary btn-sm', text: opts.verb });
@@ -375,6 +449,7 @@
             }, [
                 el('div', {}, [
                     el('div', { class: 'fw-semibold', text: 'Saved signer' }),
+                    savedName,
                     savedLabel
                 ]),
                 savedActions
