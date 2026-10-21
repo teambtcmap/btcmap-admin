@@ -105,11 +105,11 @@ accounts and no tokens. Two credentials are accepted:
   (opened from the Nostr button), all implemented in
   `static/js/nostr-signer.js`:
 
-  - a NIP-07 browser extension (Alby, nos2x) signing in the page;
+  - a NIP-07 browser extension signing in the page;
   - a NIP-46 signer app via a pasted `bunker://` URI;
   - a NIP-46 signer app paired by QR: the page shows a `nostrconnect://` URI
-    to scan (Amber, Opal, nsec.app), with the URI also copyable and linkable
-    for signers on the same device.
+    to scan, with the URI also copyable and linkable for signers on the same
+    device.
 
   A completed signer-app pairing is kept in `localStorage` (`btcmap_bunker`)
   so the next visit is one click; **Forget signer** removes it. That record is
