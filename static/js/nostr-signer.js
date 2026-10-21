@@ -349,7 +349,24 @@
         var savedBtn = null;
         var forgetBtn = null;
         if (saved) {
-            var savedLabel = saved.npub || (saved.pubkey ? 'key ' + saved.pubkey.slice(0, 10) + '...' : 'saved key');
+            // Always name the signer by its npub. Pairings stored before the
+            // npub was saved have only the hex key, so encode it here and put
+            // it back in localStorage - showing hex to the user is noise.
+            var savedLabel = el('div', {
+                class: 'small font-monospace text-break',
+                text: saved.npub || (saved.pubkey ? 'key ' + saved.pubkey.slice(0, 10) + '...' : 'saved key')
+            });
+            if (!saved.npub && saved.pubkey) {
+                npubFor(saved.pubkey).then(function (npub) {
+                    if (!npub) return;
+                    savedLabel.textContent = npub;
+                    var record = loadPairing();
+                    if (record && record.pubkey === saved.pubkey && !record.npub) {
+                        record.npub = npub;
+                        savePairing(record);
+                    }
+                });
+            }
             savedBtn = el('button', { type: 'button', class: 'btn btn-primary btn-sm', text: opts.verb });
             forgetBtn = el('button', { type: 'button', class: 'btn btn-link btn-sm text-muted', text: 'Forget signer' });
             savedActions = el('div', { class: 'd-flex gap-2' }, [savedBtn, forgetBtn]);
@@ -358,7 +375,7 @@
             }, [
                 el('div', {}, [
                     el('div', { class: 'fw-semibold', text: 'Saved signer' }),
-                    el('div', { class: 'small font-monospace text-break', text: savedLabel })
+                    savedLabel
                 ]),
                 savedActions
             ]);

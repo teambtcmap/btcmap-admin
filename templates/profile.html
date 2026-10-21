@@ -134,7 +134,18 @@ document.addEventListener('DOMContentLoaded', function() {
         return data.message || data.error || `HTTP ${resp.status}`;
     }
 
+    // TOKEN is captured once, when this page loads. If the browser signs in as
+    // someone else in another tab while a signer prompt is open, that old token
+    // still authenticates - and would attach the key to the wrong account. Check
+    // before every mutation rather than trusting the capture.
+    function assertSameSession() {
+        if (localStorage.getItem('btcmap_token') !== TOKEN) {
+            throw new Error('This browser is signed in as a different account now. Reload the page and try again.');
+        }
+    }
+
     async function sendLink(signedEvent) {
+        assertSameSession();
         const resp = await fetch(linkUrl, {
             method: 'PUT',
             headers: {
@@ -156,12 +167,17 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     async function unlinkNostr() {
-        if (!confirm('Unlink your Nostr key from this account? Signing in with Nostr will stop working until you link it again.')) {
+        if (!confirm(
+            'Unlink your Nostr key from this account?\n\n' +
+            'Signing in with Nostr stops working until you link a key again. ' +
+            'If this key is your only way in, you will be locked out.'
+        )) {
             return;
         }
 
         unlinkBtn.disabled = true;
         try {
+            assertSameSession();
             const resp = await fetch(linkUrl, {
                 method: 'DELETE',
                 headers: { 'Authorization': `Bearer ${TOKEN}` }
