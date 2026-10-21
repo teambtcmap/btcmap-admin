@@ -31,17 +31,20 @@
     var CLIENT_NAME = 'BTC Map Admin';
     // Relays the signer app listens on while pairing. Amber and nsec.app both
     // accept arbitrary relay lists in the nostrconnect URI.
-    var DEFAULT_RELAYS = ['wss://relay.nsec.app', 'wss://relay.damus.io'];
-    // Profile metadata (kind 0) lives on the general relays, not the signer
-    // relays, so the saved-signer row can show a name instead of a key.
-    var PROFILE_RELAYS = [
-        'wss://relay.damus.io',
-        'wss://nos.lol',
+    // Relays the signer and this page talk over during pairing (kind 24133).
+    // All five accept NIP-46 events; relay.damus.io, which this used to carry,
+    // rejects them ("banned: too many rate-limit violations").
+    var DEFAULT_RELAYS = [
+        'wss://relay.nsec.app',
+        'wss://relay.nostrconnect.com',
+        'wss://public.relay.btcmap.org',
         'wss://relay.primal.net',
-        // purplepag.es exists to serve kind 0/3/10002, so it has profiles the
-        // general relays may have pruned.
-        'wss://purplepag.es'
+        'wss://nos.lol'
     ];
+    // Profile metadata (kind 0) is read from the same relays plus purplepag.es,
+    // which exists to serve kind 0/3/10002 and holds profiles the general
+    // relays have pruned. It is not in the pairing URI: it carries no NIP-46.
+    var PROFILE_RELAYS = ['wss://purplepag.es'];
     var PROFILE_WAIT_MS = 5000;
     // NIP-46 permissions this app needs: read the key, sign NIP-98 events.
     var PERMS = ['get_public_key', 'sign_event:27235'];
@@ -125,7 +128,7 @@
             // up as subscriptions closing seconds after they open.
             if (!profilePool) profilePool = new mod.SimplePool();
             return profilePool
-                .get(PROFILE_RELAYS, { kinds: [0], authors: [pubkey] }, { maxWait: PROFILE_WAIT_MS })
+                .get(PROFILE_RELAYS.concat(DEFAULT_RELAYS), { kinds: [0], authors: [pubkey] }, { maxWait: PROFILE_WAIT_MS })
                 .then(function (event) {
                     var name = null;
                     if (event) {
