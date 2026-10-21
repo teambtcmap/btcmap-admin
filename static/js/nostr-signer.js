@@ -906,18 +906,23 @@
         document.body.appendChild(modalEl);
 
         var modal = new bootstrap.Modal(modalEl, { backdrop: true, keyboard: true });
+        // The dialog is mounted once per page and reopened from the same
+        // button, so hiding resets it rather than throwing it away - removing
+        // the element left the next open() with nothing to show.
         modalEl.addEventListener('hidden.bs.modal', function () {
             cancelRun();
             if (qrModalEl) qrModalEl.remove();
             qrModal = null;
             qrModalEl = null;
-            modalEl.remove();
         });
 
         renderIdle();
 
         return {
-            open: function () { modal.show(); },
+            // Re-render on open: extensions often inject window.nostr after
+            // DOMContentLoaded, so a dialog mounted at load can miss one that
+            // is there by the time the user actually clicks.
+            open: function () { renderIdle(); modal.show(); },
             close: function () { modal.hide(); },
             element: modalEl
         };
