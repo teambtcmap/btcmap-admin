@@ -535,7 +535,7 @@
         var pair = column('qr', 'NostrConnect', 'Scan a QR code or copy a connection string.');
 
         // Extension controls
-        var extBtn = el('button', { type: 'button', class: 'btn btn-primary w-100', text: opts.verb });
+        var extBtn = el('button', { type: 'button', class: 'btn btn-primary w-100', text: 'Use extension' });
 
         // Signer app controls: hand off to a native app, or connect with a URI.
         var openBtn = el('button', {
