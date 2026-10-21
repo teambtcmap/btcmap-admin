@@ -41,10 +41,18 @@
         'wss://relay.primal.net',
         'wss://nos.lol'
     ];
-    // Profile metadata (kind 0) is read from the same relays plus purplepag.es,
-    // which exists to serve kind 0/3/10002 and holds profiles the general
-    // relays have pruned. It is not in the pairing URI: it carries no NIP-46.
-    var PROFILE_RELAYS = ['wss://purplepag.es'];
+    // Profile metadata (kind 0): the pairing relays plus purplepag.es, which
+    // exists to serve kind 0/3/10002 and holds profiles the general relays have
+    // pruned. Listed out rather than derived, so the set is readable here;
+    // purplepag.es stays out of the pairing URI because it carries no NIP-46.
+    var PROFILE_RELAYS = [
+        'wss://purplepag.es',
+        'wss://public.relay.btcmap.org',
+        'wss://relay.nostrconnect.com',
+        'wss://relay.primal.net',
+        'wss://nos.lol',
+        'wss://relay.nsec.app'
+    ];
     var PROFILE_WAIT_MS = 5000;
     // NIP-46 permissions this app needs: read the key, sign NIP-98 events.
     var PERMS = ['get_public_key', 'sign_event:27235'];
@@ -128,7 +136,7 @@
             // up as subscriptions closing seconds after they open.
             if (!profilePool) profilePool = new mod.SimplePool();
             return profilePool
-                .get(PROFILE_RELAYS.concat(DEFAULT_RELAYS), { kinds: [0], authors: [pubkey] }, { maxWait: PROFILE_WAIT_MS })
+                .get(PROFILE_RELAYS, { kinds: [0], authors: [pubkey] }, { maxWait: PROFILE_WAIT_MS })
                 .then(function (event) {
                     var name = null;
                     if (event) {
