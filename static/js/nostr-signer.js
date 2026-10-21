@@ -29,8 +29,8 @@
     var profilePool = null;
     var profileNames = {};
     var CLIENT_NAME = 'BTC Map Admin';
-    // Relays the signer app listens on while pairing. Amber and nsec.app both
-    // accept arbitrary relay lists in the nostrconnect URI.
+    // Relays the signer listens on while pairing. Signers accept arbitrary
+    // relay lists in the nostrconnect URI.
     // Relays the signer and this page talk over during pairing (kind 24133).
     // All five accept NIP-46 events; relay.damus.io, which this used to carry,
     // rejects them ("banned: too many rate-limit violations").
@@ -179,8 +179,8 @@
     }
 
     /**
-     * NIP-46 connect is optional in practice. Some signers (Opal) never answer
-     * a connect on an already-paired session - they act on the request itself -
+     * NIP-46 connect is optional in practice. Some signers never answer a
+     * connect on an already-paired session - they act on the request itself -
      * so a silent connect must not block. An explicit error still fails.
      */
     async function connectQuietly(signer, metadata, waitMs) {
@@ -240,7 +240,7 @@
     function signWithExtension(url, method) {
         if (!isExtensionAvailable()) {
             return Promise.reject(new Error(
-                'No Nostr extension detected. Install Alby, nos2x, or another NIP-07 extension.'
+                'No Nostr extension detected. Install a NIP-07 extension to sign in this way.'
             ));
         }
         return window.nostr.signEvent(nip98Template(url, method));
@@ -268,9 +268,9 @@
 
     /**
      * The bunker URI names the signer service; the key that actually signs is
-     * whatever comes back on the event. On Amber/Opal they are the same key, on
-     * a hosted signer (nsec.app) they are not - so the record must be written
-     * from the signature, never from the pointer.
+     * whatever comes back on the event. On most signers those are the same key;
+     * on a hosted signer they are not - so the record must be written from the
+     * signature, never from the pointer.
      */
     async function savePairingForEvent(pairing, event) {
         if (!pairing || !event || !event.pubkey) return null;
@@ -382,7 +382,7 @@
         // fromURI resolves only after the signer answers the pairing, which
         // both establishes the session and names the signer - so no connect()
         // call is needed here. Sending one anyway stalls on signers that treat
-        // a repeat connect as already done and never reply (Opal does this).
+        // a repeat connect as already done and never reply.
         var signer = await withTimeout(
             nip46.BunkerSigner.fromURI(secretKey, uri, { onauth: options.onauth }, wait),
             options.timeoutMs || PAIR_TIMEOUT_MS,
@@ -535,8 +535,8 @@
             [ext, signer, pair].forEach(function (col) { setStatus(col, ''); });
         }
 
-        var ext = column('extension', 'Browser extension', 'Alby, nos2x or another NIP-07 extension.');
-        var signer = column('signer', 'Signer app', 'Amber, Opal or any other NIP-46 signer.');
+        var ext = column('extension', 'Browser extension', 'Any NIP-07 extension that can sign for this page.');
+        var signer = column('signer', 'Signer app', 'Any NIP-46 signer, paired with a URI or a QR code.');
         var pair = column('qr', 'NostrConnect', 'Scan a QR code or copy a connection string.');
 
         // Extension controls
@@ -600,7 +600,7 @@
             if (!isExtensionAvailable()) {
                 extBtn.disabled = true;
                 extBtn.className = 'btn btn-outline-secondary w-100';
-                setStatus(ext, 'No extension detected - install Alby or nos2x.');
+                setStatus(ext, 'No NIP-07 extension detected.');
             } else {
                 extBtn.className = 'btn w-100 ' + (primary === 'extension' ? 'btn-primary' : 'btn-outline-primary');
             }
@@ -817,7 +817,7 @@
         }
 
         /**
-         * Hand the nostrconnect URI to a native signer (Amber, Opal). Browsers
+         * Hand the nostrconnect URI to a native signer app. Browsers
          * silently ignore a scheme with no handler, so warn if nothing happened.
          */
         function openWithSigner(uri) {
