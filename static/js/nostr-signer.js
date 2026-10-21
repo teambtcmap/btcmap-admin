@@ -26,6 +26,7 @@
     var PAIRING_KEY = 'btcmap_bunker';
     // Session-lifetime caches: one pool import, one name per pubkey.
     var poolPromise = null;
+    var profilePool = null;
     var profileNames = {};
     var CLIENT_NAME = 'BTC Map Admin';
     // Relays the signer app listens on while pairing. Amber and nsec.app both
@@ -119,11 +120,13 @@
             return Promise.resolve(profileNames[pubkey]);
         }
         return loadPool(inject).then(function (mod) {
-            var pool = new mod.SimplePool();
-            return pool
+            // One pool for the page, like the web app: opening four sockets and
+            // tearing them down for every lookup is connection churn that shows
+            // up as subscriptions closing seconds after they open.
+            if (!profilePool) profilePool = new mod.SimplePool();
+            return profilePool
                 .get(PROFILE_RELAYS, { kinds: [0], authors: [pubkey] }, { maxWait: PROFILE_WAIT_MS })
                 .then(function (event) {
-                    pool.close(PROFILE_RELAYS);
                     var name = null;
                     if (event) {
                         try {
@@ -138,7 +141,6 @@
                     if (name) profileNames[pubkey] = name;
                     return name;
                 }, function () {
-                    pool.close(PROFILE_RELAYS);
                     return null;
                 });
         }, function () {
