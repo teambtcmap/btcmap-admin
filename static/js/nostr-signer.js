@@ -37,9 +37,11 @@
         'wss://relay.damus.io',
         'wss://nos.lol',
         'wss://relay.primal.net',
-        'wss://ditto.pub/relay'
+        // purplepag.es exists to serve kind 0/3/10002, so it has profiles the
+        // general relays may have pruned.
+        'wss://purplepag.es'
     ];
-    var PROFILE_WAIT_MS = 3000;
+    var PROFILE_WAIT_MS = 5000;
     // NIP-46 permissions this app needs: read the key, sign NIP-98 events.
     var PERMS = ['get_public_key', 'sign_event:27235'];
     // A saved signer has already approved this client, so a connect ack is
@@ -133,7 +135,7 @@
                             name = null;
                         }
                     }
-                    profileNames[pubkey] = name;
+                    if (name) profileNames[pubkey] = name;
                     return name;
                 }, function () {
                     pool.close(PROFILE_RELAYS);
@@ -142,6 +144,12 @@
         }, function () {
             return null;
         });
+    }
+
+    /** The hex key out of a bunker:// URI, for pairings stored without one. */
+    function pubkeyFromBunkerUrl(url) {
+        var match = /^bunker:\/\/([0-9a-f]{64})/i.exec(url || '');
+        return match ? match[1].toLowerCase() : null;
     }
 
     /** npub1abc…xyz - enough of a key to recognise, not a wall of bech32. */
@@ -421,6 +429,8 @@
                 text: shortenKey(saved.npub || saved.pubkey || 'saved key'),
                 title: saved.npub || saved.pubkey || ''
             });
+            // Old pairings may carry only the bunker URL - the pubkey is in it.
+            if (!saved.pubkey) saved.pubkey = pubkeyFromBunkerUrl(saved.bunkerUrl);
             if (saved.pubkey) {
                 // Resolve the key to its npub (old pairings stored only hex),
                 // then to the profile name if one is published.
