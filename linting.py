@@ -108,26 +108,38 @@ def get_area_id_from_area(area: dict) -> str:
     return str(area.get('id', ''))
 
 
+def is_standard_area_icon_url(icon_url: str, area_id) -> bool:
+    """
+    Check an icon URL against the standard static.btcmap.org location.
+
+    The set_area_image RPC writes `{id}_{image_type}.{ext}` (e.g.
+    `260_square.jpg`), so a type segment is optional but valid. Older icons
+    still use the untagged `{id}.{ext}` form.
+    """
+    pattern = (
+        r'https://static\.btcmap\.org/images/areas/'
+        rf'{re.escape(str(area_id))}(?:_(?:square|wide))?\.\w+'
+    )
+    return re.fullmatch(pattern, icon_url) is not None
+
+
 def check_icon_legacy_url(area: dict) -> Optional[LintResult]:
     """Check if icon URL is in the standard format."""
     tags = area.get('tags', {})
     icon_url = tags.get('icon:square', '')
-    
+
     if not icon_url:
         return None  # Handled by icon-missing rule
-    
+
     area_id = get_area_id_from_area(area)
-    
-    # Expected pattern: https://static.btcmap.org/images/areas/{id}.{ext}
-    expected_pattern = rf'^https://static\.btcmap\.org/images/areas/{re.escape(area_id)}\.\w+$'
-    
-    if not re.match(expected_pattern, icon_url):
+
+    if not is_standard_area_icon_url(icon_url, area_id):
         return LintResult(
             rule=LINT_RULES['icon-legacy-url'],
             message=f'Icon URL does not match expected format',
             current_value=icon_url
         )
-    
+
     return None
 
 
@@ -294,8 +306,7 @@ def fix_migrate_icon(area_id: str, rpc_call_fn, get_area_fn) -> dict:
         
         # Check if already in correct format
         numeric_id = str(area.get('id', ''))
-        expected_pattern = rf'^https://static\.btcmap\.org/images/areas/{re.escape(numeric_id)}\.\w+$'
-        if re.match(expected_pattern, icon_url):
+        if is_standard_area_icon_url(icon_url, numeric_id):
             return {'success': True, 'message': 'Icon already in correct format'}
         
         # Download the image
